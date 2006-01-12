@@ -1,0 +1,51 @@
+Revision history for WWW::Myspace
+
+0.09	2006-01-11/10:24pm
+		Chnaged name from "Myspace" to "WWW::Myspace"
+		Made "Spiffy".
+		Updated docs.
+		Changed cache file to use $HOME/.www-myspace/login_cache by default.
+		Fixed bugs:
+		Known issues:
+			- get_friends method does not work if user has > 40 friends
+			  (bug introduced by change in myspace site).
+			- post_comment dies if it is told to post to a friendID that
+			  is not a friend of the logged-in user. (Myspace displays
+			  an error instead of a form).
+		Added test suite.
+
+0.08	2006-01-07/12:52pm
+		*** REQUIRED VERSION AFTER 1/7/2006 ***
+		Added explicit load of "Home" page when logging in.
+		Note that this was done beacuse Myspace added an
+		ad page which breaks any version of this module prior
+		to this one.
+
+0.07	2006-01-03/7:51pm
+		Added CAPTCHA response code "FC" to send_message method. send_message
+		returns FC if the $CAPTCHA regexp is found after submitting a message
+		form.
+
+0.06	2005-12-27/5:04pm
+		Added friends_in_group method. Returns list of "friends" in a
+		Myspace group when passed the group ID.
+
+0.05	2005-12-14/7:49pm
+		Added approve_friends method.
+
+0.04	2005-12-11/9:38pm
+		Minor documentation tweaks: Updated BUGS and Copyright secsions,
+		added "send_messages" method in SYNOPSIS.
+
+0.03	2005-12-11/9:21pm
+		Added send_message method.
+		Added already_commented method.
+		Updated documentation to be in-line in the package file.
+
+0.02	2005-12-08/10:41pm
+		post_comments now adds "<br>" tags to the message
+		like myspace's Javascript does.
+
+0.01    2005-12-05/1:14
+        First version, released on an unsuspecting world.
+

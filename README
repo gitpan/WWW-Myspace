@@ -1,0 +1,90 @@
+WWW::Myspace - Access MySpace.com from Perl scripts
+
+WWW::Myspace.pm provides methods to access myspace.com accounts and functions
+automatically. It provides a simple interface for scripts to log in,
+access lists of friends, scan user's profiles, retreive profile
+data, and post comments.
+
+Example:
+
+    use WWW::Myspace;
+    my $myspace = WWW::Myspace->new ($account, $password);
+        OR
+    my $myspace = new WWW::Myspace; # Prompts for email and password
+
+    my ( @friends ) = $myspace->get_friends();
+
+
+PREREQUESITES
+
+HTTP::Request::Form
+Spiffy
+
+Each of them has a list of dependencies also.
+
+If you don't have XML::Parser installed,
+you'll probably need to manually install expat:
+http://sourceforge.net/projects/expat/
+
+On MacOS X you'll need to install the developer tools from your
+Tiger install DVD or download them from http://developer.apple.com
+or nothing will install and you'll get errors about missing CORE files).
+(I haven't tested this on pre-Tiger MacOS, but it should work).
+
+INSTALLATION
+
+Installing using the cpan command-line tool is the easiest
+as it will install the dependencies for you.
+
+cpan install WWW::Myspace
+
+Good general advice for installing any CPAN module:
+If a module fails to install:
+- Starting at the top, scan the copious output cpan will create
+- When you see a module has failed to install:
+  - cd into the module's directory ( hint: cd ~/.cpan/build ; ls )
+  - Read the README for the module and install it manually. You'll
+    see the specific errors it's having there.
+  - Once it's installed, run your cpan install command again.
+
+If you don't configure cpan to use "sudo make install", you'll probably
+want to run the cpan command as root or run "sudo cpan". man cpan
+for more info.
+
+
+
+To install this module manually, run the following commands:
+
+    perl Makefile.PL
+    make
+    make test
+    sudo make install
+
+
+
+SUPPORT AND DOCUMENTATION
+
+After installing, you can find documentation for this module with the perldoc command.
+
+  perldoc WWW::Myspace
+
+You can also look for information at:
+
+    Search CPAN
+        http://search.cpan.org/dist/WWW::Myspace
+
+    CPAN Request Tracker:
+        http://rt.cpan.org/NoAuth/Bugs.html?Dist=WWW::Myspace
+
+    AnnoCPAN, annotated CPAN documentation:
+        http://annocpan.org/dist/WWW::Myspace
+
+    CPAN Ratings:
+        http://cpanratings.perl.org/d/WWW::Myspace
+
+COPYRIGHT AND LICENCE
+
+Copyright (C) 2005 Grant Grueninger
+
+This program is free software; you can redistribute it and/or modify it
+under the same terms as Perl itself.
