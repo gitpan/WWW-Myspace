@@ -37,11 +37,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.09
+Version 0.10
 
 =cut
 
-our $VERSION = '0.09';
+our $VERSION = '0.10';
 
 =head1 SYNOPSIS
 
@@ -74,11 +74,15 @@ our $BASE_URL="http://www.myspace.com/";
 
 # Where should we store files? (cookies, cache dir). We use, and untaint,
 # the user's home dir for the default.
-our $HOME_DIR= "$ENV{'HOME'}";
-if ( $HOME_DIR =~ /^([-A-Za-z0-9_ \/\.@\+]+)$/ ) {
-	$HOME_DIR = $1;
-} else {
-	croak 'Invalid characters in $ENV{HOME}.';
+our $HOME_DIR= "";
+if ( defined $ENV{'HOME'} ) {
+	$HOME_DIR = "$ENV{'HOME'}";
+	
+	if ( $HOME_DIR =~ /^([\-A-Za-z0-9_ \/\.@\+]*)$/ ) {
+		$HOME_DIR = $1;
+	} else {
+		croak "Invalid characters in $ENV{HOME}.";
+	}
 }
 
 # What's the URL for the user's Home page?
@@ -273,6 +277,8 @@ Returns the path to the file we're using to store cookies. Defaults
 to $ENV{'HOME'}/.cookies.txt. If called with a filename, sets
 cookie_jar to that path.
 
+If using this from a CGI script, you should set cookie_jar.
+
 =cut
 
 field cookie_jar =>"$HOME_DIR/.cookies.txt";
@@ -286,6 +292,10 @@ cache data as well.
 cache_dir sets or returns the directory in which we should store cache
 data. Defaults to $ENV{'HOME'}/.www-myspace.
 
+If using this from a CGI script, you will need to provide the
+account and password in the "new" method call, so cache_dir will
+not be used.
+
 =cut
 
 field cache_dir => "$HOME_DIR/.www-myspace";
@@ -295,6 +305,10 @@ field cache_dir => "$HOME_DIR/.www-myspace";
 
 Sets or returns the name of the file into which the login
 cache data is stored. Defaults to login_cache.
+
+If using this from a CGI script, you will need to provide the
+account and password in the "new" method call, so cache_file will
+not be used.
 
 =cut
 

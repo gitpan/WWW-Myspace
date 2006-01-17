@@ -1,5 +1,9 @@
 Revision history for WWW::Myspace
 
+0.10	2006-01-16/8:12pm
+		Fixed setting of HOME_DIR to work if $ENV{HOME} is not
+		set (i.e. if running in a CGI script). Updated docs.
+
 0.09	2006-01-11/10:24pm
 		Chnaged name from "Myspace" to "WWW::Myspace"
 		Made "Spiffy".
