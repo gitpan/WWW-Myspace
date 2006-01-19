@@ -1,5 +1,9 @@
 Revision history for WWW::Myspace
 
+0.11	2006-01-19/2:48am
+		Maintenance release - removed extra ._* files that
+		broke some tests.
+
 0.10	2006-01-16/8:12pm
 		Fixed setting of HOME_DIR to work if $ENV{HOME} is not
 		set (i.e. if running in a CGI script). Updated docs.

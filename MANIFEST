@@ -6,5 +6,4 @@ README
 lib/WWW/Myspace.pm
 t/00-load.t
 t/boilerplate.t
-t/pod-coverage.t
 t/pod.t
