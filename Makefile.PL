@@ -12,6 +12,9 @@ WriteMakefile(
         'Test::More' => 0,
         'HTTP::Request::Form' => 0,
         'Spiffy' => 0.24,
+        'YAML' => 0.39,
+        'IO::All' => 0.33,
+        'File::Spec::Functions' => 0, # Note: Forces File::Spec 0.7 or later.
     },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean               => { FILES => 'WWW-Myspace-*' },

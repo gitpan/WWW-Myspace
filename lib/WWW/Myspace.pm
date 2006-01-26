@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm,v 1.4 2006/01/12 08:15:59 grant Exp $
+# $Id: Myspace.pm,v 1.17 2006/01/26 04:41:05 grant Exp $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -15,8 +15,8 @@
 package WWW::Myspace;
 use Spiffy -Base;
 
-# *** If you're not familiar with Spiffy, read the docs. To save you
-# confusion, one of its features is to add "my $self = shift" to
+# *** If you're not familiar with Spiffy, read its docs. To save you
+# confusion, one of its features is to add "my $self = shift;" to
 # each method definition, so when you see that missing, that's why. ***
 
 ######################################################################
@@ -28,7 +28,8 @@ use LWP::UserAgent;
 use HTTP::Request;
 use HTTP::Request::Common;
 use HTTP::Request::Form;
-use HTML::TreeBuilder 3.0;                          
+use HTML::TreeBuilder 3.0;         
+use File::Spec::Functions;
 
 
 =head1 NAME
@@ -37,31 +38,39 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.11
+Version 0.15
 
 =cut
 
-our $VERSION = '0.11';
+our $VERSION = '0.15';
 
 =head1 SYNOPSIS
 
-Myspace.pm provides methods to access myspace.com accounts and functions
-automatically. It provides a simple interface for scripts to log in,
-access lists of friends, scan user's profiles, retreive profile
-data, send messages, and post comments.
+WWW::Myspace.pm provides methods to access your myspace.com
+account and functions automatically. It provides a simple interface
+for scripts to log in, access lists of friends, scan user's profiles,
+retreive profile data, send messages, and post comments.
 
-    use Myspace;
-    my $myspace = Myspace->new ($account, $password);
+    use WWW::Myspace;
+    my $myspace = WWW::Myspace->new ($account, $password);
         OR
-    my $myspace = new Myspace; # Prompts for email and password
+    my $myspace = new WWW::Myspace; # Prompts for email and password
     
     my ( @friends ) = $myspace->get_friends();
 
-Myspace works by interacting with the site through a UserAgent
+This module is designed to help you automate and
+centralize redundant tasks so that you can better handle keeping in
+personal touch with numerous friends or fans, or coordinate fan
+communications among multiple band members. This module operates well
+within MySpace's security measures. If you're looking for a spambot,
+this ain't it.
+
+WWW::Myspace works by interacting with the site through a UserAgent
 object, using HTTP::Request::Form to process forms. Since by nature
 web sites are dynamic, if you find that some interaction with the
 site breaks, check for a new version of this module (or if you
 go source diving, submit a patch).
+
 
 =cut
 
@@ -78,7 +87,7 @@ our $HOME_DIR= "";
 if ( defined $ENV{'HOME'} ) {
 	$HOME_DIR = "$ENV{'HOME'}";
 	
-	if ( $HOME_DIR =~ /^([\-A-Za-z0-9_ \/\.@\+]*)$/ ) {
+	if ( $HOME_DIR =~ /^([\-A-Za-z0-9_ \/\.@\+\\:]*)$/ ) {
 		$HOME_DIR = $1;
 	} else {
 		croak "Invalid characters in $ENV{HOME}.";
@@ -123,6 +132,18 @@ our $SEND_MESSAGE_FORM="http://Mail1.myspace.com/index.cfm?fuseaction=mail.messa
 # us the message was sent?
 our $VERIFY_MESSAGE_SENT = "Your Message Has Been Sent\!";
 
+# If a person's profile is set to "private" we'll get an error when we
+# pull up the form to mail them. What regexp do we read to identify that
+# page?
+our $MAIL_PRIVATE_ERROR = "You can't send a message to [^<]+ because you must be [^<]+'s friend";
+
+# If a person has set an away message, what regexp should we look for?
+our $MAIL_AWAY_ERROR = "You can't send a message to [^<]+ because [^<]+ has set [^<]+ status to away";
+
+# If we exceed our daily mail usage, what regexp would we see?
+# (Note: they've misspelled usage, so the ? is in case they fix it.)
+our $EXCEED_USAGE = "User has exceeded their daily use?age";
+
 # What regexp should we use to find the "requestGUID" for a friend request?
 our $FRIEND_REQUEST = "requestGUID.value='([^\']+)'";
 
@@ -158,14 +179,14 @@ the last-used data (from the preferences file) as defaults.
 
 Once the account and password have been retreived, the new method
 automatically invokes the "site_login" method and returns a new
-Myspace object reference. The new object already contains the
+WWW::Myspace object reference. The new object already contains the
 content of the user's "home" page, the user's friend ID, and
 a UserAgent object used internally as the "browser" that is used
-by all methods in the Myspace class.
+by all methods in the WWW::Myspace class.
 
     EXAMPLES
-        use Myspace;
-        my $myspace = Myspace->new();
+        use WWW::Myspace;
+        my $myspace = new WWW::Myspace;
         
         # Print my friend ID
         print $myspace->my_friend_id;
@@ -173,15 +194,17 @@ by all methods in the Myspace class.
         # Print the contents of the home page
         print $myspace->current_page->content;
         
-        # Print all my friends
+        # Print all my friends with a link to their profile.
         @friend_ids = $myspace->get_friends;
         foreach $id ( @friend_ids ) {
-            print "${VIEW_PROFILE_URL}${id}\n"
+            print 'http://profile.myspace.com/index.cfm?'.
+                'fuseaction=user.viewprofile&friendID='.
+                ${id}."\n";
         }
-        
+
         # How many friends do we have? (Note: we don't include Tom
         # because he's everybody's friend and we don't want to be
-        # spamming him with comments and such).
+        # bugging him with comments and such).
         print @friend_ids . " friends (not incl Tom)\n";
 
 =cut
@@ -234,8 +257,8 @@ EXAMPLE
 The following would prompt the user for their login information, then print
 out the account name:
 
-	use Myspace;
-	my $myspace = new Myspace;
+	use WWW::Myspace;
+	my $myspace = new WWW::Myspace;
 	
 	print $myspace->account_name;
 
@@ -247,19 +270,80 @@ sub account_name {
 
 }
 
+=head2 user_name
+
+Returns the profile name of the logged in account. This is the
+name that shows up at the top of your profile page above your picture.
+This is NOT the account name.
+
+Normally you'll only retreive the value with this method. When logging
+in, the internal login method calls this routine with the contents
+of the profile page and this method extracts the user_name from the
+page code. You can, if you really need to, call user_name with the
+contents of a page to have it extract the user_name from it. This
+may not be supported in the future, so it's not recommended.
+
+=cut
+
+sub user_name {
+
+	if ( @_ ) {
+		my ( $homepage ) = @_;
+		my $page_source = $homepage->content;
+		if ( $page_source =~ /index\.cfm\?fuseaction=user\.viewfriends\&friendID=[0-9]+\&userName=([^\&]*)/ ) {
+			$self->{user_name} = $1;
+		}
+	}
+	
+	return $self->{user_name};
+
+}
+
+=head2 friend_count
+
+Returns the logged in user's friend count as displayed on the
+profile page ("You have NN friends").
+
+Note that due to one of WWW::Myspace's many bugs, this count may not
+be equal to the count of friends returned by get_friends.
+
+Like the user_name method, friend_count is called by the internal
+login method with the contents of the user's profile page, from
+which it extracts the friend count using a regexp on the
+"You have NN friends" string. If you need to, you can do so
+also, but again this might not be supported in the future so do so
+at your own risk.
+
+=cut
+
+sub friend_count {
+
+	# If they gave us a page, set friend_count.
+	if ( @_ ) {
+		my ( $homepage ) = @_;
+		my $page_source = $homepage->content;
+
+		if ( $page_source =~ /You have <a [^>]+>([0-9]+)<\/a> friends/ ) {
+			$self->{friend_count} = $1;
+		}
+	}
+	
+	return $self->{friend_count};
+
+}
 
 =head2 current_page
 
 Returns a reference to an HTTP::Response object that contains the last page
-retreived by the Myspace object. All methods (i.e. get_page, post_comment,
+retreived by the WWW::Myspace object. All methods (i.e. get_page, post_comment,
 get_profile, etc) set this value.
 
 EXAMPLE
 
 The following will print the content of the user's profile page:
 
-	use Myspace;
-	my $myspace = new Myspace;
+	use WWW::Myspace;
+	my $myspace = new WWW::Myspace;
 	
 	print $myspace->current_page->content;
 
@@ -281,8 +365,8 @@ If using this from a CGI script, you should set cookie_jar.
 
 =cut
 
-field cookie_jar =>"$HOME_DIR/.cookies.txt";
-#field cookie_jar =>"/Users/grant/.cookies.txt";
+#field cookie_jar => "$HOME_DIR/.cookies.txt";
+field cookie_jar => catfile( "$HOME_DIR", '.cookies.txt' );
 
 =head2 cache_dir
 
@@ -298,8 +382,7 @@ not be used.
 
 =cut
 
-field cache_dir => "$HOME_DIR/.www-myspace";
-#field cache_dir => "/Users/grant/.www-myspace";
+field cache_dir => catfile( "$HOME_DIR", '.www-myspace' );
 
 =head2 cache_file
 
@@ -319,14 +402,15 @@ field cache_file => 'login_cache';
 Remove the login cache file. Call this after creating the object if
 you don't want the login data stored:
 
- my $myspace = new Myspace( qw( myaccount, mypassword ) );
+ my $myspace = new WWW::Myspace( qw( myaccount, mypassword ) );
  $myspace->remove_cache;
 
 =cut
 
 sub remove_cache {
 
-	unlink $self->cache_file;
+	my $cache_file_path = catfile( $self->cache_dir, $self->cache_file );
+	unlink $cache_file_path;
 
 }
 
@@ -341,9 +425,10 @@ sub _get_acct {
 	my %prefs = ();
 	my $ref = "";
 	my ( $pref, $value, $res );
-	
+	my $cache_filepath = catfile( $self->cache_dir, $self->cache_file);
+
 	# Read what we got last time.	
-	if ( open ( PREFS, "< " . $self->cache_file ) ) {
+	if ( open ( PREFS, "< ", $cache_filepath ) ) {
 		while (<PREFS>) {
 			chomp;
 			( $pref, $value ) = split( ":" );
@@ -369,14 +454,10 @@ sub _get_acct {
 	}
 
 	# Make the cache directory if it doesn't exist.
-	unless ( -d $self->cache_dir ) {
-		mkdir $self->cache_dir or croak "Can't create cache directory ".
-			$self->cache_dir;
-	}
+	$self->make_cache_dir;
 
 	# Store the new values.
-	my $filepath = $self->cache_dir . "/" . $self->cache_file;
-	open ( PREFS, "> $filepath" );
+	open ( PREFS, ">", $cache_filepath ) or croak $!;
 	print PREFS "email:" . $prefs{"email"} . "\n" .
 		"password:" . $prefs{"password"} . "\n";
 	close PREFS;
@@ -412,46 +493,6 @@ sub _site_login {
 						}
 					  );
 
-#	# Now, get the login page
-#	my $res = $self->get_page( $BASE_URL);
-#	if ( ( $DEBUG ) && ( $res->is_success ) ) {
-#		print "Got content:\n";
-#		print $res->content;
-#	}
-#
-#	# Parse it
-#	my $tree = HTML::TreeBuilder->new;
-#	$tree->parse($res->content);
-#	$tree->eof();
-#
-#	# Find the FORM tags	
-#	my @forms = $tree->find_by_tag_name('FORM');
-#	die "What, no forms in $url?" unless @forms;
-#	
-#	# Find the login form (this logic just pulls the second form
-#	# on the page - first form on myspace.com is a search box, second is the
-#	# login form)
-#	my $f = HTTP::Request::Form->new($forms[1], $BASE_URL);
-#	if ( $DEBUG ) {
-#		print "Think this is the login form:\n";
-#		foreach $field ( $f->fields() ) {
-#		  print $field . "\n";
-#		}
-#		print "Dumping form data:\n";
-#		$f->dump();
-#	
-#		print "Posting URL:\n" . $f->link . "\n";
-#		print "Posting method:\n" . $f->method . "\n\n";
-#	}
-#	
-#	print "Sending login\n";
-#	# Fill in the fields
-#	$f->field("email", $self->{account_name});
-#	$f->field("password", $self->{password} );
-#	
-#	# Press the login button.
-#	$res = $ua->request($f->press("Submit22"));
-#	
 	# Check for success
 	if ( $submitted ) {
 		( $DEBUG ) && print $self->{current_page}->content;
@@ -463,12 +504,13 @@ sub _site_login {
 	# so explicitly request our Home.
 	$self->get_page( $HOME_PAGE );
 
-#	# Store our resulting web page.
-#	$self->{current_page}=$res;
-	
 	# Get our friend ID from our profile page (which happens to
 	# be the page we go to after logging in).
 	$self->_get_friend_id( $self->{current_page} );
+	
+	# Set the user_name and friend_count fields.
+	$self->user_name( $self->current_page );
+	$self->friend_count( $self->current_page );
 
 }
 
@@ -494,6 +536,34 @@ sub _get_friend_id {
 }
 
 #---------------------------------------------------------------------
+# make_cache_dir
+
+=head2 make_cache_dir
+
+Creates the cache directory in cache_dir. Only creates the
+top-level directory, croaks if it can't create it.
+
+	$myspace->cache_dir("/path/to/dir");
+	$myspace->make_cache_dir;
+
+This function mainly exists for the internal login method to use,
+and for related sub-modules that store their cache files by
+default in WWW:Myspace's cache directory.
+
+=cut
+
+sub make_cache_dir {
+
+	# Make the cache directory if it doesn't exist.
+	unless ( -d $self->cache_dir ) {
+		mkdir $self->cache_dir or croak "Can't create cache directory ".
+			$self->cache_dir;
+	}
+
+}
+
+
+#---------------------------------------------------------------------
 # get_friends();
 # Return, as an array of friend IDs, all of our friends.
 # For each friend page, grep for the "view profile" links, which
@@ -501,7 +571,10 @@ sub _get_friend_id {
 
 =head2 get_friends
 
-Returns an array that is a list of your friend's friend IDs.
+Returns, as a list of friendIDs, all of your friends. It does
+not include Tom, because he's everybody's friend and when you're
+debugging your band central CGI page it's probably best to limit your
+mistakes to actual friends.
 
     @friends = $myspace->get_friends;
 
@@ -535,6 +608,7 @@ sub get_friends {
 		}
 		
 		# Next!
+		$self->{_last_friend_page} = $page;
 		$page++;
 	}
 
@@ -549,12 +623,14 @@ sub get_friends {
 
 =head2 friends_who_emailed
 
-Returns an array containing the friend IDs of all friends with messages
+Returns list of the friend IDs of all friends with messages
 in your inbox (mail). Note that this only tells you who you have mail from,
 not how many messages, nor does it contain any method to link to those
 messages. This is primarily designed to aid in auto-responding programs
 that want to not contact (comment or email) people who have sent
-messages as someone will probably need to attend to them personally.
+messages so someone can attend to them personally. This routine
+also disincludes Tom, mainly because it uses the same routine
+as "get_friends".
 
     @friends = $myspace->friends_who_emailed;
 
@@ -572,17 +648,18 @@ sub friends_who_emailed {
 
 =head2 friends_in_group( group_id )
 
-Returns an array containing the friend IDs of all friends (by
-Myspace's definition) in the group identified by group_id.
+Returns a list of the friend IDs of all people in the
+group identified by group_id. Tom is disincluded as in get_friends
+(because the same routine is used to get the friendIDs).
 
 Example:
 
  my @hilary_fans = $myspace->friends_in_group( 100011592 );
  
- @hilary_fans now contains the friend IDs of everyone in the HIlary
+ @hilary_fans now contains the friendID of everyone in the HIlary
  Duff Fan Club group (group ID 100011592 ).
  
-To get the group ID, go to the group page in Myspace and look at
+To get the group ID, go to the group page in WWW::Myspace and look at
 the URL:
 http://groups.myspace.com/index.cfm?fuseaction=groups.viewMembers&GroupID=100011592&adTopicId=&page=3
  
@@ -631,12 +708,30 @@ sub _get_friend_page {
 		$url = "http://groups.myspace.com/index.cfm?fuseaction=".
 			"groups.viewMembers&GroupID=${id}&page=${page}";
 	} else {
-# XXX This logic is now broken due to myspace change. Repeatedly gets page 0.
-		$url = "http://home1.myspace.com/index.cfm?".
-			"fuseaction=user.viewfriends&friendID=" .
-			$self->{my_friend_id} . "&page=${page}";
+		if ( $page == 0 ) {
+			# First page
+			$url = "http://home.myspace.com/index.cfm?".
+				"fuseaction=user.viewfriends&".
+				"friendID=" . $self->my_friend_id . "&".
+				"FriendCount=" . $self->friend_count . "&" .
+				"userName=" . $self->user_name;
+		} else {
+			# Subsequent pages
+			$url = "http://home.myspace.com/index.cfm?".
+				"fuseaction=user.viewfriends&".
+				"UserName=" . $self->user_name . "&" .
+				"friendID=" . $self->my_friend_id . "&" .
+				"f_search=&searchby=&" . 
+				"friendCount=" . $self->friend_count . "&" .
+				"page=" . $page . "&" .
+				"lastpage=" . $self->{_last_friend_page} . "&" .
+				"PREVPageLASTONERETURENED=" . $self->{_high_friend_id} . "&" .
+				"PREVPageFirstONERETURENED=" . $self->{_low_friend_id}."&".
+#				"lastpageofset=" . $self->{_total_friend_pages} . "&".
+				"TotalRecords=" . $self->friend_count;
+		}
 
-#			warn "processing page $page\n";
+#			warn "processing page $url\n";
 	}
 
 	# Get the page	
@@ -646,10 +741,6 @@ sub _get_friend_page {
 }
 
 #---------------------------------------------------------------------
-# get_page( $url )
-# Myspace is testy, try until we get the page. Note that this routine
-# will KEEP TRYING FOREVER, so make sure you have the right URL!!!
-# This is designed to get past network problems and such.
 
 =head2 get_page( $url )
 
@@ -661,8 +752,8 @@ via some other method. You could include the URL to a picture
 page for example then search that page for friendIDs using
 get_friends_on_page.
 
-get_page try until it gets the page. Note that this routine
-will KEEP TRYING FOREVER, so make sure you have the right URL!!!
+get_page will try up to 20 times until it gets the page, with a 5-second
+delay between attempts.
 This is designed to get past network problems and such.
 
 EXAMPLE
@@ -686,8 +777,9 @@ sub get_page {
 	my $res = $ua->get("$url");
 	
 	# Check for actual errors and try again
-	unless ( $res->is_success ) {
-		print "Error getting page: $url\n" .
+	my $attempts=0;
+	unless ( ( $res->is_success ) || ( $attempts > 20 ) ) {
+		warn "Error getting page: $url\n" .
 			"  " . $res->status_line . "\n";
 		sleep 5;
 		$res = $ua->get("$url");
@@ -713,7 +805,7 @@ sub get_page {
 =head2 get_friends_on_page( $friends_page );
 
 This routine takes the SOURCE CODE of an HTML page and returns
-an array that contains a list of friendIDs for which there are profile
+a list of friendIDs for which there are profile
 links on the page. This routine is used internally by "get_friends"
 to scan each of the user's "View my friends" pages.
 
@@ -726,8 +818,8 @@ EXAMPLE:
 
 List the friendIDs mentioned on Tom's profile:
     
-    use Myspace;
-    my $myspace = new Myspace;
+    use WWW::Myspace;
+    my $myspace = new WWW::Myspace;
 
     $res = $myspace->get_profile( 6229 );
     
@@ -746,10 +838,24 @@ sub get_friends_on_page {
 	my %friend_ids = ();
 	my $line;
 	my @lines = split( "\n", $page );
+	$self->{_high_friend_id} = 0;
+	$self->{_low_friend_id} = 0;
 	foreach $line ( @lines ) {
 		if ( $line =~ /${FRIEND_REGEXP}([0-9]+)/i ) {
 			unless ( ( "$1" == $self->{my_friend_id} ) || ( "$1" == 6221 ) ) {
-				$friend_ids{"$1"}++
+				$friend_ids{"$1"}++;
+				
+				# The following are used to construct the URL
+				# when crawling the user's "view all my friends" pages.
+				# Set high friendID on this page
+				if ( $self->{_high_friend_id} < $1 ) {
+					$self->{_high_friend_id} = $1;
+				}
+				# Set low friendID on this page
+				if ( ( $self->{_low_friend_id} == 0 ) ||
+					 ( $1 < $self->{_low_friend_id} ) ) {
+					$self->{_low_friend_id} = $1;
+				}
 			}
 		}
 	}
@@ -811,8 +917,8 @@ Warning: It is possible for the status code to return a false
 to load.
 
 EXAMPLE:
-    use Myspace;
-    my $myspace = new Myspace;
+    use WWW::Myspace;
+    my $myspace = new WWW::Myspace;
 
     foreach $id ( $myspace->friends_who_emailed ) {
         $status = $myspace->post_comment( $id, "Thanks for the message!" )
@@ -824,6 +930,7 @@ sub post_comment {
 
 	my ( $friend_id, $message ) = @_;
 	my $status = ""; # Our return status
+	my ($submitted, $attempts);
 
 #	my ( $dbh, $ua, $login, $message, $friend_id ) = @_;
 
@@ -838,12 +945,14 @@ sub post_comment {
 #		$message = "Hi $friend_name!\n\n" . $message;
 #	}
 	
-	# HTML-ize the message like myspace's javascript does
-	$message =~ s/\n/<br>\n/gs;
-	
+	# HTML-ize the message like myspace's javascript does.
+	# This also takes care of possible literal "\n"s that come
+	# from commend-line arguments.
+	$message =~ s/(\n|\\n)/<br>\n/gs;
+
 	# Submit the comment to $friend_id's page
 	( $DEBUG ) && print "Getting comment form..\n";
-	my $submitted = 
+	$submitted = 
 		$self->submit_form( "${VIEW_COMMENT_FORM}${friend_id}", 1,
 						"", { 'f_comments' => "$message" }
 					);
@@ -867,10 +976,6 @@ sub post_comment {
 		$submitted = $self->submit_form( $self->{current_page}, 1, "",
 				{} );
 	}
-
-#	# Log the post time
-#	&log_comment( $dbh, $login, $friend_id );
-#
 
 	# Get the resulting page and clean it up (strip whitespace)
 	my $page = $self->{current_page}->content;
@@ -899,6 +1004,7 @@ sub post_comment {
 # (Note: we don't handle the filtering here yet)
 
 =head2 comment_friends( $message )
+
 =head2 comment_friends( $message, { 'ignore_dup' => 1 } )
 
 This convenience method sends the message in $message to
@@ -909,20 +1015,23 @@ If called in the second form, it uses the "already_commented" method
 to determine if a comment has already been left on each friend's page
 and skips the page if it detects a previous comment.
 
-Note that you'll probably want to use the Myspace::Comment module as if the
-process is interrupted (which is likely), this
+Note that you'll probably want to use the WWW::Myspace::Comment module
+as if the process is interrupted (which is likely), this
 routine doesn't offer a way to recover. 
-The Myspace::Comment module logs where comments have been left, scans for
+The WWW::Myspace::Comment module logs where comments have been left, scans for
 previous comments we've left on the user's page, and can stop after a
 specified number of posts to avoid triggering security measures. It can also
 be re-run without leaving duplicate comments.
+
+Of course, if you just want to whip off a quick comment to a few (less than
+50) friends, this method's for you.
 
 EXAMPLE:
     A simple script to leave a comment saying "Merry Christmas"
     to everyone on your friends list:
 
-    use Myspace;
-    my $myspace = new Myspace;
+    use WWW::Myspace;
+    my $myspace = new WWW::Myspace;
     $myspace->comment_friends( "Merry Christmas!" );
 
 =cut
@@ -935,7 +1044,7 @@ sub comment_friends {
 	my $friend_id;
 	
 	# Get friends
-	my @friends=$self->get_friends();
+	my @friends=$self->get_friends;
 	
 	# Loop and post
 	foreach $friend_id ( @friends ) {
@@ -960,12 +1069,13 @@ Returns true if there is a link to our profile on "$friend_id"'s page.
 (If we've left a comment, there'll be a link).
 
 Note that if you're friends with this person and they have another link
-to your page on their page, this will return a "false" true.
+to your profile on their page, this will return true, even though
+you may not have left a comment.
 
 EXAMPLE
 
-  my Myspace;
-  my $myspace = new Myspace;
+  my WWW::Myspace;
+  my $myspace = new WWW::Myspace;
   
   foreach $friend_id ( $myspace->get_friends ) {
 	  unless ( $myspace->already_commented( $friend_id ) {
@@ -1008,6 +1118,10 @@ Returns a status code:
  P: Posted. Verified by HTTP response code and reading a regexp
  	from the resulting page saying the message was sent.
  FC: Failed. A CAPTCHA response was requested.
+ FF: Failed. The person's profile is set to private. You must
+     be their friend to message them.
+ FA: Failed. The person has set their status to "away".
+ FE: Failed. The account has exceeded its daily usage.
  FN: Failed. The POST returned an unsuccessful HTTP response code.
  F:  Failed. Post went through, but we didn't see the regexp on the
  	resulting page (message may or may not have been sent).
@@ -1017,16 +1131,37 @@ Returns a status code:
 sub send_message {
 
 	my ( $friend_id, $subject, $message ) = @_;
+	my ( $submitted, $res, $page );
+
+	# Try to get the message form
+	$res = $self->get_page( "${SEND_MESSAGE_FORM}${friend_id}" );
+	
+	# See if we can mail or if there's an error.
+	if ( $res->is_success ) {
+		$page = $res->content;
+		$page =~ s/[ \t\n\r]+/ /g;
+		if ( $page =~ /${MAIL_PRIVATE_ERROR}/i ) {
+			return "FF";
+		} elsif ( $page =~ /${MAIL_AWAY_ERROR}/i ) {
+			return "FA";
+		}
+	} else {
+		return "FN";
+	}
+
+	# Takes care of possible literal "\n"s that come
+	# from commend-line arguments.
+	$message =~ s/\\n/\n/gs;
 
 	# Submit the message
-	my $submitted = $self->submit_form( "${SEND_MESSAGE_FORM}${friend_id}",
+	$submitted = $self->submit_form( $res,
 						1, "",
 						{ 'subject' => "$subject",
 						  'mailbody' => "$message"
 						}
 					  );
 	
-	my $page = $self->{current_page}->content;
+	$page = $self->{current_page}->content;
 	$page =~ s/[ \t\n\r]+/ /g;
 
 	# Return the result
@@ -1034,6 +1169,8 @@ sub send_message {
 		return "FN";
 	} elsif ( $page =~ /$VERIFY_MESSAGE_SENT/ ) {
 		return "P";
+	} elsif ( $page =~ /${EXCEED_USAGE}/i ) {
+		return "FE";
 	} elsif ( $page =~ /$CAPTCHA/ ) {
 		return "FC";
 	} else {
@@ -1043,10 +1180,12 @@ sub send_message {
 
 #---------------------------------------------------------------------
 
-=head2 approve_friend_requests
+=head2 approve_friend_requests( [message] )
 
 Looks for any new friend requests and approves them.
 Returns a list of friendIDs that were approved.
+If "message" is given, it will be posted as a comment to the
+new friend.
 
 EXAMPLE
 
@@ -1056,12 +1195,30 @@ EXAMPLE
   # Print the number of friends added and their friend IDs.
   print "Added " . @friends_added . " friends: @friends_added.";
 
-  # Leave each new friend a thank you comment.
-  foreach $id ( @friends_added ) {
-    $myspoace->post_comment( $id, "Thanks for adding me!" );
-  }
+  # Approve new frieds and leave them a thank you comment.
+  @friends_added = $myspace->approve_friend_requests(
+    "Thanks for adding me!\n\n- Your nww friend" );
 
 Run it as a cron job. :)
+
+Note that "\n" is properly handled if you pass it literally also (i.e.
+from the command line). That is if you write this "approve_friends"
+script:
+
+ #!/usr/bin/perl -w
+ # usage: approve_friends [ "message" ]
+ 
+ use WWW::Myspace;
+ my $myspace = new WWW::Myspace;
+ 
+ $myspace->approve_friend_requests( @ARGV );
+ 
+ And run it as:
+ 
+ approve_friends "Thanks for adding me\!\!\n\n- Me"
+ 
+You'll get newlines and not "\n" in the message. There, I even gave
+you your script.
 
 =cut
 
@@ -1072,6 +1229,7 @@ sub approve_friend_requests
 	my @friends = ();
 	my %friends = ();  # Not a typo. See below.
 	my ( $page, $id );
+	my ( $message ) = @_;
 
 	# Get the first page of friend requests
 	while ( 1 ) {
@@ -1094,7 +1252,10 @@ sub approve_friend_requests
 	}
 
 	# Clean up friends (there -could- be duplicates in some circomstances)
-	foreach $id ( @friends ) { $friends{"$id"}++ }
+	foreach $id ( @friends ) {
+		$friends{"$id"}++;
+		( $message ) && $self->post_comment( $id, $message );
+	}
 	
 	# Return the list of friends
 	return keys( %friends );
@@ -1105,7 +1266,7 @@ sub approve_friend_requests
 # _get_friend_requests()
 # Returns a list of friend requests from the Friend Requests page
 
-sub _get_friend_requests()
+sub _get_friend_requests
 {
 	my ( $page ) = @_;
 
@@ -1127,16 +1288,15 @@ sub _get_friend_requests()
 sub _post_friend_requests
 {
 	my ( @guids ) = @_;
-	my ( $submitted, $guid, $res );
+	my ( $submitted, $guid, $res, $pass );
 
 	# For each request post the approval form.
+	$pass=1;
 	foreach $guid ( @guids ) {
 
-		print "Approving guid: " . $guid . "\n";
+#		print "Approving guid: " . $guid . "\n";
 		
 		# Post it.
-		# XXX This routine is getting the right guids and posting
-		# successfully but the friends are not being approved.
 		$res=$self->{ua}->post( $FRIEND_REQUEST_POST,
 					{ requestType => 'SINGLE',
 					  requestGUID => $guid,
@@ -1145,9 +1305,124 @@ sub _post_friend_requests
 					} );
 
 		unless ( $res->is_success ) {
-			print $res->status_line . "\n";
+			$pass=0;
+#			print $res->status_line . "\n";
 		}
 	}
+
+	return $pass;
+
+}
+
+#---------------------------------------------------------------------
+# send_friend_request
+
+=head2 send_friend_request( @friend_ids )
+
+Send a friend request to each friend in the list of @friend_ids.
+
+This is the same as going to their profile page and clicking
+the "add as friend" button and confirming that you want to add them.
+
+ $myspace->send_friend_request( 12345, 123456 );
+
+Returns 1 if all requests were submitted ok, 0 if any failed.
+
+=cut
+
+sub send_friend_request {
+
+	# We pass unless 
+	my $pass = 1;
+
+	foreach my $id ( @_ ) {
+		my $res = $self->submit_form(
+			'http://www.myspace.com/index.cfm?'.
+			'fuseaction=invite.addfriend_verify&'.
+			'friendID=' . $id, 1, '', {} );
+		unless ( $res ) { $pass = 0 }
+	}
+	
+	return ( $pass );
+}
+
+=head2 add_as_friend
+
+Convenience method - same as send_friend_request. This method's here
+because the button on Myspace's site that the method emulates
+is usually labeled "Add as friend".
+
+=cut
+
+sub add_as_friend {
+	$self->send_friend_request( @_ );
+}
+
+#---------------------------------------------------------------------
+# delete_friend
+
+=head2 delete_friend( @friend_ids )
+
+Deletes the list of friend_ids passed from your list of friends.
+
+ $myspace->delete_friend( 12345, 151133 );
+
+Returns true if it posted ok, false if it didn't.
+
+(This method is a bit inefficient if deleting more than one friend
+due to a documented bug in HTTP::Request::Form. It should probably
+be moved to WWW::Mechanize.)
+
+=cut
+
+sub delete_friend {
+
+	my ( $form, $tree, $f, $res, $id );
+	my $pass=1;
+
+	foreach $id ( @_ ) {
+		# Create the form
+		$form =
+			'<FORM ACTION="index.cfm?fuseaction=user.deleteFriend" '.
+			'METHOD="POST">';
+
+		$form .= '<input type="checkbox" name="delFriendID" value="'
+			. $id . '">';
+
+		$form .= '<input type="image" border="0" name="deleteAll" '.
+			'src="images/btn_deleteselected.gif" width="129" height="20">'.
+			'</form>';
+
+		# Turn it into an HTML::Elements tree
+		$tree = HTML::TreeBuilder->new_from_content( $form );
+		$tree = $tree->elementify;
+
+#		$tree->dump;
+		
+		# Parse that into a HTTP::Request::Form object
+		my @forms = HTTP::Request::Form->new_many(
+			$tree, 'http://www.myspace.com/' );
+		$f = $forms[0];
+
+		# Check the checkboxes
+#		warn "Setting checkbox\n";
+		$f->checkbox_check( 'delFriendID' );
+
+#		if ( $f->checkbox_ischecked( 'delFriendID' ) ) {
+#			warn "Checkbox checked\n";
+#		}
+
+		# Submit the form
+#		$f->dump;
+
+		$res = $self->{'ua'}->request( $f->press( 'deleteAll' ) );	
+
+		unless ( $res->is_success ) {
+			$pass=0;
+		}
+	}
+
+	return $pass;
 
 }
 
@@ -1186,6 +1461,11 @@ This powerful little method reads the web page specified by $url,
 finds the form specified by $form_no, fills in the values
 specified in $fields_ref, and clicks the button named "$button".
 
+You may or may not need this method - it's used internally by
+any method that needs to fill in and post a form. I made it
+public just in case you need to fill in and post a form that's not
+handled by another method (in which case, see CONTRIBUTING below :).
+
 $url can either be a text string to a URL, or a reference to an
 HTTP::Response object that contains the source of the page
 that contains the form.
@@ -1200,6 +1480,9 @@ be "submit", but if they've named the button something clever like
 "Submit22" (as MySpace does in their login form), then you may have to
 use that.
 
+$fields_ref is a reference to a hash that contains field names
+and values you want to fill in on the form.
+
 EXAMPLE
 
 This is how post_comment actually posts the comment:
@@ -1213,7 +1496,7 @@ This is how post_comment actually posts the comment:
 	$self->submit_form( $self->{current_page}, 1, "submit", {} );
 
 The comment form is a 2-step process. The first command gets the form
-and fills it in, then posts it. Myspace then returns the HTML display
+and fills it in, then posts it. WWW::Myspace then returns the HTML display
 of the form with a "Post Comment" button. So we just need to click that
 button ("Post Comment" is the button's "value", but its type is "submit".
 You could probably use either value. See the "press" method in
@@ -1240,7 +1523,7 @@ sub submit_form {
 	} else {
 		$res = $self->get_page( $url );
 	}
-	
+
 	# Parse the page
 	my $tree = HTML::TreeBuilder->new_from_content($res->content);
 	$tree = $tree->elementify();
@@ -1249,8 +1532,8 @@ sub submit_form {
 	&_fix_textareas( $tree );
 
 	# Find the forms, fail if there aren't any
-	( $DEBUG ) && print "\n\nExtracting forms from the following:\n";
-	( $DEBUG ) && $tree->dump;
+#	( $DEBUG ) && print "\n\nExtracting forms from the following:\n";
+#	( $DEBUG ) && $tree->dump;
 
 	my @forms = HTTP::Request::Form->new_many( $tree, $BASE_URL );
 	$tree = $tree->delete();
@@ -1273,6 +1556,7 @@ sub submit_form {
 	foreach $field ( keys( %$fields_ref ) ) {
 		( $DEBUG ) && print "Filled in $field with " .
 					$$fields_ref{"$field"} . "\n";
+#		warn "Filling in field " . $field . "\n";
 		$f->field( "$field", "$$fields_ref{\"$field\"}" );
 	}
 	if ($DEBUG) {
@@ -1286,11 +1570,21 @@ sub submit_form {
 	}
 
 	# Press the submit button.
-	if ( $button ) {
-		$res = $ua->request($f->press("$button"))
-	} else {
-		$res = $ua->request($f->press())
-	}
+	my $attempts = 0;
+	do
+	{
+		if ( $button ) {
+			$res = $ua->request($f->press("$button"))
+		} else {
+#			warn "pressing button\n";
+			$res = $ua->request($f->press())
+		}
+		
+		$attempts++;
+		
+		sleep 2 unless ( $res->is_success );
+
+	} until ( ( $res->is_success ) || ( $attempts > 5 ) );
 	
 	# Return the result
 	$self->{current_page} = $res;
@@ -1337,16 +1631,39 @@ Grant Grueninger, C<< <grantg at cpan.org> >>
 
 =item -
 
-get_friends method does not work if user has > 40 friends
-(bug introduced by change in myspace site).
-
-=item -
-
 post_comment dies if it is told to post to a friendID that
-is not a friend of the logged-in user. (Myspace displays
+is not a friend of the logged-in user. (MySpace displays
 an error instead of a form).
 
 =back
+
+=head1 TODO
+
+Add an option to include the "add to friends" button after a message
+automatically.
+
+  Hint:
+  <a href="http://www.myspace.com/index.cfm?fuseaction=invite.addfriend_verify&friendID=37033247"><img src="http://i.myspace.com/site/images/addFriendIcon.gif" alt="Add as friend"></a>
+  (Replace "37033247" with your friend ID)
+
+Have 'add_to_friends' method check GUIDS after first submit to make
+sure the current page of GUIDS doesn't contain any duplicates. This
+is to prevent a possible infinite loop that could occur if the
+submission of the friend requests fails, and also to signal a warning
+if myspace changes in a way that breaks the method.
+
+Add checks to all methods to self-diagnose to detect changes in myspace
+site that break this module.
+
+=head1 CONTRIBUTING
+
+If you would like to contribute to this module, you can email me
+and/or post patches at the RT bug links below. There are many methods that
+could be added to this module (profile editing, for example). If you
+find yourself using the "submit_form" method, it probably means you
+should write whatever you're editing into a method and post it on RT.
+
+See the TODO section above for starters.
 
 =head1 BUGS
 
@@ -1390,7 +1707,7 @@ L<http://search.cpan.org/dist/WWW-Myspace>
 
 =head1 COPYRIGHT & LICENSE
 
-Copyright 2005 Grant Grueninger, all rights reserved.
+Copyright 2005-2006 Grant Grueninger, all rights reserved.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.

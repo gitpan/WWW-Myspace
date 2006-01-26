@@ -1,8 +1,77 @@
 Revision history for WWW::Myspace
 
-0.11	2006-01-19/2:48am
-		Maintenance release - removed extra ._* files that
-		broke some tests.
+0.15	2006-01-25/3:12pm
+		- Fixed condition in submit_form so it'll try 5 times with 2
+		  second delay if there's a network error.
+		- Updated test suite for new max_count in Message and removed
+		  extra "approve_friends" test in 01-login.t
+	    - Added handling of private profiles in send_message - returns "FF"
+	    - send_message converts literal '\n' into "\n".
+	    - Added handling of away messages - returns "FA"
+	    - Added handling of excess usage - returns "FE"
+		Message.pm:
+		  - Added result code display (i.e. why are we sleeping?) when
+		    sleeping and "noisy" is on.
+		  - Det default max_count to 300.
+		  - Added handling of private profiles and away messages.
+		  - Added handling of usage being exceeded - returns "USAGE".
+
+0.14	2006-01-25/11:41am
+		- Added loop code to submit_form - will now try each
+		  submit 5 times if the submit fails.
+		- Added optional "message" argument to approve_friend_requests.
+		  You can now call approve_friend_requests( message )
+		  and message will be posted to each approved friend.
+		- Added TODO and CONTRIBUTING section to docs.
+		- Updated docs for all methods.
+		- Updated get_page to attempt GET 20 times instead of forever.
+		- Added methods:
+			- send_friend_request
+			- add_as_friend
+			- delete_friend
+		Comment.pm (0.9):
+			- Reworked module internals. Made Spiffy.
+			- Numerous minor bug fixes.
+			- Renamed "HTML" accessor "html".
+			- Added "noisy" accessor.
+			- Added "cache_file" to conform to Message and Myspace.
+
+0.13	2006-01-20/7:43pm
+		Fixed approve_friend_requests method. Was skipping valid friend
+		requests.
+
+0.12	2006-01-17/1:20pm
+		Included Comment.pm, FriendChanges.pm, and Message.pm in
+		distribution.
+		Fixed bugs in cache_dir and cache_file handling.
+		Made pathname handling OS-independent using File::Spec.
+		Added friend_count and user_name accessors.
+		Fixed retreival of user's friend list in get_friends.
+		Added make_cache_dir method.
+		Comment.pm:
+			- Added exlusions_file method.
+			- Renamed "set_HTML" method "HTML". Made it a
+			  standard accessor method.
+		FriendChanges.pm:
+			- Set default cache file to $myspace->cache_dir/friend_cache.
+			- Added cache_file accessor method.
+			- Obsoleted "set_cache_file" method.
+		Message.pm, Comment.pm, FriendChanges.pm:
+			- When cache_dir method is called to retreive its default
+			  value, it calls the make_cache_dir method in the
+			  WWW::Myspace object to create cache_dir if it
+			  doesn't exist.
+			- File handling done by File::Spec for cross-platform
+			  portability.
+		Message.pm:
+			- Added extensive test suite.
+			- Added "messaged" method.
+			- Stabilized code to beta release state. Passes test suite.
+			- Fixed bugs.
+			- Noted obscure known "bugs".
+
+0.11	2006-01-19/3:07am
+		CPAN maintenance release. Removed stray ._ files from dist.
 
 0.10	2006-01-16/8:12pm
 		Fixed setting of HOME_DIR to work if $ENV{HOME} is not
