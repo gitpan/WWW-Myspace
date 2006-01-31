@@ -1,4 +1,4 @@
-# $Id: Comment.pm,v 1.8 2006/01/25 19:29:41 grant Exp $
+# $Id: Comment.pm,v 1.10 2006/01/31 02:23:05 grant Exp $
 
 package WWW::Myspace::Comment;
 
@@ -12,11 +12,11 @@ WWW::Myspace::Comment - Auto-comment your MySpace friends from Perl scripts
 
 =head1 VERSION
 
-Version 0.09
+Version 0.10
 
 =cut
 
-our $VERSION = '0.09';
+our $VERSION = '0.10';
 
 =head1 SYNOPSIS
 
@@ -121,7 +121,11 @@ sub friend_ids {
 	if ( @_ ) {
 		$self->{friend_ids} = \@_;
 	} else {
-		return @{ $self->{friend_ids} };
+		if ( defined ( $self->{friend_ids} ) ) {
+			return @{ $self->{friend_ids} };
+		} else {
+			return ();
+		}
 	}
 }
 
@@ -244,6 +248,19 @@ $comment->html( 1 );
 field html => 0;
 
 #----------------------------------------------------------------------
+# delay_time
+
+=head2 delay_time
+
+Sets the number of seconds for which the post_all method will sleep
+after reaching a COUNTER or CAPTCHA response. Defaults to 86400
+(24 hours).
+
+=cut
+
+field delay_time => 86400;
+
+#----------------------------------------------------------------------
 # noisy
 
 =head2 noisy( [1] [0] )
@@ -290,7 +307,7 @@ field 'myspace';
 
 =pod
 
-=head2 post_comments( $message, [@friend_ids] )
+=head2 post_comments( [ $message ], [ @friend_ids ] )
 
 Posts comments to friends specified by @friend_ids. If none are given,
 post_comments retrieves the list of all friends using the WWW::Myspace
@@ -486,6 +503,63 @@ sub post_comments {
 
 }
 
+=head2 post_all
+
+This convenience method implements the while loop script example in the
+post_comments section above. If the response is "DONE", it exits. Otherwise, it
+sleeps for the number of seconds set in "delay_time" and calls send again.
+It repeats this until it receives "DONE" from the send method.
+send_all does NOT reset the exclusions file. If delay_time is 0, it
+returns instead of sleeping.
+
+EXAMPLE
+ use WWW::Myspace;
+ use WWW::Myspace::Comment;
+ 
+ my $comment = new WWW::Myspace;
+ my $comment = new WWW::Myspace::Comment( $myspace );
+
+ $comment->message("This is a great message wraught with meaning.");
+ $comment->friend_ids( $myspace->get_friends );
+ $comment->post_all;
+
+ # Or
+ 
+ $comment->post_all( "This is a great message", $myspace->get_friends );
+
+=cut
+
+sub post_all {
+
+	my $response = "";
+
+	# Send our message to our friends until we're done - may take
+	# several days if we're popular.
+	while ( 1 ) {
+		# Send to as many as we can right now. Will stop either
+		# because it's DONE, it was asked for a CAPTCHA response,
+		# or because it maxed out the COUNTER.
+		$response = $self->post_comments( @_ );
+		
+		last if ( $response eq "DONE" );
+	
+		# Wait
+		if ( $self->noisy ) {
+			print "Got " . $response . "\n";
+			print "Sleeping " . $self->delay_time . " seconds...";
+			print "<br>" if ( $self->html );
+			print "\n";
+		}
+
+		# Sleep only if delay_time > 0, otherwise we're done.
+		last unless ( $self->delay_time > 0 );
+
+		sleep $self->delay_time;
+	}
+
+}
+
+
 =head2 ignore_duplicates( [ 1 | 0 ] )
 
 By default post_comments will not post on a page if it detects
@@ -544,7 +618,7 @@ sub reset_exclusions {
 
 	my ( $all ) = @_;
 
-	if ( $all eq "all" ) {
+	if ( ( defined $all ) && ( $all eq "all" ) ) {
 		unlink $self->cache_file or croak @!;
 		$self->{commented} = undef;
 	} else {

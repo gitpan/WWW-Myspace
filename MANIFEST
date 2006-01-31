@@ -12,6 +12,7 @@ t/01-login.t
 t/02-dual.t
 t/03-delete.t
 t/approve.t
+t/comment.t
 t/boilerplate.t
 t/pod-coverage.t
 t/pod.t

@@ -1,5 +1,19 @@
 Revision history for WWW::Myspace
 
+0.16	2006-01-26/8:09pm
+		- Set test count correctly in approve.t
+		Comment.pm:
+		- Added post_all method
+		- Added comment.t test.
+		- Fixed a condition which could cause an "undefined variable"
+		  warning when reset_exclusions is called.
+		- Fixed a bug that would produce an error:
+		  Can't use an undefined value as an ARRAY reference at
+		  /path/to/WWW/Myspace/Comment.pm line 124, <STDIN> line 2.
+		  if post_comments was called without any friends.
+		  (RT Bug 17379: http://rt.cpan.org/Ticket/Display.html?id=17379).
+		- Added test for defaults to comment.t
+
 0.15	2006-01-25/3:12pm
 		- Fixed condition in submit_form so it'll try 5 times with 2
 		  second delay if there's a network error.
