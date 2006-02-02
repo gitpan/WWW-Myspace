@@ -80,7 +80,7 @@ cmp_ok( @friends_who_emailed, '>=', 0, 'Retreive friends who emailed' );
 # Count the friends in the test group.
 my @friends_in_group = $myspace->friends_in_group( $test_group );
 
-cmp_ok( @friends_in_group, '>', 41, 'Retreive friends in Perl' );
+cmp_ok( @friends_in_group, '>', 41, 'Retreive friends in Perl Group' );
 diag( "Counted " . @friends_in_group . " friends in group" );
 
 # That's about all we can do without depending on myspace too much

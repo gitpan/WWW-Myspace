@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm,v 1.18 2006/01/27 04:54:57 grant Exp $
+# $Id: Myspace.pm,v 1.19 2006/02/02 02:45:25 grant Exp $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -38,11 +38,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.16
+Version 0.17
 
 =cut
 
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 
 =head1 SYNOPSIS
 
@@ -487,7 +487,7 @@ sub _site_login {
 	$self->{ua} = $ua;
 	
 	# Now log in
-	my $submitted = $self->submit_form( "$BASE_URL", 1, "Submit22",
+	my $submitted = $self->submit_form( "$BASE_URL", 1, "",
 						{ 'email' => $self->{account_name},
 						  'password' => $self->{password}
 						}
