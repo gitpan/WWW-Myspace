@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm,v 1.19 2006/02/02 02:45:25 grant Exp $
+# $Id: Myspace.pm,v 1.20 2006/02/02 23:00:28 grant Exp $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -38,11 +38,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.17
+Version 0.18
 
 =cut
 
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 
 =head1 SYNOPSIS
 
@@ -1672,6 +1672,10 @@ C<bug-www-myspace at rt.cpan.org>, or through the web interface at
 L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=WWW-Myspace>.
 I will be notified, and then you'll automatically be notified of progress on
 your bug as I make changes.
+
+IF YOU USE A MAIL SERVICE (or program) WITH JUNK MAIL FILTERING, especially
+HOTMAIL or YAHOO, add the bug reporting email address above to your address
+book so that you can receive status updates.
 
 Bug reports are nice, patches are nicer.
 

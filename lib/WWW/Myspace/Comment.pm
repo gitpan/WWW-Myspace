@@ -1,4 +1,4 @@
-# $Id: Comment.pm,v 1.10 2006/01/31 02:23:05 grant Exp $
+# $Id: Comment.pm,v 1.11 2006/02/03 02:40:21 grant Exp $
 
 package WWW::Myspace::Comment;
 
@@ -12,11 +12,11 @@ WWW::Myspace::Comment - Auto-comment your MySpace friends from Perl scripts
 
 =head1 VERSION
 
-Version 0.10
+Version 0.11
 
 =cut
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 =head1 SYNOPSIS
 
@@ -450,7 +450,7 @@ sub post_comments {
 					$result = "PP"; # Posted Previously
 				} else {
 					$result = $myspace->post_comment( $id, $self->message );
-					$counter++
+					$counter++ if ( $result =~ /^P/ );
 				}
 				# Log our attempt and the result
 				$self->_write_exclusions( $id, $result );

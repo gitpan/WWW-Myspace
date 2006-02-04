@@ -1,4 +1,4 @@
-# $Id: Message.pm,v 1.6 2006/01/26 04:41:05 grant Exp $
+# $Id: Message.pm,v 1.7 2006/02/03 02:40:21 grant Exp $
 
 package WWW::Myspace::Message;
 
@@ -13,11 +13,11 @@ WWW::Myspace::Message - Auto-message your MySpace friends from Perl scripts
 
 =head1 VERSION
 
-Version 0.06
+Version 0.07
 
 =cut
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 
 =head1 SYNOPSIS
 
@@ -401,7 +401,7 @@ sub send_message {
 				if ( $self->html ) { print "<P>" }
 				if ( $self->noisy ) { print "Sending to $id: " };
 				$result = $myspace->send_message( $id, $subject, $message );
-				$counter++;
+				$counter++ if ( $result =~ /^P/ );
 
 				# Log our attempt and the result
 				$self->_write_exclusions( $id, $result );

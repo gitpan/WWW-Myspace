@@ -1,5 +1,12 @@
 Revision history for WWW::Myspace
 
+0.18	2006-02-02
+		- Added bug reporting note to docs.
+		Message.pm (0.7):
+		- Counter now only counts successful posts.
+		Comment.pm (0.11):
+		- Counter now only counts successful posts.		
+
 0.17	2006-02-01/6:43pm
 		- Updated Login script due to change in myspace.com login form.
 		Unless Myspace.com changes the form back, NO PREVIOUS VERSION
