@@ -1,4 +1,9 @@
 Revision history for WWW::Myspace
+
+0.20	2006-02-04
+		- Added Tom's friend_user_name method and test for it.
+		- Added more output info to approve.t test.
+
 0.19	2006-02-04
 		Maintenance release
 		- Added missing test files to distribution

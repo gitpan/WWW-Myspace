@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm,v 1.21 2006/02/05 03:01:59 grant Exp $
+# $Id: Myspace.pm,v 1.24 2006/02/05 23:10:56 grant Exp $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -38,11 +38,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.19
+Version 0.20
 
 =cut
 
-our $VERSION = '0.19';
+our $VERSION = '0.20';
 
 =head1 SYNOPSIS
 
@@ -297,6 +297,59 @@ sub user_name {
 	
 	return $self->{user_name};
 
+}
+
+=head2 friend_user_name( friend_id )
+
+Returns the profile name of the friend specified by friend_id.
+This is the name that shows up at the top of their profile page
+above their picture. (Note, DON'T go using this to sign comments
+because most users use funky names and it'll just look cheesy.
+If you really want to personalize things, write a table mapping
+friend IDs to first names - you'll have to enter them yourself).
+
+=cut
+
+sub friend_user_name {
+
+	my $page = $self->get_profile( @_ );
+
+	if ( $page->content =~ /index\.cfm\?fuseaction=user\&circuitaction\=viewProfile_commentForm\&friendID\=[0-9]+\&name\=([^\&]+)\&/ ) {
+		return $1;
+	} else {
+		return "";
+	}
+}
+
+=head2 friend_url( friend_id )
+
+Returns the custom URL of friend_id's profile page. If they haven't
+specified one, it returns an empty string.
+
+ Example:
+ 
+ foreach my $friend_id ( $myspace->get_friends ) {
+     my $url = $myspace->friend_url( $friend_id );
+     if ( $url ) {
+	     print 'Friend's custom URL: http://www.myspace.com/' .
+	     $myspace->friend_url( $friend_id );
+     } else {
+         print 'Friend doesn't have a custom URL. Use: '.
+         'http://www.myspace.com/' . $friend_id;
+     }
+ }
+
+=cut
+
+sub friend_url {
+
+	my $page = $self->get_profile( @_ );
+
+	if ( $page->content =~ /\<title\>[\s]*www.myspace\.com\/([\S]*)[\s]*\<\/title\>/ ) {
+		return $1;
+	} else {
+		return "";
+	}
 }
 
 =head2 friend_count
@@ -1624,6 +1677,10 @@ __END__
 =head1 AUTHOR
 
 Grant Grueninger, C<< <grantg at cpan.org> >>
+
+Thanks to:
+Tom Kerswill for the friend_url method, which also inspired the
+friend_user_name method.
 
 =head1 KNOWN ISSUES
 

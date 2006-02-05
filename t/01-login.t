@@ -1,6 +1,6 @@
 #!perl -T
 
-use Test::More tests => 23;
+use Test::More tests => 24;
 #use Test::More 'no_plan';
 
 use WWW::Myspace;
@@ -12,6 +12,7 @@ my $password = 'BluDoggie1';
 my $friend_id = '48439059';
 my $user_name = "Perl";
 my $friend = '48449904';
+my $friend_user_name = "Perl 2";
 my $test_group = '100009984'; # Appropriate I think.
 
 # Some setup
@@ -59,6 +60,9 @@ cmp_ok( $myspace->my_friend_id, '==', $friend_id, 'Verify friend ID' );
 is( $myspace->account_name, $accountname, 'Verify account_name' );
 
 is( $myspace->user_name, $user_name, 'Verify user_name' );
+
+is( $myspace->friend_user_name( $friend ), $friend_user_name,
+	'Verify friend_user_name' );
 
 # This should return more than 0 friends. If the regexp breaks,
 # this'll return something else, like undefined.

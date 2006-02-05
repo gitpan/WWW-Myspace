@@ -47,7 +47,9 @@ if ( @friends ) {
 }
 
 # Now see if we posted that comment.
-warn "Checking for comment post\n";
+warn "Checking for comment post using friendID " .
+	$CONFIG->{'acct2'}->{'friend_id'} .
+	" and ident " . $ident . "\n";
 $res = $myspace1->get_profile( $CONFIG->{'acct2'}->{'friend_id'} );
 
 if ( $res->content =~ /${ident}/ ) {
