@@ -1,0 +1,14 @@
+---
+acct1:
+  cookie_jar: acct1ck.txt
+  friend_id: 48439059
+  username: perl+user@bebop.com
+  password: BluDoggie1
+  user_name: Perl
+acct2:
+  cookie_jar: acct2ck.txt
+  friend_id: 48449904
+  username: perl+user@cscorp.com
+  password: hi4boog
+  user_name: Perl 2
+test_group: 100009984

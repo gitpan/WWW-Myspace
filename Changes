@@ -1,4 +1,7 @@
 Revision history for WWW::Myspace
+0.19	2006-02-04
+		Maintenance release
+		- Added missing test files to distribution
 
 0.18	2006-02-02
 		- Added bug reporting note to docs.

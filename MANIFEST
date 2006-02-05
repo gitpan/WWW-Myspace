@@ -16,3 +16,5 @@ t/comment.t
 t/boilerplate.t
 t/pod-coverage.t
 t/pod.t
+t/TestConfig.pm
+t/config.yaml
