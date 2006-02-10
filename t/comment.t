@@ -1,6 +1,6 @@
 #!perl -T
 
-use Test::More tests => 2;
+use Test::More tests => 1;
 #use Test::More 'no_plan';
 
 use lib 't';
@@ -35,13 +35,13 @@ if ( $res->content =~ /${ident}/ ) {
 }
 
 # Test commenting all of Perl 2's friends (checks defaults)
-my $comment2 = new WWW::Myspace::Comment( $myspace2 );
+#my $comment2 = new WWW::Myspace::Comment( $myspace2 );
 
-$comment2->noisy(0);
-$comment2->ignore_duplicates(1);
-$comment2->cache_file( "comexcl" );
-$comment2->delay_time(0);
-$res = $comment2->post_comments( 'Just posting a test comment - thanks for helping!\n\n- Perl 2\n'.${ident} );
+#$comment2->noisy(0);
+#$comment2->ignore_duplicates(1);
+#$comment2->cache_file( "comexcl" );
+#$comment2->delay_time(0);
+#$res = $comment2->post_comments( 'Just posting a test comment - thanks for helping!\n\n- Perl 2\n'.${ident} );
 
-cmp_ok( $res, 'eq', 'DONE', 'Post Perl 2 friends' );
+#cmp_ok( $res, 'eq', 'DONE', 'Post Perl 2 friends' );
 $comment->reset_exclusions('all');

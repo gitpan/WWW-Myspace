@@ -149,6 +149,8 @@ cmp_ok( $message->delay_time, '==', 86400,
 # Lets try actually sending a message
 $message->cache_file( "msgexcl" );
 
+$message->add_to_friends( 1 );
+
 $response = "";
 $response = $message->send_message;
 

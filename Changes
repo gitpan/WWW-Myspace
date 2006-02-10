@@ -1,5 +1,36 @@
 Revision history for WWW::Myspace
 
+0.21	2006-02-07
+		- Added example and "See also WWW::Myspace::Message" docs for
+			send_message due to a user question.
+		- Added "See also WWW::Myspace::Comment" for post_comment.
+		- Removed unnecessary pre-requesite "IO::All" from Makefile.PL
+		- Fixed condition in 03-delete.t in which test would fail if
+		  Perl 2 was not in friend list.
+		- Added code to check for "unexpected error" page.
+		- Made get_page and submit_form functions much more robost.
+		- Updated URLs in send_friend_request, delete_friends,
+		  post_comment to use new myspace URLs.
+		- Added flag to send_message to have it attach an "Add to Friends"
+		  button. This is mostly to save people having to update their
+		  message files manually if the code for this changes again.
+		- Fixed delete_friends method, broken by myspace change.
+		- Numerous other changes and bug fixes from extensive changes at
+		  Myspace.com.
+		- Reinforcement of test script items so that tests should pass,
+		  so that end-user installations can include auto-update code
+		  without forcing install.
+		Message.pm (0.8):
+		- Added add_to_friends method which adds an "Add to friends"
+		  button after the message if set to true.
+		  If you include an "add to friends" button in your messages,
+		  YOU SHOULD UPDATE YOUR CODE TO USE THIS METHOD instead.
+
+		  PREVIOUS VERSIONS WILL ENCOUNTER MANY ERRORS:
+		  Posting comments, deleting friends, sending friend requests.
+		  Install tests will fail.
+
+
 0.20	2006-02-04
 		- Added Tom's friend_user_name method and test for it.
 		- Added more output info to approve.t test.

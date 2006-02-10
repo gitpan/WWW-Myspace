@@ -61,8 +61,10 @@ sub login_myspace {
 	$CONFIG->{'acct1'}->{'password'} );
 	
 #	warn "Logging into " . $CONFIG->{'acct2'}->{'username'} . "\n";
-	$CONFIG->{'acct2'}->{'myspace'} = new WWW::Myspace( $CONFIG->{'acct2'}->{'username'},
-								  $CONFIG->{'acct2'}->{'password'} );
+	$CONFIG->{'acct2'}->{'myspace'} = new
+		WWW::Myspace( $CONFIG->{'acct2'}->{'username'},
+					  $CONFIG->{'acct2'}->{'password'}
+					);
 }
 
 1;

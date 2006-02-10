@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm,v 1.24 2006/02/05 23:10:56 grant Exp $
+# $Id: Myspace.pm,v 1.27 2006/02/10 10:16:49 grant Exp $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -38,11 +38,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.20
+Version 0.21
 
 =cut
 
-our $VERSION = '0.20';
+our $VERSION = '0.21';
 
 =head1 SYNOPSIS
 
@@ -118,7 +118,7 @@ our $CAPTCHA='<img src="http:\/\/security.myspace.com\/CAPTCHA\/CAPTCHA\.aspx\?S
 
 # What's the URL to the comment form? We'll append the user's friend ID to
 # the end of this string.
-our $VIEW_COMMENT_FORM="http://www.myspace.com/index.cfm?fuseaction=user&circuitaction=viewProfile_commentForm&friendID=";
+our $VIEW_COMMENT_FORM="http://comments.myspace.com/index.cfm?fuseaction=user&circuitaction=viewProfile_commentForm&friendID=";
 
 # What's the URL to view a user's profile? We'll append the friendID to the
 # end of this string.
@@ -139,6 +139,11 @@ our $MAIL_PRIVATE_ERROR = "You can't send a message to [^<]+ because you must be
 
 # If a person has set an away message, what regexp should we look for?
 our $MAIL_AWAY_ERROR = "You can't send a message to [^<]+ because [^<]+ has set [^<]+ status to away";
+
+# What regexp should we look for for Myspace's frequent "technical error"
+# message?
+our $UNEXPECTED_ERROR = "Sorry! an unexpected error has occurred\. <br><br> ".
+		"This error has been forwarded to MySpace's technical group\.";
 
 # If we exceed our daily mail usage, what regexp would we see?
 # (Note: they've misspelled usage, so the ? is in case they fix it.)
@@ -291,6 +296,9 @@ sub user_name {
 		my ( $homepage ) = @_;
 		my $page_source = $homepage->content;
 		if ( $page_source =~ /index\.cfm\?fuseaction=user\.viewfriends\&friendID=[0-9]+\&userName=([^\&]*)/ ) {
+			my $line = $1;
+			$line =~ s/\+/ /g;
+			$line =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
 			$self->{user_name} = $1;
 		}
 	}
@@ -315,7 +323,10 @@ sub friend_user_name {
 	my $page = $self->get_profile( @_ );
 
 	if ( $page->content =~ /index\.cfm\?fuseaction=user\&circuitaction\=viewProfile_commentForm\&friendID\=[0-9]+\&name\=([^\&]+)\&/ ) {
-		return $1;
+		my $line = $1;
+		$line =~ s/\+/ /g;
+		$line =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
+		return $line;
 	} else {
 		return "";
 	}
@@ -559,7 +570,7 @@ sub _site_login {
 
 	# Get our friend ID from our profile page (which happens to
 	# be the page we go to after logging in).
-	$self->_get_friend_id( $self->{current_page} );
+	$self->_get_friend_id( $self->current_page );
 	
 	# Set the user_name and friend_count fields.
 	$self->user_name( $self->current_page );
@@ -659,6 +670,8 @@ sub get_friends {
 		foreach $id ( @friends_on_page ) {
 			$friend_ids{"$id"}++;
 		}
+
+		last unless ( $friends_page->content =~ /">Next<\/a> \&gt;/i );
 		
 		# Next!
 		$self->{_last_friend_page} = $page;
@@ -826,21 +839,58 @@ sub get_page {
 	# Get our web browser object
 	my $ua = $self->{ua}; # For readability...
 
-	# Try to get the page
-	my $res = $ua->get("$url");
-	
-	# Check for actual errors and try again
-	my $attempts=0;
-	unless ( ( $res->is_success ) || ( $attempts > 20 ) ) {
-		warn "Error getting page: $url\n" .
-			"  " . $res->status_line . "\n";
-		sleep 5;
+	# Try to get the page 20 times.
+	my $attempts = 20;
+	my $res;
+	do {
+
+		# Try to get the page
 		$res = $ua->get("$url");
-	}
+		$attempts--;
+
+	} until ( ( $self->$page_ok( $res ) ) || ( $attempts <= 0 ) );
 
 	# We both set "current_page" and return the value.
 	$self->{current_page}=$res;
 	return ( $res );
+
+}
+
+#---------------------------------------------------------------------
+# my sub page_ok( $result )
+# Takes a UserAgent response object and checks to see if the
+# page was sucessfully retreived, and checks the content against
+# known error message.
+
+my sub page_ok {
+	my ( $res ) = @_;
+
+	# Check for errors
+	my $page_ok = 1;
+	my $page;
+
+	if ( $res->is_success ) {
+
+		# Page loaded, but make sure it isn't an error page.
+		$page = $res->content; # Get the content
+		$page =~ s/[ \t\n\r]+/ /g; # Strip whitespace
+
+		if ( $page =~ /$UNEXPECTED_ERROR/i ) {
+			$page_ok = 0;
+			warn "Got \"unexpected error\" page.\n";
+		}
+
+	} else {
+
+		warn "Error getting page: \n" .
+			"  " . $res->status_line . "\n";
+		$page_ok = 0;
+
+	}
+
+	sleep 2 unless ( $page_ok );
+
+	return $page_ok;
 
 }
 
@@ -976,6 +1026,9 @@ EXAMPLE:
     foreach $id ( $myspace->friends_who_emailed ) {
         $status = $myspace->post_comment( $id, "Thanks for the message!" )
     }
+
+See also the WWW::Myspace::Comment module that installs with the
+distribution.
 
 =cut
 
@@ -1162,11 +1215,15 @@ sub already_commented {
 
 #---------------------------------------------------------------------
 
-=head2 send_message( $friend_id, $subject, $message )
+=head2 send_message( $friend_id, $subject, $message, $add_friend_button )
 
-Send a message to the user identified by $friend_id.
+Send a message to the user identified by $friend_id. If $add_friend_button
+is a true value, HTML code for the "Add to friends" button will be added at
+the end of the message.
 
-Returns a status code:
+ $myspace->send_message( 6221, 'Hi Tom!', 'Just saying hi!', 0 );
+
+ Returns a status code:
 
  P: Posted. Verified by HTTP response code and reading a regexp
  	from the resulting page saying the message was sent.
@@ -1179,12 +1236,23 @@ Returns a status code:
  F:  Failed. Post went through, but we didn't see the regexp on the
  	resulting page (message may or may not have been sent).
 
+See also WWW::Myspace::Message, which installs along with the
+distribution.
+
 =cut
 
 sub send_message {
 
-	my ( $friend_id, $subject, $message ) = @_;
+	my ( $friend_id, $subject, $message, $atf ) = @_;
 	my ( $submitted, $res, $page );
+
+	# Add the button if they wanted it.
+	if ( ( defined $atf ) && ( $atf ) ) {
+		$message .= '<p><a href="http://collect.myspace.com/index.cfm?'.
+			'fuseaction=invite.addfriend_verify&friendID=' .
+			$self->my_friend_id . '"><img src="http://i.myspace.com'.
+			'/site/images/addFriendIcon.gif" alt="Add as friend"></a>\n';
+	}
 
 	# Try to get the message form
 	$res = $self->get_page( "${SEND_MESSAGE_FORM}${friend_id}" );
@@ -1390,7 +1458,7 @@ sub send_friend_request {
 
 	foreach my $id ( @_ ) {
 		my $res = $self->submit_form(
-			'http://www.myspace.com/index.cfm?'.
+			'http://collect.myspace.com/index.cfm?'.
 			'fuseaction=invite.addfriend_verify&'.
 			'friendID=' . $id, 1, '', {} );
 		unless ( $res ) { $pass = 0 }
@@ -1436,7 +1504,7 @@ sub delete_friend {
 	foreach $id ( @_ ) {
 		# Create the form
 		$form =
-			'<FORM ACTION="index.cfm?fuseaction=user.deleteFriend" '.
+			'<FORM ACTION="index.cfm?fuseaction=user.deleteFriend&page=0" '.
 			'METHOD="POST">';
 
 		$form .= '<input type="checkbox" name="delFriendID" value="'
@@ -1454,7 +1522,7 @@ sub delete_friend {
 		
 		# Parse that into a HTTP::Request::Form object
 		my @forms = HTTP::Request::Form->new_many(
-			$tree, 'http://www.myspace.com/' );
+			$tree, 'http://collect.myspace.com/' );
 		$f = $forms[0];
 
 		# Check the checkboxes
@@ -1468,11 +1536,16 @@ sub delete_friend {
 		# Submit the form
 #		$f->dump;
 
-		$res = $self->{'ua'}->request( $f->press( 'deleteAll' ) );	
+		my $attempts = 25;
+		do {
+			$res = $self->{'ua'}->request( $f->press( 'deleteAll' ) );	
+			$attempts--;
+		} until ( ( $self->$page_ok( $res ) ) || ( $attempts <= 0 ) );
 
-		unless ( $res->is_success ) {
+		unless ( $attempts ) {
 			$pass=0;
 		}
+
 	}
 
 	return $pass;
@@ -1623,21 +1696,18 @@ sub submit_form {
 	}
 
 	# Press the submit button.
-	my $attempts = 0;
+	my $attempts = 5;
 	do
 	{
 		if ( $button ) {
 			$res = $ua->request($f->press("$button"))
 		} else {
-#			warn "pressing button\n";
 			$res = $ua->request($f->press())
 		}
-		
-		$attempts++;
-		
-		sleep 2 unless ( $res->is_success );
 
-	} until ( ( $res->is_success ) || ( $attempts > 5 ) );
+		$attempts--;
+
+	} until ( ( $self->$page_ok( $res ) ) || ( $attempts <= 0 ) );
 	
 	# Return the result
 	$self->{current_page} = $res;
@@ -1688,9 +1758,24 @@ friend_user_name method.
 
 =item -
 
+Some myspace error pages are not accounted for, such as their new
+Server Application error page.  If you know enough about web development
+to identify an error page that would return a successful HTTP
+response code (i.e. returns 200 OK), but then displays an error message,
+please keep an eye out for such pages.
+If you get such an error message page, PLEASE EMAIL ME the page content
+so I can account for it.
+
+=item -
+
 post_comment dies if it is told to post to a friendID that
 is not a friend of the logged-in user. (MySpace displays
 an error instead of a form).
+
+=item -
+
+delete_friend may fail if the friend is not on the first page of
+friends.
 
 =back
 

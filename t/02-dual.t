@@ -1,7 +1,7 @@
 #!perl -T
 
-#use Test::More tests => 24;
-use Test::More 'no_plan';
+use Test::More tests => 2;
+#use Test::More 'no_plan';
 
 use lib 't';
 use TestConfig;

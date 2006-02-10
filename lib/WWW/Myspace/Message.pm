@@ -1,4 +1,4 @@
-# $Id: Message.pm,v 1.7 2006/02/03 02:40:21 grant Exp $
+# $Id: Message.pm,v 1.8 2006/02/10 10:01:13 grant Exp $
 
 package WWW::Myspace::Message;
 
@@ -13,11 +13,11 @@ WWW::Myspace::Message - Auto-message your MySpace friends from Perl scripts
 
 =head1 VERSION
 
-Version 0.07
+Version 0.08
 
 =cut
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 
 =head1 SYNOPSIS
 
@@ -30,6 +30,7 @@ our $VERSION = '0.07';
  
  $message->subject("Hi there!");
  $message->message("I'm sending you a message!\nIsn't that cool?\n");
+ $message->add_to_friends( 1 );
  $message->friend_ids( $myspace->get_friends );
  $message->send_message;
 
@@ -123,7 +124,7 @@ Of course if it finished and you restarted it, it'd re-message everyone.
 
 our @PERSISTENT_FIELDS = (
 	'subject', 'message', 'friend_ids', 'cache_file', 'max_count',
-	'noisy', 'html', 'delay_time'
+	'noisy', 'html', 'delay_time', 'add_to_friends'
 	);
 
 =head1 ACCESSOR METHODS
@@ -162,6 +163,17 @@ Convenience method, same as calling "message".
 sub body {
 	$self->message( @_ )
 }
+
+=head2 add_to_friends
+
+ $message->add_to_friends( 1 );
+
+If called with 1 true value, HTML code for an "Add to friends"
+button will be added to the end of the message.
+
+=cut
+
+field add_to_friends => '0';
 
 =head2 friend_ids
 
@@ -400,7 +412,8 @@ sub send_message {
 
 				if ( $self->html ) { print "<P>" }
 				if ( $self->noisy ) { print "Sending to $id: " };
-				$result = $myspace->send_message( $id, $subject, $message );
+				$result = $myspace->send_message( $id, $subject, $message,
+					$self->add_to_friends );
 				$counter++ if ( $result =~ /^P/ );
 
 				# Log our attempt and the result
