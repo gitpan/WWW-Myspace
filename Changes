@@ -1,5 +1,15 @@
 Revision history for WWW::Myspace
 
+0.22	2006-02-10
+		- Added regexp for "This user's profile has been temporarily
+		  disabled for special maintenance" error.
+		- Added an array of regexps for error page handling.
+		- Added ability to explicitly verify certain pages in get_pages.
+		  - Added explicit verify for get_profile method.
+		- Updated known issues.
+		- Added explicit check for verify form for post_comments.
+		- Added dual RE check options for submit_form.
+
 0.21	2006-02-07
 		- Added example and "See also WWW::Myspace::Message" docs for
 			send_message due to a user question.

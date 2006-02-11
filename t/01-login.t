@@ -91,26 +91,17 @@ diag( "Counted " . @friends_in_group . " friends in group" );
 # or sending a message.
 
 # Post a comment (This posts to a special test account)
-#$attempts = 0;
-#do {
-	$response = $myspace->post_comment( $friend, "Um, great profile..." );
-#	$attempts++;
-	if ( ( $response =~ /^P/ ) || ( $response eq 'FC' ) ) { $response = 'P' }
-#	sleep 2 if ( $response eq 'FN' );
-#} until  ( ( $response ne 'FN' ) || ( $attempts > 5 ) );
+$response = $myspace->post_comment( $friend, "Um, great profile..." );
+if ( ( $response =~ /^P/ ) || ( $response eq 'FC' ) ||
+	 ( $response eq "FF") ) { $response = 'P' }
 
 is( $response, 'P', 'Post Comment' );
 
 # Send a message
 $response = "";
-#$attempts = 0;
-#do {
-	$response = $myspace->send_message( $friend, "Hi", 'Just saying hi.\n\n'.
-		'Hope all is well.' );
-#	$attempts++;
-	if ( ( $response =~ /^P/ ) || ( $response eq 'FC' ) ) { $response = 'P' }
-#	sleep 2 if ( $response eq 'FN' );
-#} until ( ( $response eq 'P' ) || ( $attempts > 5 ) );
+$response = $myspace->send_message( $friend, "Hi", 'Just saying hi.\n\n'.
+	'Hope all is well.' );
+if ( ( $response =~ /^P/ ) || ( $response eq 'FC' ) ) { $response = 'P' }
 
 is( $response, 'P', 'Send Message' );
 

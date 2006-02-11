@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm,v 1.27 2006/02/10 10:16:49 grant Exp $
+# $Id: Myspace.pm,v 1.31 2006/02/10 20:26:48 grant Exp $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -38,11 +38,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.21
+Version 0.22
 
 =cut
 
-our $VERSION = '0.21';
+our $VERSION = '0.22';
 
 =head1 SYNOPSIS
 
@@ -106,6 +106,12 @@ our $FRIEND_REGEXP="fuseaction=user\.viewprofile\&friendID=";
 # the user's profile page, so we look for text that'll be near the top of the page).
 our $VERIFY_COMMENT_POST='<span class="nametext">[^\<]*<\/span>.*View [Mm]ore [Pp]ics';
 
+# After loading a person's profile page, we look for this RE to
+# verify that we actually got the page.
+# It just so happens that when we post a comment, it takes us back to
+# their profile, so these are the same.
+our $VERIFY_GET_PROFILE=$VERIFY_COMMENT_POST;
+
 # On the page following posting a comment, what should we look for
 # to indicate that the user requires comments to be approved?
 # (This is only checked after VERIFY_COMMENT_POST has been checked).
@@ -142,8 +148,17 @@ our $MAIL_AWAY_ERROR = "You can't send a message to [^<]+ because [^<]+ has set 
 
 # What regexp should we look for for Myspace's frequent "technical error"
 # message?
-our $UNEXPECTED_ERROR = "Sorry! an unexpected error has occurred\. <br><br> ".
-		"This error has been forwarded to MySpace's technical group\.";
+# This lists regexps to look for on pages that indicate we've got an error
+# instead of a successful load or post.
+our @ERROR_REGEXPS = (
+
+	"Sorry! an unexpected error has occurred\. <br><br> ".
+		"This error has been forwarded to MySpace's technical group\.",
+
+	'<b>This user\'s profile has been temporarily '.
+	'disabled for special maintenance.<br>'
+
+);
 
 # If we exceed our daily mail usage, what regexp would we see?
 # (Note: they've misspelled usage, so the ? is in case they fix it.)
@@ -153,10 +168,15 @@ our $EXCEED_USAGE = "User has exceeded their daily use?age";
 our $FRIEND_REQUEST = "requestGUID.value='([^\']+)'";
 
 # What's the URL to the friend requests page?
-our $FRIEND_REQUEST_URL = "http://mail2.myspace.com/index.cfm?fuseaction=mail.friendRequests";
+our $FRIEND_REQUEST_URL = "http://mail.myspace.com/index.cfm?fuseaction=mail.friendRequests";
 
 # Where do we post freind requests?
-our $FRIEND_REQUEST_POST = "http://mail2.myspace.com/index.cfm?fuseaction=mail.processFriendRequests";
+our $FRIEND_REQUEST_POST = "http://mail.myspace.com/index.cfm?fuseaction=mail.processFriendRequests";
+
+# What's the URL for a friend request button (to send a friend request)?
+our $ADD_FRIEND_URL = 'http://collect.myspace.com/index.cfm?'.
+			'fuseaction=invite.addfriend_verify&'.
+			'friendID=';
 
 # Debugging? (Yes=1, No=0)
 our $DEBUG=0;
@@ -808,7 +828,7 @@ sub _get_friend_page {
 
 #---------------------------------------------------------------------
 
-=head2 get_page( $url )
+=head2 get_page( $url, [ $regexp ] )
 
 get_page returns a referece to a HTTP::Response object that contains
 the web page specified by $url.
@@ -818,9 +838,11 @@ via some other method. You could include the URL to a picture
 page for example then search that page for friendIDs using
 get_friends_on_page.
 
-get_page will try up to 20 times until it gets the page, with a 5-second
-delay between attempts.
-This is designed to get past network problems and such.
+get_page will try up to 20 times until it gets the page, with a 2-second
+delay between attempts. It checks for invalid HTTP response codes,
+and known Myspace error pages. If called with the optional regexp,
+it will consider the page an error unless the page content matches
+the regexp. This is designed to get past network problems and such.
 
 EXAMPLE
 
@@ -834,7 +856,7 @@ EXAMPLE
 
 sub get_page {
 
-	my ( $url ) = @_;
+	my ( $url, $regexp ) = @_;
 
 	# Get our web browser object
 	my $ua = $self->{ua}; # For readability...
@@ -848,7 +870,7 @@ sub get_page {
 		$res = $ua->get("$url");
 		$attempts--;
 
-	} until ( ( $self->$page_ok( $res ) ) || ( $attempts <= 0 ) );
+	} until ( ( $self->$page_ok( $res, $regexp ) ) || ( $attempts <= 0 ) );
 
 	# We both set "current_page" and return the value.
 	$self->{current_page}=$res;
@@ -857,13 +879,15 @@ sub get_page {
 }
 
 #---------------------------------------------------------------------
-# my sub page_ok( $result )
+# my sub page_ok( $response, $regexp )
 # Takes a UserAgent response object and checks to see if the
 # page was sucessfully retreived, and checks the content against
 # known error message.
+# If passed a regexp, it will return true if the page content
+# matches the regexp.
 
 my sub page_ok {
-	my ( $res ) = @_;
+	my ( $res, $regexp ) = @_;
 
 	# Check for errors
 	my $page_ok = 1;
@@ -875,9 +899,20 @@ my sub page_ok {
 		$page = $res->content; # Get the content
 		$page =~ s/[ \t\n\r]+/ /g; # Strip whitespace
 
-		if ( $page =~ /$UNEXPECTED_ERROR/i ) {
-			$page_ok = 0;
-			warn "Got \"unexpected error\" page.\n";
+		if ( $regexp ) {
+			# Page must match the regexp
+			unless ( $page =~ /$regexp/i ) {
+				$page_ok = 0;
+				warn "Page doesn't match verification pattern.\n";
+			}
+		} else {
+			foreach my $error_regexp ( @ERROR_REGEXPS ) {
+				if ( $page =~ /$error_regexp/i ) {
+					$page_ok = 0;
+					warn "Got error page.\n";
+					last;
+				}
+			}
 		}
 
 	} else {
@@ -988,7 +1023,8 @@ sub get_profile {
 
 	my ( $friend_id ) = @_;
 
-	return $self->get_page( "${VIEW_PROFILE_URL}${friend_id}" );
+	return $self->get_page( "${VIEW_PROFILE_URL}${friend_id}",
+		$VERIFY_GET_PROFILE );
 
 }
 
@@ -1060,7 +1096,7 @@ sub post_comment {
 	( $DEBUG ) && print "Getting comment form..\n";
 	$submitted = 
 		$self->submit_form( "${VIEW_COMMENT_FORM}${friend_id}", 1,
-						"", { 'f_comments' => "$message" }
+						"", { 'f_comments' => "$message" }, '', 'f_comments'
 					);
 	
 	# If we posted ok, confirm the comment
@@ -1248,8 +1284,7 @@ sub send_message {
 
 	# Add the button if they wanted it.
 	if ( ( defined $atf ) && ( $atf ) ) {
-		$message .= '<p><a href="http://collect.myspace.com/index.cfm?'.
-			'fuseaction=invite.addfriend_verify&friendID=' .
+		$message .= '<p><a href="' . $ADD_FRIEND_URL .
 			$self->my_friend_id . '"><img src="http://i.myspace.com'.
 			'/site/images/addFriendIcon.gif" alt="Add as friend"></a>\n';
 	}
@@ -1356,7 +1391,8 @@ sub approve_friend_requests
 	while ( 1 ) {
 		
 		# Get the page
-		$page = $self->get_page( $FRIEND_REQUEST_URL )->content;
+		$page = $self->get_page( $FRIEND_REQUEST_URL,
+			'Friend Request Manager' )->content;
 
 		# Get the GUID codes from the page
 		@guids = $self->_get_friend_requests( $page );
@@ -1458,9 +1494,7 @@ sub send_friend_request {
 
 	foreach my $id ( @_ ) {
 		my $res = $self->submit_form(
-			'http://collect.myspace.com/index.cfm?'.
-			'fuseaction=invite.addfriend_verify&'.
-			'friendID=' . $id, 1, '', {} );
+			$ADD_FRIEND_URL . $id, 1, '', {} );
 		unless ( $res ) { $pass = 0 }
 	}
 	
@@ -1471,7 +1505,19 @@ sub send_friend_request {
 
 Convenience method - same as send_friend_request. This method's here
 because the button on Myspace's site that the method emulates
-is usually labeled "Add as friend".
+is usually labeled "Add to Friends".
+
+=cut
+
+sub add_to_friends {
+	$self->send_friend_request( @_ );
+}
+
+=head2 add_as_friend
+
+Convenience method - same as send_friend_request. This method's here
+Solely for backwards compatibility. Use add_to_friends or
+send_friend_request in new code.
 
 =cut
 
@@ -1570,7 +1616,8 @@ sub delete_friend {
 #}
 
 #---------------------------------------------------------------------
-# submit_form( $url, $form_no, $button, $fields_ref )
+# submit_form( $url, $form_no, $button, $fields_ref, [ $regexp1 ],
+#             [ $regexp2 ] )
 # Fill in and submit a form on the specified web page.
 # $url is the URL of the page OR a reference to a HTTP::Request object.
 # $form_no is the number of the form (starting at 0). i.e. if there
@@ -1581,7 +1628,8 @@ sub delete_friend {
 # and values you want to fill in on the form.
 # submit_form returns 1 if it succeeded, 0 if it fails.
 
-=head2 submit_form( $url, $form_no, $button, $fields_ref )
+=head2 submit_form( $url, $form_no, $button, $fields_ref, [ $regexp1 ],
+	[ $regexp2 ] )
 
 This powerful little method reads the web page specified by $url,
 finds the form specified by $form_no, fills in the values
@@ -1609,13 +1657,23 @@ use that.
 $fields_ref is a reference to a hash that contains field names
 and values you want to fill in on the form.
 
+$regexp1 is an optional Regular Expression that will be used to make
+sure the proper form page has been loaded. The page content will
+be matched to the RE, and will be treated as an error page and retried
+until it matches. See get_page for more info.
+
+$regexp2 is an optional RE that will me used to make sure that the
+post was successful. USE THIS CAREFULLY! If your RE breaks, you could
+end up repeatedly posting a form. This is used by post_comemnts to make
+sure that the Verify Comment page is actually shown.
+
 EXAMPLE
 
 This is how post_comment actually posts the comment:
 
 	# Submit the comment to $friend_id's page
 	$self->submit_form( "${VIEW_COMMENT_FORM}${friend_id}", 1, "submit",
-						{ 'f_comments' => "$message" }
+						{ 'f_comments' => "$message" }, '', 'f_comments'
 					);
 	
 	# Confirm it
@@ -1634,7 +1692,7 @@ page returned by the first post.
 
 sub submit_form {
 
-	my ( $url, $form_no, $button, $fields_ref ) = @_;
+	my ( $url, $form_no, $button, $fields_ref, $regexp1, $regexp2 ) = @_;
 
 	# Initialize our variables
 	my $ua = $self->{ua}; # For convenience
@@ -1647,7 +1705,7 @@ sub submit_form {
 		# They gave us a page already
 		$res = $url;
 	} else {
-		$res = $self->get_page( $url );
+		$res = $self->get_page( $url, $regexp1 );
 	}
 
 	# Parse the page
@@ -1707,7 +1765,7 @@ sub submit_form {
 
 		$attempts--;
 
-	} until ( ( $self->$page_ok( $res ) ) || ( $attempts <= 0 ) );
+	} until ( ( $self->$page_ok( $res, $regexp2 ) ) || ( $attempts <= 0 ) );
 	
 	# Return the result
 	$self->{current_page} = $res;
@@ -1776,6 +1834,18 @@ an error instead of a form).
 
 delete_friend may fail if the friend is not on the first page of
 friends.
+
+=item -
+
+When submit_form is called, if it gets a page that is not a
+recognized error page, but does not contain the requested form, it
+gives up. This may be causing post_comment to fail too easily.
+
+=item -
+
+If the text used to verify that the profile page has been loaded
+changes in the future, get_profile and post_comments will report
+that the page hasn't been loaded when in fact it has.
 
 =back
 
