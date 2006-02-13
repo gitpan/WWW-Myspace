@@ -1,5 +1,17 @@
 Revision history for WWW::Myspace
 
+0.23	2006-02-11
+		- Added "profile undergoing routine maintenance" error RE to
+		  list of error pages.
+		- Added add_to_friends convenience method.
+		- Updated URL for inbox friends check. Fixes friends_who_emailed
+		  method and tests so install works.
+		- Updated $SEND_MESSAGE_FORM URL. Fixes mail sending and tests.
+		- Fixed POD for add_to_friends.
+
+		  PREVIOUS VERSIONS WILL FAIL INSTALL TESTS AND CAN'T SEND
+		  MESSAGES.
+
 0.22	2006-02-10
 		- Added regexp for "This user's profile has been temporarily
 		  disabled for special maintenance" error.

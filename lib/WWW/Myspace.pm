@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm,v 1.31 2006/02/10 20:26:48 grant Exp $
+# $Id: Myspace.pm,v 1.34 2006/02/13 22:47:08 grant Exp $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -38,11 +38,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.22
+Version 0.23
 
 =cut
 
-our $VERSION = '0.22';
+our $VERSION = '0.23';
 
 =head1 SYNOPSIS
 
@@ -132,7 +132,7 @@ our $VIEW_PROFILE_URL="http://profile.myspace.com/index.cfm?fuseaction=user.view
 
 # What's the URL to send mail to a user? We'll append the friendID to the
 # end if this string too.
-our $SEND_MESSAGE_FORM="http://Mail1.myspace.com/index.cfm?fuseaction=mail.message&friendID=";
+our $SEND_MESSAGE_FORM="http://mail.myspace.com/index.cfm?fuseaction=mail.message&friendID=";
 
 # What regexp should we look for after sending a message that tells
 # us the message was sent?
@@ -149,14 +149,19 @@ our $MAIL_AWAY_ERROR = "You can't send a message to [^<]+ because [^<]+ has set 
 # What regexp should we look for for Myspace's frequent "technical error"
 # message?
 # This lists regexps to look for on pages that indicate we've got an error
-# instead of a successful load or post.
+# instead of a successful load or post. Note: Page content is stripped
+# of extra whitespace before checking, so make sure any spaces you have here
+# are single spaces, not multiple, nor tabs, nor returns.
 our @ERROR_REGEXPS = (
 
 	"Sorry! an unexpected error has occurred\. <br><br> ".
 		"This error has been forwarded to MySpace's technical group\.",
 
 	'<b>This user\'s profile has been temporarily '.
-	'disabled for special maintenance.<br>'
+	'disabled for special maintenance.<br>'.
+	
+	'This profile is undergoing routine maintenance. '.
+	'We apologize for the inconvenience!',
 
 );
 
@@ -788,11 +793,11 @@ sub _get_friend_page {
 
 	# Set the URL string for the right set of pages
 	if ( (defined $source ) && ( $source eq "inbox" ) ) {
-		$url = "http://mail2.myspace.com/index.cfm?fuseaction=mail.inbox" .
+		$url = "http://mail.myspace.com/index.cfm?fuseaction=mail.inbox" .
 			"&page=${page}";
 	} elsif ( (defined $source ) && ( $source eq "group" ) ) { 
 		$url = "http://groups.myspace.com/index.cfm?fuseaction=".
-			"groups.viewMembers&GroupID=${id}&page=${page}";
+			"groups.viewMembers&groupID=${id}&page=${page}";
 	} else {
 		if ( $page == 0 ) {
 			# First page
@@ -1501,7 +1506,7 @@ sub send_friend_request {
 	return ( $pass );
 }
 
-=head2 add_as_friend
+=head2 add_to_friends
 
 Convenience method - same as send_friend_request. This method's here
 because the button on Myspace's site that the method emulates
