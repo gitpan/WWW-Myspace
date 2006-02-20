@@ -5,7 +5,7 @@ use Test::More tests => 2;
 
 use lib 't';
 use TestConfig;
-login_myspace;
+login_myspace or die "Login Failed - can't run tests";
 
 # Make sure we've got two accounts and didn't accidentally use the
 # same one twice.

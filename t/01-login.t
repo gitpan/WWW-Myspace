@@ -29,6 +29,9 @@ my $attempts;
 my $myspace = new WWW::Myspace( $accountname, $password );
 
 # Verify login
+unless ( $myspace->logged_in ) {
+	die "Login Failed - can't run tests";
+}
 ok( ref $myspace, 'Create myspace object' );
 
 ## Test cache file exists

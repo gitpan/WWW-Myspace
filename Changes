@@ -1,5 +1,18 @@
 Revision history for WWW::Myspace
 
+0.24	2006-02-19
+		- Added logged_in method. Returns true if login was successful.
+		- Added login failure tests to test scripts.
+		- Updated for changes in myspace.com. These fix install test
+		  errors and the get_friends method (whose URL relies on
+		  friend_count) as well.
+		  - user_name now gets name from "Hello, <name>!" line.
+		  - Included test for optional "<span>" in friend_count.
+		  
+		  PREVIOUS VERSION WILL FAIL INSTALL TESTS AND get_friends,
+		  user_name, AND friend_count METHODS (and possibly others)
+		  WILL NOT WORK.
+
 0.23	2006-02-11
 		- Added "profile undergoing routine maintenance" error RE to
 		  list of error pages.

@@ -65,6 +65,12 @@ sub login_myspace {
 		WWW::Myspace( $CONFIG->{'acct2'}->{'username'},
 					  $CONFIG->{'acct2'}->{'password'}
 					);
+	if ( $CONFIG->{'acct1'}->{'myspace'}->{'logged_in'} &&
+		 $CONFIG->{'acct2'}->{'myspace'}->{'logged_in'} ) {
+		return 1;
+	} else {
+		return 0;
+	}
 }
 
 1;

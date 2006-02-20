@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm,v 1.34 2006/02/13 22:47:08 grant Exp $
+# $Id: Myspace.pm,v 1.35 2006/02/20 07:45:50 grant Exp $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -38,11 +38,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.23
+Version 0.24
 
 =cut
 
-our $VERSION = '0.23';
+our $VERSION = '0.24';
 
 =head1 SYNOPSIS
 
@@ -69,8 +69,9 @@ WWW::Myspace works by interacting with the site through a UserAgent
 object, using HTTP::Request::Form to process forms. Since by nature
 web sites are dynamic, if you find that some interaction with the
 site breaks, check for a new version of this module (or if you
-go source diving, submit a patch).
-
+go source diving, submit a patch). You can run "cpan -i WWW::Myspace"
+as a cron job or before running your scripts, if appropriate, to
+make sure you have the latest version.
 
 =cut
 
@@ -96,6 +97,10 @@ if ( defined $ENV{'HOME'} ) {
 
 # What's the URL for the user's Home page?
 our $HOME_PAGE="http://home.myspace.com/index.cfm?fuseaction=user";
+
+# What regexp should we look for to verify that we're logged in?
+# This is checked against the home page when we log in.
+our $VERIFY_HOME_PAGE = 'Hello,.*My Mail.*You have .* friends';
 
 # What should we look for to see if there's a link to a friend's page?
 our $FRIEND_REGEXP="fuseaction=user\.viewprofile\&friendID=";
@@ -320,10 +325,10 @@ sub user_name {
 	if ( @_ ) {
 		my ( $homepage ) = @_;
 		my $page_source = $homepage->content;
-		if ( $page_source =~ /index\.cfm\?fuseaction=user\.viewfriends\&friendID=[0-9]+\&userName=([^\&]*)/ ) {
-			my $line = $1;
-			$line =~ s/\+/ /g;
-			$line =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
+		if ( $page_source =~ /<h4 +class="heading">Hello, (.*)\!<\/h4>/ ) {
+#			my $line = $1;
+#			$line =~ s/\+/ /g;
+#			$line =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
 			$self->{user_name} = $1;
 		}
 	}
@@ -412,8 +417,8 @@ sub friend_count {
 		my ( $homepage ) = @_;
 		my $page_source = $homepage->content;
 
-		if ( $page_source =~ /You have <a [^>]+>([0-9]+)<\/a> friends/ ) {
-			$self->{friend_count} = $1;
+		if ( $page_source =~ /You have (<span>)?<a [^>]+>([0-9]+)<\/a>(<\/span>)? friends/ ) {
+			$self->{friend_count} = $2;
 		}
 	}
 	
@@ -443,6 +448,34 @@ sub current_page {
 	return $self->{current_page};
 
 }
+
+=head2 logged_in
+
+Returns true if login was successful. When you call the new method
+of WWW::Myspace, the class logs in using the username and password you
+provided (or that it prompted for).  It then retreives your "home"
+page (the one you see when you click the "Home" button on myspace.com,
+and checks it against an RE.  If the page matches the RE, logged_in is
+set to a true value. Otherwise it's set to a false value.
+
+ Notes:
+ - This method is only set on login. If you're logged out somehow,
+   this method won't tell you that (yet - I may add that later).
+ - The internal login method calls this method to set the value.
+   You can (currently) call logged_in with a value, and it'll set
+   it, but that would be stupid, and it might not work later
+   anyway, so don't.
+
+ Example:
+
+ my $myspace = new WWW::Myspace;
+ unless ( $myspace->logged_in ) {
+ 	die "Login failed\n";
+ }
+
+=cut
+
+field logged_in => 0;
 
 =head2 cookie_jar
 
@@ -592,6 +625,13 @@ sub _site_login {
 	# We probably have an ad or somesuch (started 1/7/2006)
 	# so explicitly request our Home.
 	$self->get_page( $HOME_PAGE );
+	
+	# Verify we're logged in
+	if ( $self->current_page->content =~ /$VERIFY_HOME_PAGE/si ) {
+		$self->logged_in( 1 );
+	} else {
+		$self->logged_in( 0 );
+	}
 
 	# Get our friend ID from our profile page (which happens to
 	# be the page we go to after logging in).
@@ -1826,8 +1866,8 @@ Server Application error page.  If you know enough about web development
 to identify an error page that would return a successful HTTP
 response code (i.e. returns 200 OK), but then displays an error message,
 please keep an eye out for such pages.
-If you get such an error message page, PLEASE EMAIL ME the page content
-so I can account for it.
+If you get such an error message page, PLEASE EMAIL ME (see BUGS below)
+the page content so I can account for it.
 
 =item -
 
@@ -1851,6 +1891,16 @@ gives up. This may be causing post_comment to fail too easily.
 If the text used to verify that the profile page has been loaded
 changes in the future, get_profile and post_comments will report
 that the page hasn't been loaded when in fact it has.
+
+=item -
+
+Something (probably UserAgent) is generating the following warnings:
+ Day too big - 2238936 > 24855
+ Sec too big - 2238936 > 11647
+ Day too big - 2238936 > 24855
+ Sec too big - 2238936 > 11647
+
+These are annoying but don't seem to affect the output.
 
 =back
 

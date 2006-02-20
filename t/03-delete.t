@@ -6,7 +6,7 @@ use Test::More tests => 1;
 use lib 't';
 use TestConfig;
 
-login_myspace;
+login_myspace or die "Login Failed - can't run tests";
 
 my $myspace1 = $CONFIG->{'acct1'}->{'myspace'};
 my $myspace2 = $CONFIG->{'acct2'}->{'myspace'};

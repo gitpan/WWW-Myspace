@@ -7,7 +7,7 @@ use lib 't';
 use TestConfig;
 use WWW::Myspace::Comment;
 
-login_myspace;
+login_myspace or die "Login Failed - can't run tests";
 
 my $myspace1 = $CONFIG->{'acct1'}->{'myspace'};
 my $myspace2 = $CONFIG->{'acct2'}->{'myspace'};
