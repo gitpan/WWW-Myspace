@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm,v 1.35 2006/02/20 07:45:50 grant Exp $
+# $Id: Myspace.pm,v 1.36 2006/02/20 09:22:47 grant Exp $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -38,11 +38,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.24
+Version 0.25
 
 =cut
 
-our $VERSION = '0.24';
+our $VERSION = '0.25';
 
 =head1 SYNOPSIS
 
@@ -727,6 +727,7 @@ sub get_friends {
 
 		# Grep the friend IDs out
 		@friends_on_page = $self->get_friends_on_page( $friends_page->content );
+		( $DEBUG ) && print "Done with page $page\n";
 		last unless ( @friends_on_page );
 #		warn "Got ". @friends_on_page . " friends\n";
 
@@ -743,8 +744,28 @@ sub get_friends {
 		$page++;
 	}
 
+	# Returning an incomplete friend list can be dangerous. Do a
+	# safety check. We see if the friend count is within 5% of the
+	# number of friends returned (no, myspace's actual acount is never
+	# actually right.....)
+	unless ( $source ) {
+		my @friends = keys( %friend_ids );
+		my $friend_count = @friends;
+		my $error_allowed = $self->friend_count * .05;
+		my $error_offset = abs ( $self->friend_count - $friend_count );
+		if ( $error_allowed < 10 ) { $error_allowed = 10 };
+		
+		if ( $error_offset > $error_allowed ) {
+			warn "WARNING: get_friends returned $friend_count friends, ".
+			"but should have returned around " . $self->friend_count . ".";
+		}
+	}
+
 	# Return the list
-	( $DEBUG ) && print keys %friend_ids;
+	if ( $DEBUG ) {
+		my @friends = keys( %friend_ids );
+		print "get_friends got " . @friends . " friends\n";
+	}
 	return ( sort( keys( %friend_ids ) ) );
 }
 
@@ -830,7 +851,15 @@ sub _get_friend_page {
 	my ( $page, $source, $id ) = @_;
 	
 	my $url;
+	my $verify_re = '';
 
+	# Get the URL-ized version of the user_name
+	unless ( defined $self->{_user_name_encoded} ) {
+		$self->{_user_name_encoded} = $self->user_name;
+		$self->{_user_name_encoded} =~ 
+			s/([^A-Za-z0-9 .,%\/])/"%".unpack("H2", $1)/eg;
+	}
+	
 	# Set the URL string for the right set of pages
 	if ( (defined $source ) && ( $source eq "inbox" ) ) {
 		$url = "http://mail.myspace.com/index.cfm?fuseaction=mail.inbox" .
@@ -839,34 +868,37 @@ sub _get_friend_page {
 		$url = "http://groups.myspace.com/index.cfm?fuseaction=".
 			"groups.viewMembers&groupID=${id}&page=${page}";
 	} else {
+		$verify_re = "View All Friends";
+		( $DEBUG ) && print "Loading friend page $page\n";
 		if ( $page == 0 ) {
 			# First page
 			$url = "http://home.myspace.com/index.cfm?".
 				"fuseaction=user.viewfriends&".
-				"friendID=" . $self->my_friend_id . "&".
-				"FriendCount=" . $self->friend_count . "&" .
-				"userName=" . $self->user_name;
+				"friendID=" . $self->my_friend_id . "&";
+#				"FriendCount=" . $self->friend_count . "&" .
+#				"userName=" . $self->user_name;
 		} else {
 			# Subsequent pages
 			$url = "http://home.myspace.com/index.cfm?".
 				"fuseaction=user.viewfriends&".
-				"UserName=" . $self->user_name . "&" .
 				"friendID=" . $self->my_friend_id . "&" .
-				"f_search=&searchby=&" . 
 				"friendCount=" . $self->friend_count . "&" .
+				"userName=" . $self->{_user_name_encoded} . "&" .
 				"page=" . $page . "&" .
-				"lastpage=" . $self->{_last_friend_page} . "&" .
-				"PREVPageLASTONERETURENED=" . $self->{_high_friend_id} . "&" .
+				"prevPage=" . $self->{_last_friend_page} . "&" .
 				"PREVPageFirstONERETURENED=" . $self->{_low_friend_id}."&".
+				"PREVPageLASTONERETURENED=" . $self->{_high_friend_id} . "&";
+#				"f_search=&searchby=&" . 
 #				"lastpageofset=" . $self->{_total_friend_pages} . "&".
-				"TotalRecords=" . $self->friend_count;
+#				"TotalRecords=" . $self->friend_count;
 		}
 
 #			warn "processing page $url\n";
 	}
 
-	# Get the page	
-	my $res = $self->get_page( $url );
+	# Get the page
+	( $DEBUG ) && print "  Getting URL: $url\n";
+	my $res = $self->get_page( $url, $verify_re );
 
 	return $res;
 }
@@ -1041,6 +1073,11 @@ sub get_friends_on_page {
 				}
 			}
 		}
+	}
+	
+	if ( $DEBUG ) {
+		my @friends = keys( %friend_ids );
+		print "  Got " . @friends . " friends on page\n";
 	}
 
 	return ( keys( %friend_ids ) );
@@ -1894,7 +1931,8 @@ that the page hasn't been loaded when in fact it has.
 
 =item -
 
-Something (probably UserAgent) is generating the following warnings:
+Something (probably UserAgent getting bad cookie data) is generating
+the following warnings when logging in:
  Day too big - 2238936 > 24855
  Sec too big - 2238936 > 11647
  Day too big - 2238936 > 24855

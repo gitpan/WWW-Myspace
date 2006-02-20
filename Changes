@@ -1,5 +1,15 @@
 Revision history for WWW::Myspace
 
+0.25	2006-02-20
+		- Added debugging code.
+		- Updated URLs for get_friends sub-methods. Versions before
+		  this one will not return all friends.
+		- Added warning if friend_count and number of friends returned
+		  by get_friends differs by more than 10 friends or 5% of
+		  friend_count.
+		- Added page verification RE to get_friends to help ensure all
+		  friends are accounted for.
+
 0.24	2006-02-19
 		- Added logged_in method. Returns true if login was successful.
 		- Added login failure tests to test scripts.
