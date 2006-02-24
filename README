@@ -70,6 +70,16 @@ WWW::Myspace::Comment
 WWW::Myspace::FriendChanges
 WWW::Myspace::Message
 
+The distribution also installs the following handy scripts:
+comment_myspace
+message_group
+approve_friends
+
+These are scripts I use, and decided to include in the
+distribution in case they're handy, since they're the most common
+uses for the module, and they're a bit more robust and friendly
+than just using the methods in the module themselves.
+
 
 TEST SUITE
 

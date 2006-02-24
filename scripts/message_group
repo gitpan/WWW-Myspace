@@ -1,0 +1,155 @@
+#!/usr/bin/perl -w
+######################################################################
+# message_group
+# Sccsid:  %Z%  %M%  %I%  Delta: %G%
+# $Id: message_group,v 1.1 2006/02/21 02:49:50 grant Exp $
+######################################################################
+# Copyright (c) 2004 Grant Grueninger, Commercial Systems Corp.
+
+=head1 NAME
+
+message_group - Send a message to a myspace group
+
+=head1 VERSION
+
+Version 0.3
+
+=cut
+
+our $VERSION = '0.3';
+
+=head1 SYNOPSIS
+
+ message_group config_file
+
+Where config_file is a YAML file containing account and message
+info. Note that this should be readable only by you
+(i.e. chmod 600 config_file).
+
+This script is a command-line front end for the WWW::Myspace::Message
+module that lets you message all the members of a specific MySpace group.
+This is handy if, say, your band sounds like another band and you
+want to send a message to the members of that group saying that they
+might like your music because they like that band.
+
+ Sample config file:
+
+ ---
+ account: myaccount@myspace.com
+ password: mypassword
+ subject: Hi there!
+ cache_file: mycache
+ message: |
+   This is a message.
+   
+   - Me
+ group: 1255555
+
+This script will read the config file and start messaging. If
+it hits the max_count value or a CAPTCHA response, it will sleep
+for 12 hours, then continue. If the script is stopped or interrupted,
+re-run it using the same config file and it will pick up where it left
+off. The script invokes the send_all method in WWW::Myspace::Message.
+Use perldoc WWW::Myspace::Message to read the docs on that module.
+
+=cut
+
+#---------------------------------------------------------------------
+# Setup Variables
+
+# Debugging?
+our $DEBUG=0;
+
+#---------------------------------------------------------------------
+# Libraries
+
+use WWW::Myspace 0.21;
+use WWW::Myspace::Message 0.08;
+use YAML;
+use IO::All;
+use Carp;
+
+######################################################################
+# Main Program
+
+# Read the message info
+my $filename = "$ENV{HOME}/.myspace/group_message.yml";
+if ( @ARGV ) { $filename = $ARGV[0] }
+
+my $data < io "$filename";
+my $hashref = Load( $data ) or croak "Error loading config file";
+my %attr = %$hashref;
+
+my $myspace = new WWW::Myspace( $attr{'account'}, $attr{'password'} );
+
+# Create the message
+my $message = WWW::Myspace::Message->new( $myspace );
+$message->cache_file( $attr{'cache_file'} ) if $attr{'cache_file'};
+$message->subject( $attr{'subject'} );
+$message->message( $attr{'message'} );
+$message->add_to_friends( 1 );
+$message->delay_time( $attr{'delay_time'} ) if ( defined $attr{'delay_time'} );
+my @group_friends = $myspace->friends_in_group( $attr{'group'} );
+my @message_friends = &exclude_my_friends( $myspace, @group_friends );
+
+$message->friend_ids( @message_friends );
+$message->noisy(1);
+
+#( $DEBUG ) && $message->friend_ids( 30204716 );
+
+print "Posting with these values:\n";
+foreach my $key ( keys( %attr ) ) {
+	print "  $key: ". $attr{"$key"} . "\n";
+}
+my @friends = $message->friend_ids;
+print "Found " . @friends . " in group.\n";
+
+my @exclusions = $message->exclusions;
+print "Excluding " . @exclusions . " friends.\n";
+	
+if ( $DEBUG ) {
+	print "\nContinue(y/n)? ";
+	my $ans=<STDIN>;
+	unless ( $ans =~ /y/i ) { exit 1; }
+}
+
+# Send our message to our friends until we're done - may take
+# several days if we're popular.
+$message->send_all;
+
+# We're done sending this message - reset the exclusions file
+# completely.
+#$message->reset_exclusions;
+
+
+######################################################################
+# Subroutines
+
+# exclude_my_friends( $myspace, @friends )
+# We don't want to message people that are already our friend.
+# This funtion takes a list of friend IDs, gets our list of
+# friends, and returns the list of friendIDs that aren't already
+# our friends.
+
+sub exclude_my_friends {
+
+	my ( $myspace, @friends ) = @_;
+	my ( $id, @myfriends, @notfriends );
+
+	# Get myspace friends
+	@myfriends = $myspace->get_friends;
+
+	foreach $id ( @myfriends ) {
+		$friends{"$id"}++;
+	}
+	
+	# Exclude
+	foreach $id ( @friends ) {
+		unless ( defined $friends{"$id"} ) {
+			push ( @notfriends, $id );
+		}
+	}
+
+	return ( @notfriends );
+}
+

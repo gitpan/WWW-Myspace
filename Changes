@@ -1,5 +1,26 @@
 Revision history for WWW::Myspace
 
+0.26	2006-02-20
+		- Included approve_friends, message_group, and comment scripts
+		  in distribution.
+		- Added browse method, but not yet functional.  If you want to
+		  help debug, please do. Otherwise, don't use it yet.
+		- Added CAPTCHA handling (alpha stage):
+		  - post_comment sets $myspace->captcha and returns FC
+		  - Call post_comment with ID, message, captcha response to
+		    continue.
+		    Note: Using this is a bit tricky, needs better examples.
+		- Fixed "t/02-dual.........Can't open test config file
+		  readline() on closed filehandle CONFIG at t/TestConfig.pm
+		  line 50." error in test.
+		- CHANGED submit_friend_request. This implements feature request
+		  17587, but IS NOT BACKWARDS COMPATIBLE. It will DIE if you call
+		  it with more than one friend, so that it can tell you to update
+		  your code.  Now returns a status code like post_comment instead
+		  of a true/false value.
+		- Added submit_friend_requests method for multiple adds (but see
+		  docs for a better example).
+
 0.25	2006-02-20
 		- Added debugging code.
 		- Updated URLs for get_friends sub-methods. Versions before

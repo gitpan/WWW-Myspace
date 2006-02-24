@@ -1,0 +1,207 @@
+#!/usr/bin/perl -w
+######################################################################
+# approve_friends
+# Sccsid:  %Z%  %M%  %I%  Delta: %G%
+# $Id: approve_friends,v 1.3 2006/02/24 21:37:27 grant Exp $
+######################################################################
+# Copyright (c) 2004 Grant Grueninger, Commercial Systems Corp.
+#
+# Description:
+#
+
+=head1 NAME
+
+approve_friends - Approve new friends and post a comment to them
+
+=head1 VERSION
+
+Version 0.06
+
+=cut
+
+our $VERSION='0.06';
+
+=head1 SYNOPSIS
+
+approve_friends [-m message] [-y] [-u username -p password] [-nc]
+    [-f filename] [-c cache_file]
+
+approve_friends [-f filename.yaml]
+
+The first form of the command specifies arguments on the command line. If
+the -f flag is used, the username, password, and message will be read from
+the file. The username on the first line, password on the second, and
+message on the remaining lines.
+
+The second form of the command takes a YAML configuration file. Any other
+command-line arguments will be ignored.
+
+Note that the ability to specify the cache file lets you set a
+different file if you have multiple accounts. If you use the same
+cache_file as you do for the "comment" script (and you should),
+both scripts will avoid posting to users you've already commented
+with either script. This allows you to run them concurrently.
+
+EXAMPLES
+
+ Sample YAML config file:
+ 
+ ---
+ username: myaccount@myspace.com
+ password: ILikePasswords
+ message: |
+   This is a message.
+   
+   It is a few lines long
+   
+   - Me
+ silent: 1  # Or 0 (default)
+ no_comment: 1  # Or 0 (default)
+ cache_file: /home/joe/approve_cache
+
+=cut
+
+#---------------------------------------------------------------------
+# Setup Variables
+
+use warnings;
+use strict;
+
+# Debugging?
+our $DEBUG=0;
+
+our $DEFAULT_MESSAGE = 'Thanks for adding me!';
+
+#---------------------------------------------------------------------
+# Libraries
+
+use WWW::Myspace 0.21;
+use WWW::Myspace::Comment;
+
+use YAML;
+use IO::All;
+
+######################################################################
+# Main Program
+
+# Get passed arguments
+my $args = &parse_args(@ARGV);
+
+# Log in
+my $date = `date`; chop $date;
+print "Logging in to myspace at ${date}...\n";
+my $myspace = "";
+if ( $args->{'username'} ) {
+	$myspace = WWW::Myspace->new( $args->{'username'}, $args->{'password'} );
+} else {
+	$myspace = new WWW::Myspace;
+}
+
+# Approve friends
+print "Checking for friends to approve...\n";
+my @friends = $myspace->approve_friend_requests;
+
+# If we approved any, comment them
+if ( @friends ) {
+	print "Approved " . @friends . " new friends: @friends\n";
+	
+	unless ( defined $args->{'no_comment'} ) {
+
+		print "Leaving comments...\n";
+	
+		my $comment = WWW::Myspace::Comment->new( $myspace );
+		$comment->set_noisy(1);
+		# If we're posting less than 50 friends, comment them all.
+		$comment->ignore_duplicates(1) if ( @friends < 50 );
+		$comment->cache_file( $args->{'cache_file'} )
+			if ( defined $args->{'cache_file'} );
+		( ! $DEBUG ) && $comment->post_comments( $args->{'message'}, @friends );
+	}
+	
+}
+
+print "Done.\n";
+
+######################################################################
+# Subroutines
+
+#----------------------------------------------------------------------
+# parse_args( @ARGS )
+# Parse command-line arguments and return a has of values
+
+sub parse_args {
+
+	my ( @passed_args ) = @_;
+
+	# Initialize
+	my $args = {};
+	my @friend_ids = ();
+	my ( $arg, $line, $data );
+
+	while ( $arg = shift( @passed_args ) ) {
+		if ( $arg eq "-m" ) {
+			$args->{'message'} = shift( @passed_args )
+		} elsif ( $arg eq "-y" ) {
+			$args->{'silent'}=1;
+		} elsif ( $arg eq "-u" ) {
+			$args->{'username'}=shift( @passed_args );
+		} elsif ( $arg eq "-p" ) {
+			$args->{'password'}=shift( @passed_args );
+		} elsif ( $arg eq "-f" ) {
+			$args->{'filename'}=shift( @passed_args );
+		} elsif ( $arg eq "-nc" ) {
+			$args->{'no_comment'} = 1;
+		} elsif ( $arg eq "-c" ) {
+			$args->{'cache_file'} = shift( @passed_args );
+		} else {
+			print "Invalid argument: $arg\n";
+			&fail()
+		}
+
+	}
+
+	# Verify data
+	if ( ( $args->{'username'} ) && ( ! $args->{'password'} ) ) {
+		print "You must specify a password if you provide a username\n";
+		&fail();
+	}
+	
+	# Check for -f flag - means we read username, password, and message
+	# from a file
+	if ( defined $args->{'filename'} ) {
+		open FILE, "<", $args->{'filename'} or die "Invalid filename: ".$args->{'filename'};
+
+		# New YAML support
+		if ( $args->{'filename'} =~ /\.ya?ml$/i ) {
+			( $DEBUG ) && print "Reading YAML config file " . $args->{'filename'} . "\n";
+			$data < io( $args->{'filename'} );
+			$args = Load( $data );
+		} else {
+			( $DEBUG ) && print "Reading standard config file ". $args->{'filename'} . "\n";
+			$args->{'username'} = <FILE>;
+			$args->{'password'} = <FILE>;
+			undef $args->{'message'}; # Just in case...
+			foreach $line ( <FILE> ) {
+				$args->{'message'} .= $line;
+			}
+		}
+
+		close FILE;
+	}
+	
+	# Check the comment
+	unless ( $args->{'message'} ) {
+		$args->{'message'} = $DEFAULT_MESSAGE;
+	}
+	
+	# Debugging output
+	if ( $DEBUG ) {
+		print "Got arguments:\n";
+		foreach $arg (sort( keys( %{$args} ) ) ) {
+			print "$arg:" . $args->{"$arg"} . "\n";
+		}
+	}
+
+	# Return our arguments
+	return $args;
+}

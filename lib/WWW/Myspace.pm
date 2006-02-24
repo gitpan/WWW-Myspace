@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm,v 1.36 2006/02/20 09:22:47 grant Exp $
+# $Id: Myspace.pm,v 1.41 2006/02/24 21:37:26 grant Exp $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -38,11 +38,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.25
+Version 0.26
 
 =cut
 
-our $VERSION = '0.25';
+our $VERSION = '0.26';
 
 =head1 SYNOPSIS
 
@@ -102,6 +102,9 @@ our $HOME_PAGE="http://home.myspace.com/index.cfm?fuseaction=user";
 # This is checked against the home page when we log in.
 our $VERIFY_HOME_PAGE = 'Hello,.*My Mail.*You have .* friends';
 
+# What's the URL to the Browse page?
+our $BROWSE_PAGE = 'http://browseusers.myspace.com/browse/Browse.aspx';
+
 # What should we look for to see if there's a link to a friend's page?
 our $FRIEND_REGEXP="fuseaction=user\.viewprofile\&friendID=";
 
@@ -125,7 +128,8 @@ our $COMMENT_APPROVAL_MSG="This user requires all comments to be approved before
 our $NOT_FRIEND_ERROR="Error: You must be someone's friend to make comments about them.";
 
 # What should we look for to see if we are being asked for a CAPTCHA code?
-our $CAPTCHA='<img src="http:\/\/security.myspace.com\/CAPTCHA\/CAPTCHA\.aspx\?SecurityToken=';
+# We'll extract the URL to return from the area in parenthesis.
+our $CAPTCHA='<img src="(http:\/\/security.myspace.com\/CAPTCHA\/CAPTCHA\.aspx\?SecurityToken=[^"]+)"';
 
 # What's the URL to the comment form? We'll append the user's friend ID to
 # the end of this string.
@@ -691,6 +695,68 @@ sub make_cache_dir {
 
 }
 
+=head2 browse
+
+XXX - NOT YET FUNCTIONAL
+XXX - More debugging needs to be done to ensure accurate
+results, and tests need to be added to the test suite for it.
+It is working only in Basic search mode, and doesn't seem to
+maintain state between pages.  This is not a high-priority
+function for me, so if you'd like to help debug/implement it
+please do.  Send me a patch and I'll credit you. :)
+
+And now back to your normal docs:
+
+Call browse with a hashref of your search criteria and it
+returns a list of friendIDs that match your criteria.
+
+ my @friends = $myspace->browse( {
+                   'zipCode' => '91000',
+                   'zipRadius' => '20',
+                   'Gender' => 'genderWomen', # Pick one of these
+                   'Gender' => 'genderMen',
+                   'Gender' => 'genderBoth'
+                 } );
+
+I'm not sure how I'm going to make the criteria passing easier.
+I'm also concerned about your script breaking if they change the
+browse form variable names. So maybe I'll add a mapping later.
+
+For now, you have to look at the code for the browse page:
+
+ http://browseusers.myspace.com/browse/Browse.aspx
+
+and get the form variables and possible values from there.
+
+Note that depending on any defaults is dangerous, as this is a strange
+form indeed.
+
+=cut
+
+sub browse {
+
+	my ( $criteria ) = @_;
+
+	# Safety check
+	croak 'Criteria must be a hash reference\n' unless ref $criteria;
+
+	# We need to set a couple things: Advanced view so we have all
+	# the options, and Show Name and Photo Only to list more people
+	# per page (for speed).
+	$criteria->{'showNamePhotoOnly'} = 'checked';
+#	$criteria->{'__EVENTTARGET'} = 'advancedView';
+	$criteria->{'__EVENTTARGET'} = 'update';
+
+	# This is a bit of a wacked page, but get_friends
+	# handles it with some special case code.
+	$self->get_friends( 'browse', $criteria );
+	
+	# XXX - Try setting __EVENTTARGET to advancedView
+	#     - get_friends will stop after 5 pages if $DEBUG
+	#     - Sort must preserve state somehow, cookies not working?
+	
+
+}
 
 #---------------------------------------------------------------------
 # get_friends();
@@ -714,12 +780,17 @@ sub get_friends {
 	my $source="";
 	my $source_id = "";
 	( $source, $source_id ) = @_;
-	
+
+	# Browse starts at page 1, the rest start at 0.	
+	my $page=0; $page++ if ( ( defined $source ) && ($source eq 'browse' ) );
+
+	# Initialize
 	my $friends_page="";
-	my $page=0;
 	my %friend_ids = ();
 	my @friends_on_page = ();
 	my ( $id );
+
+	# Loop until we get an empty page or there isn't a "next" link.
 	while ( 1 ) {
 
 		# Get the page
@@ -737,11 +808,13 @@ sub get_friends {
 			$friend_ids{"$id"}++;
 		}
 
-		last unless ( $friends_page->content =~ /">Next<\/a> \&gt;/i );
+		last unless ( $friends_page->content =~ /">Next<\/a>( |&nbsp;)\&gt;/i );
 		
 		# Next!
 		$self->{_last_friend_page} = $page;
 		$page++;
+		
+		last if ( ( $page > 5 ) && ( $DEBUG ) );
 	}
 
 	# Returning an incomplete friend list can be dangerous. Do a
@@ -851,7 +924,10 @@ sub _get_friend_page {
 	my ( $page, $source, $id ) = @_;
 	
 	my $url;
+	my $res;
+	my $success;
 	my $verify_re = '';
+	$source = '' unless defined $source;
 
 	# Get the URL-ized version of the user_name
 	unless ( defined $self->{_user_name_encoded} ) {
@@ -861,12 +937,35 @@ sub _get_friend_page {
 	}
 	
 	# Set the URL string for the right set of pages
-	if ( (defined $source ) && ( $source eq "inbox" ) ) {
+	if ( $source eq "inbox" ) {
 		$url = "http://mail.myspace.com/index.cfm?fuseaction=mail.inbox" .
 			"&page=${page}";
-	} elsif ( (defined $source ) && ( $source eq "group" ) ) { 
+	} elsif ( $source eq "group" ) { 
 		$url = "http://groups.myspace.com/index.cfm?fuseaction=".
 			"groups.viewMembers&groupID=${id}&page=${page}";
+	} elsif ( $source eq 'browse' ) {
+		# This page is weird. It's one big form, and the page number
+		# is just part of the form. So the first time, we just get
+		# the form, and the rest we just update the page number.
+		# Oh, and we start at page 1 instead of 0.
+		if ( $page == 1 ) {
+			# First time through we load the browse form and submit to
+			# specify our options.
+			$success = $self->submit_form(
+				$BROWSE_PAGE, 1, 'update', $id,
+				'Browse Users', 'Browse Users',
+				'http://browseusers.myspace.com/browse/');
+		} else {
+			# Then simply update the page number and submit the form
+			$id->{'Page'} = $page;
+			$success = $self->submit_form(
+				$self->current_page, 1, 'update', $id,
+				'Browse Users', 'Browse Users',
+				'http://browseusers.myspace.com/browse/' );
+		}
+
+		$res = $self->current_page;
+
 	} else {
 		$verify_re = "View All Friends";
 		( $DEBUG ) && print "Loading friend page $page\n";
@@ -897,8 +996,10 @@ sub _get_friend_page {
 	}
 
 	# Get the page
-	( $DEBUG ) && print "  Getting URL: $url\n";
-	my $res = $self->get_page( $url, $verify_re );
+	unless ( $source eq 'browse' ) {
+		( $DEBUG ) && print "  Getting URL: $url\n";
+		$res = $self->get_page( $url, $verify_re );
+	}
 
 	return $res;
 }
@@ -1152,7 +1253,7 @@ distribution.
 
 sub post_comment {
 
-	my ( $friend_id, $message ) = @_;
+	my ( $friend_id, $message, $captcha_response ) = @_;
 	my $status = ""; # Our return status
 	my ($submitted, $attempts);
 
@@ -1168,37 +1269,44 @@ sub post_comment {
 #	if ( $friend_name ) {
 #		$message = "Hi $friend_name!\n\n" . $message;
 #	}
-	
-	# HTML-ize the message like myspace's javascript does.
-	# This also takes care of possible literal "\n"s that come
-	# from commend-line arguments.
-	$message =~ s/(\n|\\n)/<br>\n/gs;
 
-	# Submit the comment to $friend_id's page
-	( $DEBUG ) && print "Getting comment form..\n";
-	$submitted = 
-		$self->submit_form( "${VIEW_COMMENT_FORM}${friend_id}", 1,
-						"", { 'f_comments' => "$message" }, '', 'f_comments'
-					);
+	unless ( $captcha_response ) {
+		# HTML-ize the message like myspace's javascript does.
+		# This also takes care of possible literal "\n"s that come
+		# from commend-line arguments.
+		$message =~ s/(\n|\\n)/<br>\n/gs;
 	
-	# If we posted ok, confirm the comment
-	if ( $submitted ) {
-	
-		# See if there's a CAPTCHA response required, if so,
-		# fail appropriately.
-		if ( $self->{current_page}->content =~ /$CAPTCHA/ ) {
-			return "FC";
-		}
+		# Submit the comment to $friend_id's page
+		( $DEBUG ) && print "Getting comment form..\n";
+		$submitted = 
+			$self->submit_form( "${VIEW_COMMENT_FORM}${friend_id}", 1,
+							"", { 'f_comments' => "$message" }, '', 'f_comments'
+						);
 		
-		# Check for the "not your friend" error
-		if ( $self->{current_page}->content =~ /$NOT_FRIEND_ERROR/ ) {
-			return "FF";
+		# If we posted ok, confirm the comment
+		if ( $submitted ) {
+		
+			# See if there's a CAPTCHA response required, if so,
+			# fail appropriately.
+			if ( $self->current_page->content =~ /$CAPTCHA/i ) {
+				$self->captcha = $1;
+				return "FC";
+			}
+			
+			# Check for the "not your friend" error
+			if ( $self->{current_page}->content =~ /$NOT_FRIEND_ERROR/ ) {
+				return "FF";
+			}
+	
+			# Otherwise, confirm it.
+			( $DEBUG ) && print "Confirming comment...\n";
+			$submitted = $self->submit_form( $self->{current_page}, 1, "",
+					{} );
 		}
-
-		# Otherwise, confirm it.
-		( $DEBUG ) && print "Confirming comment...\n";
-		$submitted = $self->submit_form( $self->{current_page}, 1, "",
-				{} );
+	} else {
+		# Post the confirmation
+		$submitted = $self->submit_form( $self->current_page, 1, '',
+			{ 'CAPTCHAResponse' => $captcha_response } );
 	}
 
 	# Get the resulting page and clean it up (strip whitespace)
@@ -1218,6 +1326,35 @@ sub post_comment {
 
 	return "$status";
 }
+
+=head2 captcha
+
+If post_comment returns "FC", the "captcha" method will return
+the URL to the CAPTCHA image that contains the text that the
+user must enter to post the comment.
+
+ Psuedo-code example of how you can use this in a CGI script:
+
+ my $response = $myspace->post_comment( 12345, 'This is a message' );
+ if ( $response eq 'FC' ) {
+ 	# Get and display the image
+ 	print '<form>\n'.
+ 	  "<img src='" . $myspace->captcha . "'>\n".
+      '<input type=text name=\'CAPTCHAResponse\'>' .
+      '<input type=submit>' .
+      '</form>';
+ }
+
+ # Post the comment
+ $myspace->post_comment( 12345, 'This is a message', $captcha_response );
+
+ (Use in a CGI script is currently problematic since you'll lose the
+ Myspace object. I'll try to write a better example later. You could
+ try doing a YAML Dump and Load of the $myspace object...)
+
+=cut
+
+field 'captcha';
 
 #---------------------------------------------------------------------
 # comment_friends( $message, $attr )
@@ -1556,31 +1693,141 @@ sub _post_friend_requests
 #---------------------------------------------------------------------
 # send_friend_request
 
-=head2 send_friend_request( @friend_ids )
+=head2 send_friend_request( $friend_id )
 
-Send a friend request to each friend in the list of @friend_ids.
+IMPORTANT: THIS METHOD'S BEHAVIOR HAS CHANGED SINCE VERSION 0.25!
+
+Sorry, I hate to break backwards-compatibility, but to keep this
+method in line with the rest, I had to. The changes are:
+1) It takes only one friend, it will DIE if you give it more
+   (mainly to let you know that #2 has changed so your scripts don't
+   think they're succeeding when they're not).
+2) It no longer returns pass/fail, it returns a status code like
+   post_comment.
+
+Send a friend request to the friend identified by $friend_id.
 
 This is the same as going to their profile page and clicking
 the "add as friend" button and confirming that you want to add them.
 
- $myspace->send_friend_request( 12345, 123456 );
+Returns a status code similar to post_comments:
 
-Returns 1 if all requests were submitted ok, 0 if any failed.
+ FF: Failed, this person is already your friend.
+ FN: Failed, network error (couldn't get the page, etc).
+ FP: Failed, you already have a pending friend request for this person
+ FC: Failed, CAPTCHA response requested.
+ P:  Passed! Verification string received.
+ F: Failed, verification string not found on page after posting.
+
+After send_friend_request posts a friend request, it searches for
+various Regular Expressions on the resulting page and sets the
+status code accordingly. The "F" response is of particular interest
+because it means that the request went through fine, but none of
+the known failure messages were received, but the verification
+message wasn't seen either.  This means it -might- have gone through,
+but probably not.  Of course, worst case here is you try again.
+
+
+ EXAMPLES
+ 
+ # Send a friend request and check for some status responses.
+ my $status = $myspace->send_friend_request( 12345 );
+ if ( $status =~ /^P/ ) {
+ 	print "Friend request sent\n";
+ } else {
+ 	if ( $status eq 'FF' ) {
+ 		print "This person is already your friend\n";
+ 	} elsif ( $status eq 'FC' ) {
+ 		print "Received CATPCHA image request\n";
+ 	}
+ }
+
+ # Send a bunch of friend requests
+ my @posted = ();
+ my @failed = ();
+ foreach my $friend ( @friends ) {
+   print "Posting to $friend: ";
+   my $status = $myspace->send_friend_request( $friend )
+   
+   if ( $status =~ /^P/ ) {
+       print "Succeeded\n";
+       push ( @posted, $friend );
+   } else {
+       print "Failed with code $status\n";
+       push ( @failed, $friend );
+   }
+   
+   # Stop if we got a CAPTCHA request.
+   last if $status eq 'FC';
+ }
+ # Do what you want with @posted and @failed.
 
 =cut
 
 sub send_friend_request {
 
-	# We pass unless 
-	my $pass = 1;
+	# We had to break backwards compatibilty, so enforce it.
+	if ( @_ > 1 ) {
+		die 'send_friend_request has been changed. Must use '.
+		    'send_friend_requests to send to multiple friends.\n'.
+			'Also now returns status code instead of true/false.\n'.
+			'perldoc WWW::Myspace for info.';
+	}
+
+	my ( $friend_id ) = @_;
+
+	# Get and post the form
+	my $res = $self->submit_form(
+		$ADD_FRIEND_URL . $friend_id, 1, '', {} );
+
+	# Check response
+	unless ( $res ) {
+		return "FN";
+	}
+
+	my $page = $self->current_page->content;
+	$page =~ s/[ \t\n\r]+/ /g;
+
+	# Check for success
+	if ( $page =~ /An email has been sent to the user/i ) {
+		return "P";
+	}
+
+	# Check for "already your friend"
+	if ( $page =~ /already your friend/i ) {
+		return "FF";
+	}
+
+	# Check for pending friend request
+	if ( $page =~ /pending friend request/i ) {
+		return "FP";
+	}
+
+	# Check for CAPTCHA
+	if ( $page =~ /CAPTCHA/ ) {
+		return "FC";
+	}
+
+	# Failed.
+	return "F";
+
+}
+
+=head2 send_friend_requests( @friend_ids )
+
+Send friend requests to multiple friends. Stops if it hits a
+CAPTCHA request. Doesn't currently give any indication of
+which requests succeeded or failed. Use the code example
+above for that.
+
+=cut
+
+sub send_friend_requests {
 
 	foreach my $id ( @_ ) {
-		my $res = $self->submit_form(
-			$ADD_FRIEND_URL . $id, 1, '', {} );
-		unless ( $res ) { $pass = 0 }
+		last if $self->send_friend_request( $id ) eq 'FC';		
 	}
-	
-	return ( $pass );
+
 }
 
 =head2 add_to_friends
@@ -1774,12 +2021,13 @@ page returned by the first post.
 
 sub submit_form {
 
-	my ( $url, $form_no, $button, $fields_ref, $regexp1, $regexp2 ) = @_;
+	my ( $url, $form_no, $button, $fields_ref, $regexp1, $regexp2, $base_url ) = @_;
 
 	# Initialize our variables
 	my $ua = $self->{ua}; # For convenience
 	my $res = "";
 	my ( $field );
+	$base_url = $BASE_URL unless $base_url;
 	
 	# Get the page
 	( $DEBUG ) && print "Getting $url...\n";
@@ -1801,7 +2049,7 @@ sub submit_form {
 #	( $DEBUG ) && print "\n\nExtracting forms from the following:\n";
 #	( $DEBUG ) && $tree->dump;
 
-	my @forms = HTTP::Request::Form->new_many( $tree, $BASE_URL );
+	my @forms = HTTP::Request::Form->new_many( $tree, $base_url );
 	$tree = $tree->delete();
 	return 0 unless @forms;
 	
@@ -1823,7 +2071,17 @@ sub submit_form {
 		( $DEBUG ) && print "Filled in $field with " .
 					$$fields_ref{"$field"} . "\n";
 #		warn "Filling in field " . $field . "\n";
-		$f->field( "$field", "$$fields_ref{\"$field\"}" );
+		if ( defined ( $f->{'checkbox_state'}->{ "$field" } ) ) {
+			# A true value means check it, false means don't.
+			if ( $fields_ref->{"$field"} ) {
+				$f->checkbox_check( $field )
+			} else {
+				$f->checkbox_uncheck( $field )
+			}
+		} else {
+			# Normal field, just set the value.
+			$f->field( "$field", "$$fields_ref{\"$field\"}" )
+		}
 	}
 	if ($DEBUG) {
 		print "Dump of form filled in:\n";
