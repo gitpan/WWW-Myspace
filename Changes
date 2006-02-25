@@ -1,5 +1,12 @@
 Revision history for WWW::Myspace
 
+0.27	2006-02-24
+		- Added "An error has occurred trying to send this message" error RE.
+
+		message_group:
+		- Now displays the reason it stopped (CAPTCHA, USAGE, COUNTER, or DONE).
+		
+
 0.26	2006-02-20
 		- Included approve_friends, message_group, and comment scripts
 		  in distribution.

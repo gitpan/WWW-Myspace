@@ -2,7 +2,7 @@
 ######################################################################
 # message_group
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: message_group,v 1.1 2006/02/21 02:49:50 grant Exp $
+# $Id: message_group,v 1.2 2006/02/24 23:40:32 grant Exp $
 ######################################################################
 # Copyright (c) 2004 Grant Grueninger, Commercial Systems Corp.
 
@@ -12,11 +12,11 @@ message_group - Send a message to a myspace group
 
 =head1 VERSION
 
-Version 0.3
+Version 0.4
 
 =cut
 
-our $VERSION = '0.3';
+our $VERSION = '0.4';
 
 =head1 SYNOPSIS
 
@@ -115,7 +115,8 @@ if ( $DEBUG ) {
 
 # Send our message to our friends until we're done - may take
 # several days if we're popular.
-$message->send_all;
+my $status = $message->send_all;
+print "Stopped due to " . $status . "\n";
 
 # We're done sending this message - reset the exclusions file
 # completely.

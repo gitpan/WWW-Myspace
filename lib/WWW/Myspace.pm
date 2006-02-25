@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm,v 1.41 2006/02/24 21:37:26 grant Exp $
+# $Id: Myspace.pm,v 1.43 2006/02/25 08:42:57 grant Exp $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -38,11 +38,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.26
+Version 0.27
 
 =cut
 
-our $VERSION = '0.26';
+our $VERSION = '0.27';
 
 =head1 SYNOPSIS
 
@@ -171,6 +171,9 @@ our @ERROR_REGEXPS = (
 	
 	'This profile is undergoing routine maintenance. '.
 	'We apologize for the inconvenience!',
+	
+	'An Error has occurred!!.*'.
+	'An error has occurred (while )?trying to send this message.',
 
 );
 
@@ -1048,7 +1051,7 @@ sub get_page {
 		$res = $ua->get("$url");
 		$attempts--;
 
-	} until ( ( $self->$page_ok( $res, $regexp ) ) || ( $attempts <= 0 ) );
+	} until ( ( $self->_page_ok( $res, $regexp ) ) || ( $attempts <= 0 ) );
 
 	# We both set "current_page" and return the value.
 	$self->{current_page}=$res;
@@ -1057,14 +1060,16 @@ sub get_page {
 }
 
 #---------------------------------------------------------------------
-# my sub page_ok( $response, $regexp )
+# _page_ok( $response, $regexp )
 # Takes a UserAgent response object and checks to see if the
 # page was sucessfully retreived, and checks the content against
-# known error message.
-# If passed a regexp, it will return true if the page content
-# matches the regexp.
+# known error messages (listed at the top of this file).
+# If passed a regexp, it will return true ONLY if the page content
+# matches the regexp (instead of checking the known errors).
+# It will delay 2 seconds if it fails so you can retry immediately.
+# Called by get_page and submit_form.
 
-my sub page_ok {
+sub _page_ok {
 	my ( $res, $regexp ) = @_;
 
 	# Check for errors
@@ -1915,7 +1920,7 @@ sub delete_friend {
 		do {
 			$res = $self->{'ua'}->request( $f->press( 'deleteAll' ) );	
 			$attempts--;
-		} until ( ( $self->$page_ok( $res ) ) || ( $attempts <= 0 ) );
+		} until ( ( $self->_page_ok( $res ) ) || ( $attempts <= 0 ) );
 
 		unless ( $attempts ) {
 			$pass=0;
@@ -2105,7 +2110,7 @@ sub submit_form {
 
 		$attempts--;
 
-	} until ( ( $self->$page_ok( $res, $regexp2 ) ) || ( $attempts <= 0 ) );
+	} until ( ( $self->_page_ok( $res, $regexp2 ) ) || ( $attempts <= 0 ) );
 	
 	# Return the result
 	$self->{current_page} = $res;
