@@ -1,5 +1,14 @@
 Revision history for WWW::Myspace
 
+0.28	2006-02-26
+		- Fixed a bug in post_comment that would cause comments with
+		  multiple lines to display "<br>" tags when posted to pages that
+		  don't allow HTML comments.
+		- Made same change in send_message, which makes no difference
+		  in MacOS X, but might on other platforms that interpret "\n"
+		  differently.  Should be "safer".
+		- Updated test scripts to post multi-line messages.
+
 0.27	2006-02-24
 		- Added "An error has occurred trying to send this message" error RE.
 

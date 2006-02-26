@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm,v 1.43 2006/02/25 08:42:57 grant Exp $
+# $Id: Myspace.pm,v 1.44 2006/02/26 22:09:40 grant Exp $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -38,11 +38,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.27
+Version 0.28
 
 =cut
 
-our $VERSION = '0.27';
+our $VERSION = '0.28';
 
 =head1 SYNOPSIS
 
@@ -1276,10 +1276,10 @@ sub post_comment {
 #	}
 
 	unless ( $captcha_response ) {
-		# HTML-ize the message like myspace's javascript does.
+		# Convert newlines (\n) into socket-ready CRLF ASCII characters.
 		# This also takes care of possible literal "\n"s that come
-		# from commend-line arguments.
-		$message =~ s/(\n|\\n)/<br>\n/gs;
+		# from command-line arguments.
+		$message =~ s/(\n|\\n)/\015\012/gs;
 	
 		# Submit the comment to $friend_id's page
 		( $DEBUG ) && print "Getting comment form..\n";
@@ -1529,9 +1529,12 @@ sub send_message {
 		return "FN";
 	}
 
-	# Takes care of possible literal "\n"s that come
-	# from commend-line arguments.
-	$message =~ s/\\n/\n/gs;
+	# Convert newlines (\n) into socket-ready CRLF ASCII characters.
+	# This also takes care of possible literal "\n"s that come
+	# from command-line arguments.
+	# (Note that \n does seem to work, but this "should" be safer, especially
+	# against myspace changes and platform differences).
+	$message =~ s/(\n|\\n)/\015\012/gs;
 
 	# Submit the message
 	$submitted = $self->submit_form( $res,

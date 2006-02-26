@@ -120,7 +120,7 @@ $message->subject( "Hello" );
 
 cmp_ok( $message->subject, "eq", 'Hello', "Message Subject" );
 
-my $mymessage = 'This is a message from Message';
+my $mymessage = 'This is a message from Message.\n\n- Me';
 
 $message->body( $mymessage );
 
