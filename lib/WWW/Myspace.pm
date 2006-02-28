@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm,v 1.44 2006/02/26 22:09:40 grant Exp $
+# $Id: Myspace.pm,v 1.46 2006/02/28 03:04:49 grant Exp $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -38,11 +38,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.28
+Version 0.29
 
 =cut
 
-our $VERSION = '0.28';
+our $VERSION = '0.29';
 
 =head1 SYNOPSIS
 
@@ -2277,8 +2277,6 @@ L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=WWW-Myspace>
 L<http://search.cpan.org/dist/WWW-Myspace>
 
 =back
-
-=head1 ACKNOWLEDGEMENTS
 
 =head1 COPYRIGHT & LICENSE
 

@@ -1,5 +1,9 @@
 Revision history for WWW::Myspace
 
+0.29	2006-02-27
+		message_group:
+		  - Now accepts a reference to a list of groups or a single group.
+
 0.28	2006-02-26
 		- Fixed a bug in post_comment that would cause comments with
 		  multiple lines to display "<br>" tags when posted to pages that

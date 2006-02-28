@@ -2,7 +2,7 @@
 ######################################################################
 # message_group
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: message_group,v 1.2 2006/02/24 23:40:32 grant Exp $
+# $Id: message_group,v 1.3 2006/02/28 01:40:41 grant Exp $
 ######################################################################
 # Copyright (c) 2004 Grant Grueninger, Commercial Systems Corp.
 
@@ -12,11 +12,11 @@ message_group - Send a message to a myspace group
 
 =head1 VERSION
 
-Version 0.4
+Version 0.5
 
 =cut
 
-our $VERSION = '0.4';
+our $VERSION = '0.5';
 
 =head1 SYNOPSIS
 
@@ -45,12 +45,30 @@ might like your music because they like that band.
    - Me
  group: 1255555
 
+ # You can also do this to specify multiple groups:
+ group:
+   - 1255555
+   - 1244444
+   - 1345553
+
 This script will read the config file and start messaging. If
 it hits the max_count value or a CAPTCHA response, it will sleep
 for 12 hours, then continue. If the script is stopped or interrupted,
 re-run it using the same config file and it will pick up where it left
 off. The script invokes the send_all method in WWW::Myspace::Message.
 Use perldoc WWW::Myspace::Message to read the docs on that module.
+
+Note: To run this as a cron job, set delay_time to 0 in the config
+file. This will make it exit instead of pausing when it hits max_count
+or CAPTCHA.  This is good because it'll re-read the friends list on the
+next run, so it'll pick up any changes.
+
+ delay: 0
+
+Be careful when specifying multiple groups. The script will read all the
+friends from all the groups each time it's run.  Since you're only going to
+message about 300 per day, that can be a big waste of resources.
+Try to do one group at a time.
 
 =cut
 
@@ -80,16 +98,18 @@ my $data < io "$filename";
 my $hashref = Load( $data ) or croak "Error loading config file";
 my %attr = %$hashref;
 
+( $DEBUG ) && print "Logging in...\n";
 my $myspace = new WWW::Myspace( $attr{'account'}, $attr{'password'} );
 
 # Create the message
+( $DEBUG ) && print "Creating message and loading friends from group(s)...\n";
 my $message = WWW::Myspace::Message->new( $myspace );
 $message->cache_file( $attr{'cache_file'} ) if $attr{'cache_file'};
 $message->subject( $attr{'subject'} );
 $message->message( $attr{'message'} );
 $message->add_to_friends( 1 );
 $message->delay_time( $attr{'delay_time'} ) if ( defined $attr{'delay_time'} );
-my @group_friends = $myspace->friends_in_group( $attr{'group'} );
+my @group_friends = &read_groups( $attr{'group'} );
 my @message_friends = &exclude_my_friends( $myspace, @group_friends );
 
 $message->friend_ids( @message_friends );
@@ -98,11 +118,12 @@ $message->noisy(1);
 #( $DEBUG ) && $message->friend_ids( 30204716 );
 
 print "Posting with these values:\n";
-foreach my $key ( keys( %attr ) ) {
-	print "  $key: ". $attr{"$key"} . "\n";
-}
+print Dump \%attr;
+#foreach my $key ( keys( %attr ) ) {
+#	print "  $key: ". $attr{"$key"} . "\n";
+#}
 my @friends = $message->friend_ids;
-print "Found " . @friends . " in group.\n";
+print "Found " . @friends . " friends in group.\n";
 
 my @exclusions = $message->exclusions;
 print "Excluding " . @exclusions . " friends.\n";
@@ -154,3 +175,88 @@ sub exclude_my_friends {
 	return ( @notfriends );
 }
 
+#---------------------------------------------------------------------
+# read_groups( group_id | array_ref )
+# Read the list of friends from the specified groups.
+# You can pass a single group ID (an integer), or an array reference
+# to a list of group IDs.
+
+sub read_groups
+{
+	my ( $groups ) = @_;
+	my %friends;
+
+	if ( ref $groups ) {
+		( $DEBUG ) && print "read_groups got list reference\n";
+		%friends=();
+		# If they gave us a reference to a list of groups,
+		# loop through each one.
+		foreach my $group ( @{$groups} ) {
+			# ... and call ourselves with the group ID.
+			foreach my $id ( &read_groups( $group ) ) {
+				# ... and for each friend in the group, add it to our
+				# friends hash (to guarantee uniqueness).
+				$friends{"$id"}++
+			}
+		}
+	} else {
+		( $DEBUG ) && print "  reading friends from group $groups\n";
+		return $myspace->friends_in_group( $groups );
+	}
+
+	return ( keys( %friends ) );
+
+}
+
+__DATA__
+
+=head1 BUGS
+
+Please report any bugs or feature requests, or send any patches, to
+C<bug-www-myspace at rt.cpan.org>, or through the web interface at
+L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=WWW-Myspace>.
+I will be notified, and then you'll automatically be notified of progress on
+your bug as I make changes.
+
+IF YOU USE A MAIL SERVICE (or program) WITH JUNK MAIL FILTERING, especially
+HOTMAIL or YAHOO, add the bug reporting email address above to your address
+book so that you can receive status updates.
+
+Bug reports are nice, patches are nicer.
+
+=head1 SUPPORT
+
+You can find documentation for this module with the perldoc command.
+
+    perldoc message_group
+
+You can also look for information at:
+
+=over 4
+
+=item * AnnoCPAN: Annotated CPAN documentation
+
+L<http://annocpan.org/dist/WWW-Myspace>
+
+=item * CPAN Ratings
+
+L<http://cpanratings.perl.org/d/WWW-Myspace>
+
+=item * RT: CPAN's request tracker
+
+L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=WWW-Myspace>
+
+=item * Search CPAN
+
+L<http://search.cpan.org/dist/WWW-Myspace>
+
+=back
+
+=head1 COPYRIGHT & LICENSE
+
+Copyright 2005-2006 Grant Grueninger, all rights reserved.
+
+This program is free software; you can redistribute it and/or modify it
+under the same terms as Perl itself.
+
+=cut
