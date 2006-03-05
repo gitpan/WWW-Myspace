@@ -1,5 +1,18 @@
 Revision history for WWW::Myspace
 
+0.30	2006-03-05
+		- Added read_message method to Myspace.pm
+		- Added tests for read_message
+		- Moved Message.pm testing to 05-message.t
+		- Renamed approve.t 04-approve.t
+		- Renamed comment.t 05-comment.
+		- Changed verification RE for get_profile so that
+		  profiles marked as "private" won't produce "Page doesn't
+		  match verification pattern." warnings.
+		- Fixed bug#17999: Can't modify non-lvalue subroutine call.
+		  (When post_comment would return an FC response, the module
+		  would produce an error).
+
 0.29	2006-02-27
 		message_group:
 		  - Now accepts a reference to a list of groups or a single group.

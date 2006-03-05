@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm,v 1.46 2006/02/28 03:04:49 grant Exp $
+# $Id: Myspace.pm,v 1.49 2006/03/05 21:47:55 grant Exp $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -38,11 +38,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.29
+Version 0.30
 
 =cut
 
-our $VERSION = '0.29';
+our $VERSION = '0.30';
 
 =head1 SYNOPSIS
 
@@ -118,7 +118,7 @@ our $VERIFY_COMMENT_POST='<span class="nametext">[^\<]*<\/span>.*View [Mm]ore [P
 # verify that we actually got the page.
 # It just so happens that when we post a comment, it takes us back to
 # their profile, so these are the same.
-our $VERIFY_GET_PROFILE=$VERIFY_COMMENT_POST;
+our $VERIFY_GET_PROFILE='<span class="nametext">[^\<]*<\/span>';
 
 # On the page following posting a comment, what should we look for
 # to indicate that the user requires comments to be approved?
@@ -139,6 +139,8 @@ our $VIEW_COMMENT_FORM="http://comments.myspace.com/index.cfm?fuseaction=user&ci
 # end of this string.
 our $VIEW_PROFILE_URL="http://profile.myspace.com/index.cfm?fuseaction=user.viewprofile&friendID=";
 
+# What's the URL to read a message if we know the messageID?
+our $READ_MESSAGE_URL='http://mail.myspace.com/index.cfm?fuseaction=mail.readmessage&messageID=';
 # What's the URL to send mail to a user? We'll append the friendID to the
 # end if this string too.
 our $SEND_MESSAGE_FORM="http://mail.myspace.com/index.cfm?fuseaction=mail.message&friendID=";
@@ -1294,7 +1296,7 @@ sub post_comment {
 			# See if there's a CAPTCHA response required, if so,
 			# fail appropriately.
 			if ( $self->current_page->content =~ /$CAPTCHA/i ) {
-				$self->captcha = $1;
+				$self->captcha( "$1" );
 				return "FC";
 			}
 			
@@ -1500,6 +1502,73 @@ See also WWW::Myspace::Message, which installs along with the
 distribution.
 
 =cut
+
+=head2 read_message( message_id )
+
+Returns a hashref containing the message identified by message_id.
+
+ my $message_ref = $myspace->read_message( 123456 );
+ 
+ print 'From: ' . $message_ref->{'from'} . .'\n' . # Friend ID of sender
+       'Date: ' . $message_ref->{'date'} . .'\n' . # Date (as formatted on Myspace)
+       'Subject: ' . $message_ref->{'subject'} .'\n' .
+       'Body: ' . $message_ref->{'body'} . '\n';   # Message body
+
+=cut
+
+sub read_message {
+
+	my ( $message_id ) = @_;
+
+	my %message = ();
+	my $res = $self->get_page( $READ_MESSAGE_URL . $message_id );
+	return \%message unless $res->is_success;
+
+	# If we were passed a bad message ID, we'll have the inbox again
+	if ( $res->content =~ /<td><font size="2"><b>Mail Center<br>Inbox<\/b><\/font>/ ) {
+		warn "Invalid Message ID\n";
+		return \%message;
+	}
+
+	# Now we have to yank data out of a messy page.
+	my $page = $res->content;
+	$page =~ s/[ \t\n\r]+/ /g; # Strip whitespace
+
+	# From:
+	$page =~ /From:.*?friendID=([0-9]+)[^0-9]/;
+	$message{'from'} = $1;
+
+	# Date:
+#	$page =~ /Date:.*?> ?([^<]+) ?</;
+#	$page =~ /(Date:.*?> [^<]+ <)/;
+	$page =~ /Date:.*?> ([^<]+) </;
+	$message{'date'} = $1;
+	
+	# Subject:
+	$page =~ /Subject:.*?>([^ <][^<]+)</;
+	$message{'subject'} = $1;
+
+	# Body:
+	# (This takes the lines between the span with the special CSS class that
+	# starts the message, and the three <br> tags in a row that end the
+	# message)
+#	$res->content =~ /<span class="blacktextnb10">.*^(.*)^							<br><br><br>/sm;
+	$res->content =~ /<span class="blacktextnb10">.*?^(.*)^[ \t]+<br><br><br>/sm;
+	$message{'body'} = $1;
+	
+	# Clean up newlines
+	$message{'body'} =~ s/[\n\r]/\n/g;
+
+	# Gotta clean white space before and after the body
+	$message{'body'} =~ s/^[ \t\n]*//s;  # Before
+	$message{'body'} =~ s/[ \t\n]*$//s;  # After
+
+	# And they have these big BR tags at the beginning of each line...
+	$message{'body'} =~ s/^[ \t]*<BR>[ \t]//mg;
+
+	return \%message;
+}
+
 
 sub send_message {
 
