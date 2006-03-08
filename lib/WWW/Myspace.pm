@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm,v 1.49 2006/03/05 21:47:55 grant Exp $
+# $Id: Myspace.pm,v 1.51 2006/03/08 20:06:12 grant Exp $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -38,11 +38,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.30
+Version 0.31
 
 =cut
 
-our $VERSION = '0.30';
+our $VERSION = '0.31';
 
 =head1 SYNOPSIS
 
@@ -771,10 +771,10 @@ sub browse {
 
 =head2 get_friends
 
-Returns, as a list of friendIDs, all of your friends. It does
-not include Tom, because he's everybody's friend and when you're
-debugging your band central CGI page it's probably best to limit your
-mistakes to actual friends.
+Returns, as a list of friendIDs, all of your friends. It does not include
+Tom, because he's everybody's friend and when you're debugging your band
+central CGI page it's probably best to limit your mistakes to
+actual friends.
 
     @friends = $myspace->get_friends;
 
@@ -822,9 +822,10 @@ sub get_friends {
 		last if ( ( $page > 5 ) && ( $DEBUG ) );
 	}
 
-	# Returning an incomplete friend list can be dangerous. Do a
+	# Returning an incomplete list of our friends can be dangerous
+	# since it's used to do exclusions. Do a
 	# safety check. We see if the friend count is within 5% of the
-	# number of friends returned (no, myspace's actual acount is never
+	# number of friends returned (no, myspace's friend counter is never
 	# actually right.....)
 	unless ( $source ) {
 		my @friends = keys( %friend_ids );
@@ -839,11 +840,55 @@ sub get_friends {
 		}
 	}
 
+	# If the source is a user's profile, delete the user's friendID from
+	# the returned list.
+	if ( ( defined $source ) && ( $source eq 'profile' ) ) {
+		delete $friend_ids{$source_id};
+	}
+
 	# Return the list
 	if ( $DEBUG ) {
 		my @friends = keys( %friend_ids );
 		print "get_friends got " . @friends . " friends\n";
 	}
+	
+	# Return our findings
+	return ( sort( keys( %friend_ids ) ) );
+}
+
+#---------------------------------------------------------------------
+# friends_from_profile( friend_id );
+
+=head2 friends_from_profile( friend_id )
+
+Returns a list of the friends of the profile specified by friend_id.
+If passed a list of friend IDs, scans each profile and returns a sorted,
+unique list of friendIDs.  Yes, that means if you pass 5 friendIDs and
+they have friends in common, you'll only get each friendID once.
+You're welcome.
+
+ Examples:
+ 
+ # Band 12345 and 54366 sound like us, get their friends list
+ @similar_bands_friends=$myspace->( 12345, 54366 );
+
+=cut
+
+sub friends_from_profile {
+	my ( @profiles ) = @_;
+	my @friends = ();
+	my $id;
+	my %friend_ids = ();
+
+	foreach $id ( @profiles ) {
+		push ( @friends, $self->get_friends( 'profile', $id ) )
+	}
+	
+	# Sort and return
+	foreach $id ( @friends ) {
+		$friend_ids{"$id"}=1;
+	}
+	
 	return ( sort( keys( %friend_ids ) ) );
 }
 
@@ -853,7 +898,7 @@ sub get_friends {
 
 =head2 friends_who_emailed
 
-Returns list of the friend IDs of all friends with messages
+Returns, as a list of friend IDs, all friends with messages
 in your inbox (mail). Note that this only tells you who you have mail from,
 not how many messages, nor does it contain any method to link to those
 messages. This is primarily designed to aid in auto-responding programs
@@ -974,20 +1019,27 @@ sub _get_friend_page {
 	} else {
 		$verify_re = "View All Friends";
 		( $DEBUG ) && print "Loading friend page $page\n";
+		# Unless they specified a profile to get friends from,
+		# use our own.
+		unless ( $source eq 'profile' ) {
+			$id = $self->my_friend_id;
+		}
+
 		if ( $page == 0 ) {
 			# First page
 			$url = "http://home.myspace.com/index.cfm?".
 				"fuseaction=user.viewfriends&".
-				"friendID=" . $self->my_friend_id . "&";
+				"friendID=" . $id . "&";
 #				"FriendCount=" . $self->friend_count . "&" .
 #				"userName=" . $self->user_name;
+#			warn "Processing friendID " . $id . "\n";
 		} else {
 			# Subsequent pages
 			$url = "http://home.myspace.com/index.cfm?".
 				"fuseaction=user.viewfriends&".
-				"friendID=" . $self->my_friend_id . "&" .
-				"friendCount=" . $self->friend_count . "&" .
-				"userName=" . $self->{_user_name_encoded} . "&" .
+				"friendID=" . $id . "&" .
+				"friendCount=" . $self->{_friend_count} . "&" .
+				"userName=" . $self->{_user_name} . "&" .
 				"page=" . $page . "&" .
 				"prevPage=" . $self->{_last_friend_page} . "&" .
 				"PREVPageFirstONERETURENED=" . $self->{_low_friend_id}."&".
@@ -1004,9 +1056,34 @@ sub _get_friend_page {
 	unless ( $source eq 'browse' ) {
 		( $DEBUG ) && print "  Getting URL: $url\n";
 		$res = $self->get_page( $url, $verify_re );
+		# Save info if we need to
+		$self->$save_friend_info if  (
+			( ( $source eq '' ) || ( $source eq 'profile' ) ) &&
+			( $page == 0 ) );
 	}
 
 	return $res;
+}
+
+#---------------------------------------------------------------------
+# save_friend_info
+# We need to grab some info off the View Friends page to feed back
+# to subsequent pages.
+
+my sub save_friend_info {
+
+	# Get and store the friend count and user name
+	# Friend count
+	$self->current_page->content =~ /name="friendCount" value="([0-9]+)"/i;
+	$self->{_friend_count} = $1;
+	
+	# User name
+	$self->current_page->content =~ /name="userName" value="([^"]*)"/i;
+	$self->{_user_name} = $1;
+	
+#	warn "Stored friend count " . $self->{_friend_count} . ", ".
+#		"user name " . $self->{_user_name} . ".\n";
+	
 }
 
 #---------------------------------------------------------------------
@@ -1475,34 +1552,6 @@ sub already_commented {
 
 }
 
-#---------------------------------------------------------------------
-
-=head2 send_message( $friend_id, $subject, $message, $add_friend_button )
-
-Send a message to the user identified by $friend_id. If $add_friend_button
-is a true value, HTML code for the "Add to friends" button will be added at
-the end of the message.
-
- $myspace->send_message( 6221, 'Hi Tom!', 'Just saying hi!', 0 );
-
- Returns a status code:
-
- P: Posted. Verified by HTTP response code and reading a regexp
- 	from the resulting page saying the message was sent.
- FC: Failed. A CAPTCHA response was requested.
- FF: Failed. The person's profile is set to private. You must
-     be their friend to message them.
- FA: Failed. The person has set their status to "away".
- FE: Failed. The account has exceeded its daily usage.
- FN: Failed. The POST returned an unsuccessful HTTP response code.
- F:  Failed. Post went through, but we didn't see the regexp on the
- 	resulting page (message may or may not have been sent).
-
-See also WWW::Myspace::Message, which installs along with the
-distribution.
-
-=cut
-
 =head2 read_message( message_id )
 
 Returns a hashref containing the message identified by message_id.
@@ -1569,6 +1618,126 @@ sub read_message {
 	return \%message;
 }
 
+
+#---------------------------------------------------------------------
+
+=head2 reply_message( $message_id, $reply_message )
+
+Warning: This is a new, un-tested method.  If you're reading this, it
+means I had to release a new version for some reason before I got to
+complete the testing and documentation of this method. It "should" work
+fine.  Let me know if it does or not.
+
+Reply to message $message_id using the text in the string
+$reply_message.
+
+Returns a status code:
+ 
+  P: Posted. Verified by HTTP response code and reading a regexp
+ 	from the resulting page saying the message was sent.
+ FC: Failed. A CAPTCHA response was requested.
+ FF: Failed. The person's profile is set to private. You must
+     be their friend to message them.
+ FA: Failed. The person has set their status to "away".
+ FE: Failed. The account has exceeded its daily usage.
+ FN: Failed. The POST returned an unsuccessful HTTP response code.
+ F:  Failed. Post went through, but we didn't see the regexp on the
+ 	resulting page (message may or may not have been sent).
+
+
+ Example:
+ my $status = $myspace->reply_message( 1234567, "Thanks for emailing me!" );
+
+
+=cut
+
+sub reply_message {
+
+	my ( $id, $reply ) = @_;
+	my ( $submitted, $message, $reply_message, $page );
+
+	# Fill in the message (this is lazy...)
+	$message = $self->read_message( $id );
+	$reply_message = $reply . $message;
+
+	# Convert newlines (\n) into socket-ready CRLF ASCII characters.
+	# This also takes care of possible literal "\n"s that come
+	# from command-line arguments.
+	# (Note that \n does seem to work, but this "should" be safer, especially
+	# against myspace changes and platform differences).
+	$reply_message =~ s/(\n|\\n)/\015\012/gs;
+	
+	# First load the message and click "Reply" (first button - it has no
+	# name so this'll break if they change the button order).
+	$submitted = $self->submit_form( "$READ_MESSAGE_URL", 1, '', {},
+		"Read Mail", '' );
+
+	# See if we can mail or if there's an error.
+	if ( $submitted ) {
+		$page = $self->current_page->content;
+		$page =~ s/[ \t\n\r]+/ /g;
+		if ( $page =~ /${MAIL_PRIVATE_ERROR}/i ) {
+			return "FF";
+		} elsif ( $page =~ /${MAIL_AWAY_ERROR}/i ) {
+			return "FA";
+		}
+	} else {
+		return "FN";
+	}
+	
+	# Post the reply
+	$submitted = $self->submit_form( $self->current_page, 1, '',
+		{ 'mailbody' => $reply_message } );
+
+	# Verify and return the appropriate code.
+	$page = $self->current_page->content;
+	$page =~ s/[ \t\n\r]+/ /g;
+
+	# Return the result
+	if (! $submitted ) {
+		return "FN";
+	} elsif ( $page =~ /$VERIFY_MESSAGE_SENT/ ) {
+		return "P";
+	} elsif ( $page =~ /$EXCEED_USAGE/i ) {
+		return "FE";
+	} elsif ( $page =~ /$CAPTCHA/ ) {
+		return "FC";
+	} else {
+		return "F";
+	}
+
+#	my ( $url, $form_no, $button, $fields_ref, $regexp1, $regexp2, $base_url ) = @_;
+
+}
+
+
+#---------------------------------------------------------------------
+
+=head2 send_message( $friend_id, $subject, $message, $add_friend_button )
+
+Send a message to the user identified by $friend_id. If $add_friend_button
+is a true value, HTML code for the "Add to friends" button will be added at
+the end of the message.
+
+ $myspace->send_message( 6221, 'Hi Tom!', 'Just saying hi!', 0 );
+
+ Returns a status code:
+
+ P: Posted. Verified by HTTP response code and reading a regexp
+ 	from the resulting page saying the message was sent.
+ FC: Failed. A CAPTCHA response was requested.
+ FF: Failed. The person's profile is set to private. You must
+     be their friend to message them.
+ FA: Failed. The person has set their status to "away".
+ FE: Failed. The account has exceeded its daily usage.
+ FN: Failed. The POST returned an unsuccessful HTTP response code.
+ F:  Failed. Post went through, but we didn't see the regexp on the
+ 	resulting page (message may or may not have been sent).
+
+See also WWW::Myspace::Message, which installs along with the
+distribution.
+
+=cut
 
 sub send_message {
 
@@ -1787,7 +1956,7 @@ Send a friend request to the friend identified by $friend_id.
 This is the same as going to their profile page and clicking
 the "add as friend" button and confirming that you want to add them.
 
-Returns a status code similar to post_comments:
+Returns a status code and a human-readable error message:
 
  FF: Failed, this person is already your friend.
  FN: Failed, network error (couldn't get the page, etc).
@@ -1806,6 +1975,13 @@ but probably not.  Of course, worst case here is you try again.
 
 
  EXAMPLES
+ 
+ # Send a friend request and get the response
+ my $status = $myspace->send_friend_request( 12345 );
+ 
+ # Send a friend request and print the result
+ my ( $status, $result ) = $myspace->send_friend_request( 12345 );
+ print "Received code $status: $result\n";
  
  # Send a friend request and check for some status responses.
  my $status = $myspace->send_friend_request( 12345 );
@@ -1838,6 +2014,70 @@ but probably not.  Of course, worst case here is you try again.
    last if $status eq 'FC';
  }
  # Do what you want with @posted and @failed.
+ 
+ # **************************************************************
+ # Send friend requests and process the CAPTCHA (thanks VERY MUCH
+ # to Olaf Alders for this code).
+ use IO::Prompt;
+ use WWW::Myspace;
+ 
+ my $myspace = new WWW::Myspace;
+ 
+ my %status_codes = (
+ 
+     FF  =>  'Failed, this person is already your friend.',
+     FN  =>  'Failed, network error (couldn\'t get the page, etc).',
+     FP  =>  'Failed, you already have a pending friend request for this person',
+     FC  =>  'Failed, CAPTCHA response requested.',
+     P   =>  'Passed! Verification string received.',
+     F   =>  'Failed, verification string not found on page after posting.',
+ );
+ 
+ my $sleep = 10;
+
+ # pass a list of friend ids to this sub, i.e.:
+ &friend_request( $myspace->friends_in_group( 12345 ) ); 
+ 
+ sub friend_request {
+ 
+     my @ids = @_;
+ 
+     foreach my $id ( @ids ) {
+ 
+         my $status = $myspace->send_friend_request( $id );
+         ++$status{$status};
+ 
+         print "$id:\t$status\n";
+ 
+         if ($status eq 'FC') {
+ 
+             print "captcha response.  please fill in the form at ".
+                "the following url before continuing.\n";
+             print "\n\nhttp://collect.myspace.com/index.cfm?". 
+                "fuseaction=invite.addfriend_verify&friendID=$id\n\n";
+ 
+             my $continue = prompt "Continue? (y/n)\n", -yn;
+ 
+             unless ($continue) {
+                 print "exiting nicely.";
+                 last;
+             }
+ 
+         }
+ 
+         sleep $sleep;
+     }
+ 
+     print "Final status report...\n\n######################\n";
+ 
+     foreach my $key (keys %status_codes) {
+         if (exists $status{$key} ) {
+             print "$status{$key} $status_codes{$key} ($key)\n";
+         }
+     }
+ 
+ }
+
 
 =cut
 
@@ -1846,48 +2086,67 @@ sub send_friend_request {
 	# We had to break backwards compatibilty, so enforce it.
 	if ( @_ > 1 ) {
 		die 'send_friend_request has been changed. Must use '.
-		    'send_friend_requests to send to multiple friends.\n'.
+			'send_friend_requests to send to multiple friends.\n'.
 			'Also now returns status code instead of true/false.\n'.
 			'perldoc WWW::Myspace for info.';
 	}
 
 	my ( $friend_id ) = @_;
 
+	my %status_codes = (
+
+		FF	=>	'Failed, this person is already your friend.',
+		FN	=>	'Failed, network error (couldn\'t get the page, etc).',
+		FP	=>	'Failed, you already have a pending friend request for this person',
+		FC	=>	'Failed, CAPTCHA response requested.',
+		P	=>	'Passed! Verification string received.',
+		F	=>	'Failed, verification string not found on page after posting.',
+
+	);
+ 
 	# Get and post the form
 	my $res = $self->submit_form(
 		$ADD_FRIEND_URL . $friend_id, 1, '', {} );
 
+	my $return_code = undef;
+ 
 	# Check response
 	unless ( $res ) {
-		return "FN";
+		$return_code = 'FN';
 	}
 
-	my $page = $self->current_page->content;
-	$page =~ s/[ \t\n\r]+/ /g;
+	else {
 
-	# Check for success
-	if ( $page =~ /An email has been sent to the user/i ) {
-		return "P";
+		my $page = $self->current_page->content;
+		$page =~ s/[ \t\n\r]+/ /g;
+
+		# Check for success
+		if ( $page =~ /An email has been sent to the user/i ) {
+			$return_code = 'P';
+		}
+
+		# Check for "already your friend"
+		elsif ( $page =~ /already your friend/i ) {
+			$return_code = 'FF';
+		}
+
+		# Check for pending friend request
+		elsif ( $page =~ /pending friend request/i ) {
+			$return_code = 'FP';
+		}
+
+		# Check for CAPTCHA
+		elsif ( $page =~ /CAPTCHA/ ) {
+			$return_code = 'FC';
+		}
+
+		# Failed.
+		unless ($return_code) {
+			$return_code = 'F';
+		}
 	}
-
-	# Check for "already your friend"
-	if ( $page =~ /already your friend/i ) {
-		return "FF";
-	}
-
-	# Check for pending friend request
-	if ( $page =~ /pending friend request/i ) {
-		return "FP";
-	}
-
-	# Check for CAPTCHA
-	if ( $page =~ /CAPTCHA/ ) {
-		return "FC";
-	}
-
-	# Failed.
-	return "F";
-
+ 
+	return $return_code, $status_codes{$return_code};
 }
 
 =head2 send_friend_requests( @friend_ids )
@@ -2224,8 +2483,14 @@ __END__
 Grant Grueninger, C<< <grantg at cpan.org> >>
 
 Thanks to:
+
 Tom Kerswill for the friend_url method, which also inspired the
 friend_user_name method.
+
+Olaf Alders (http://www.wundersolutions.com) for the human-readable status
+codes in send_friend request, for the excellent sample code which provides
+a workaround for CAPTCHA responses, and for the friends_from_profile
+idea.
 
 =head1 KNOWN ISSUES
 

@@ -1,5 +1,24 @@
 Revision history for WWW::Myspace
 
+0.31	2006-03-06
+		- Added reply_message method. Not tested.
+		- Added friends_from_profile method which returns a list of
+		  one or more other profile's friends.
+		- Updated login test script to work like the others,
+		  added tests for friend_from_profile method.
+		- send_friend_request:
+		  - Applied patch from Olaf Alders to return human-readable
+		    status codes.  Added his CAPTCHA-handling sample code
+		    to docs.
+		Message.pm:
+		  - send_all method now returns a response code (fixes a bug
+		    in message_group in which it would say "Stopped due to "
+		    instead of specifying why it had stopped).
+		- approve_friends:
+		  - Added "-gc message" argument.  If used, approve_friends, after
+		    approving and commenting new friend requests, will leave
+		    "message" as a comment for existing friends.
+
 0.30	2006-03-05
 		- Added read_message method to Myspace.pm
 		- Added tests for read_message

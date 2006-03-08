@@ -1,4 +1,4 @@
-# $Id: Message.pm,v 1.8 2006/02/10 10:01:13 grant Exp $
+# $Id: Message.pm,v 1.9 2006/03/07 22:16:01 grant Exp $
 
 package WWW::Myspace::Message;
 
@@ -13,11 +13,11 @@ WWW::Myspace::Message - Auto-message your MySpace friends from Perl scripts
 
 =head1 VERSION
 
-Version 0.08
+Version 0.09
 
 =cut
 
-our $VERSION = '0.08';
+our $VERSION = '0.09';
 
 =head1 SYNOPSIS
 
@@ -476,6 +476,13 @@ sleeps for the number of seconds set in "delay_time" and calls send again.
 It repeats this until it receives "DONE" from the send method.
 send_all does NOT reset the exclusions file.
 
+Returns the last response code received from send_message.  This will
+always be "DONE" unless delay_time is set to 0 (which is redundant,
+but exists for scripting convenience as it allows users of your
+script to set delay_time to 0 if they want to control the messaging,
+without you having to call a different method - see message_group for
+example).
+
 EXAMPLE
  use WWW::Myspace;
  use WWW::Myspace::Message;
@@ -517,6 +524,8 @@ sub send_all {
 
 		sleep $self->delay_time;
 	}
+	
+	return $response;
 
 }
 
