@@ -1,4 +1,4 @@
-# $Id: Comment.pm,v 1.11 2006/02/03 02:40:21 grant Exp $
+# $Id: Comment.pm,v 1.12 2006/03/09 08:44:46 grant Exp $
 
 package WWW::Myspace::Comment;
 
@@ -12,11 +12,11 @@ WWW::Myspace::Comment - Auto-comment your MySpace friends from Perl scripts
 
 =head1 VERSION
 
-Version 0.11
+Version 0.12
 
 =cut
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 
 =head1 SYNOPSIS
 
@@ -556,6 +556,8 @@ sub post_all {
 
 		sleep $self->delay_time;
 	}
+	
+	return $response;
 
 }
 

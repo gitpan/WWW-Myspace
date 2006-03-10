@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm,v 1.51 2006/03/08 20:06:12 grant Exp $
+# $Id: Myspace.pm,v 1.54 2006/03/10 10:23:30 grant Exp $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -38,11 +38,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.31
+Version 0.32
 
 =cut
 
-our $VERSION = '0.31';
+our $VERSION = '0.32';
 
 =head1 SYNOPSIS
 
@@ -1200,7 +1200,7 @@ sub _page_ok {
 # - We use the hash method because there are multiple links for each user
 #   (hence duplicate friendIDs will be returned). (One link for the name,
 #   one for their image). This is pretty safe against changes to the page.
-# - We filter out 6229, Tom's ID...
+# - We filter out 6221, Tom's ID...
 
 =head2 get_friends_on_page( $friends_page );
 
@@ -1212,7 +1212,7 @@ to scan each of the user's "View my friends" pages.
 Notes:
  - It does not return our friendID.
  - friendIDs are filtered so they are unique (i.e. no duplicates).
- - We filter out 6229, Tom's ID.
+ - We filter out 6221, Tom's ID.
 
 EXAMPLE:
 
@@ -1221,7 +1221,7 @@ List the friendIDs mentioned on Tom's profile:
     use WWW::Myspace;
     my $myspace = new WWW::Myspace;
 
-    $res = $myspace->get_profile( 6229 );
+    $res = $myspace->get_profile( 6221 );
     
     @friends = $myspace->get_friends_on_page( $res->content );
     print "These people have left comments or have links on Tom's page:\n";
@@ -1456,9 +1456,12 @@ This convenience method sends the message in $message to
 all of your friends. (Since you can only comment friends, it
 sends the comment to everyone you can).
 
-If called in the second form, it uses the "already_commented" method
-to determine if a comment has already been left on each friend's page
-and skips the page if it detects a previous comment.
+By default it will scan the user's profile page for a previous comment
+(by searching for your profile URL on the page, which also detects
+you if you're in their top 8 or otherwise linked to from their page).
+
+If called in the second form, it forgoes this duplicate checking
+(ignores duplicates), and posts anyway.
 
 Note that you'll probably want to use the WWW::Myspace::Comment module
 as if the process is interrupted (which is likely), this
@@ -1495,7 +1498,7 @@ sub comment_friends {
 	foreach $friend_id ( @friends ) {
 		# If we can ignore duplicates or we haven't commented them already,
 		# post the comment.
-		if ( ( $$attr{'ignore_dup'} ) ||
+		if ( ( $attr->{'ignore_dup'} ) ||
 			(! $self->already_commented( $friend_id ) ) )  {
 			
 			$status = $self->post_comment( $friend_id, $message );
@@ -1808,7 +1811,18 @@ Returns a list of friendIDs that were approved.
 If "message" is given, it will be posted as a comment to the
 new friend.
 
-EXAMPLE
+If approve_friend_requests runs into a CAPTCHA response when posting
+comments, it will set $myspace->captcha to the URL of the CAPTCHA
+image.  If no CAPTCHA was encountered, $myspace->captcha will be 0.
+So you can say:
+
+ if ( $myspace->captcha ) { print "oh no!\n" }
+
+approve_friend_requests will approve all friends wether or not it can
+comment them as it approves first, then comments the list of approved
+friends.
+
+ EXAMPLES
 
   # Approve any friend requests
   @friends_added = $myspace->approve_friend_requests;
@@ -1873,10 +1887,18 @@ sub approve_friend_requests
 
 	}
 
-	# Clean up friends (there -could- be duplicates in some circomstances)
+	# Clean up friends (there -could- be duplicates in some circumstances)
+	my $captcha=0;
+	$self->captcha( 0 ); # Reset captcha so they can check it.
 	foreach $id ( @friends ) {
 		$friends{"$id"}++;
-		( $message ) && $self->post_comment( $id, $message );
+		# If we're to post a message, and this isn't a duplicate,
+		# post a comment to this new friend.
+		if ( ( $message ) && ( $friends{"$id"} == 1 ) && ( ! $captcha )) {
+			if ( $self->post_comment( $id, $message ) eq "FC" ) {
+				$captcha=1;
+			}
+		}
 	}
 	
 	# Return the list of friends
@@ -1991,7 +2013,7 @@ but probably not.  Of course, worst case here is you try again.
  	if ( $status eq 'FF' ) {
  		print "This person is already your friend\n";
  	} elsif ( $status eq 'FC' ) {
- 		print "Received CATPCHA image request\n";
+ 		print "Received CAPTCHA image request\n";
  	}
  }
 
@@ -2484,8 +2506,8 @@ Grant Grueninger, C<< <grantg at cpan.org> >>
 
 Thanks to:
 
-Tom Kerswill for the friend_url method, which also inspired the
-friend_user_name method.
+Tom Kerswill (http://tomkerswill.co.uk) for the friend_url method, which
+also inspired the friend_user_name method.
 
 Olaf Alders (http://www.wundersolutions.com) for the human-readable status
 codes in send_friend request, for the excellent sample code which provides

@@ -1,0 +1,165 @@
+#!/usr/bin/perl -w
+######################################################################
+# add_friends
+# Sccsid:  %Z%  %M%  %I%  Delta: %G%
+# $Id: add_friends,v 1.1 2006/03/09 07:54:02 grant Exp $
+######################################################################
+# Copyright (c) 2006 Grant Grueninger, Commercial Systems Corp.
+#
+# Description:
+
+=head1 NAME
+
+add_friends - Send friend requests to another user's friends.
+
+=head1 SYNOPSIS
+
+ # Send friend requests to everyone in user 12345's friend list.
+ add_friends 12345
+
+add_friends will run, printing status for you.  When it hits a
+CAPTCHA reqponse, it will display a URL for you to copy&paste into
+your web browser, and prompt you to continue. Stop when you like, and
+start again 'cause it'll just skip over those who are already your friend
+and those for whom you have pending friend requests.
+
+=cut
+
+#---------------------------------------------------------------------
+# Setup Variables
+
+# Debugging?
+#$DEBUG=0;
+
+#---------------------------------------------------------------------
+# Libraries
+
+use IO::Prompt;
+use WWW::Myspace;
+
+######################################################################
+# Main Program
+
+# **************************************************************
+# Send friend requests and process the CAPTCHA (thanks VERY MUCH
+# to Olaf Alders for this code).
+ 
+my $myspace = new WWW::Myspace;
+
+my %status_codes = (
+
+    FF  =>  'Failed, this person is already your friend.',
+    FN  =>  'Failed, network error (couldn\'t get the page, etc).',
+    FP  =>  'Failed, you already have a pending friend request for this person',
+    FC  =>  'Failed, CAPTCHA response requested.',
+    P   =>  'Passed! Verification string received.',
+    F   =>  'Failed, verification string not found on page after posting.',
+);
+
+#my $sleep = 10;
+
+# pass a list of friend ids to this sub, i.e.:
+&friend_request( $myspace->friends_from_profile( @ARGV ) ); 
+
+######################################################################
+# Subroutines
+
+sub friend_request {
+
+    my @ids = @_;
+    my ( $status, $status_desc );
+
+    foreach my $id ( @ids ) {
+
+		print "Sending to $id: ";
+        ( $status, $status_desc ) = $myspace->send_friend_request( $id );
+        ++$status{$status};
+		print $status_desc . "\n";
+
+        print "$id:\t$status\n";
+
+        if ($status eq 'FC') {
+
+            print "CAPTCHA response. Please fill in the form at ".
+               "the following url before continuing:\n\n" .
+            print "http://collect.myspace.com/index.cfm?" .
+               "fuseaction=invite.addfriend_verify&friendID=$id\n\n";
+
+            my $continue = prompt "Continue (y/n)? ", -yn;
+
+            unless ($continue) {
+                print "Exiting.\n";
+                last;
+            }
+
+        }
+
+#        sleep $sleep;
+    }
+
+    print "\nFinal status report...\n\n######################\n";
+
+    foreach my $key (keys %status_codes) {
+        if (exists $status{$key} ) {
+            print "$status{$key} $status_codes{$key} ($key)\n";
+        }
+    }
+
+}
+
+=head1 AUTHOR
+
+Original code by Olaf Alders (http://www.wundersolutions.com).
+Updated, documented, and added to module by Grant Grueninger,
+C<< <grantg at cpan.org> >>
+
+=head1 BUGS
+
+Please report any bugs or feature requests, or send any patches, to
+C<bug-www-myspace at rt.cpan.org>, or through the web interface at
+L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=WWW-Myspace>.
+I will be notified, and then you'll automatically be notified of progress on
+your bug as I make changes.
+
+IF YOU USE A MAIL SERVICE (or program) WITH JUNK MAIL FILTERING, especially
+HOTMAIL or YAHOO, add the bug reporting email address above to your address
+book so that you can receive status updates.
+
+Bug reports are nice, patches are nicer.
+
+=head1 SUPPORT
+
+You can find documentation for this module with the perldoc command.
+
+    perldoc add_friends
+
+You can also look for information at:
+
+=over 4
+
+=item * AnnoCPAN: Annotated CPAN documentation
+
+L<http://annocpan.org/dist/WWW-Myspace>
+
+=item * CPAN Ratings
+
+L<http://cpanratings.perl.org/d/WWW-Myspace>
+
+=item * RT: CPAN's request tracker
+
+L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=WWW-Myspace>
+
+=item * Search CPAN
+
+L<http://search.cpan.org/dist/WWW-Myspace>
+
+=back
+
+=head1 COPYRIGHT & LICENSE
+
+Copyright 2005-2006 Grant Grueninger, all rights reserved.
+
+This program is free software; you can redistribute it and/or modify it
+under the same terms as Perl itself.
+
+=cut

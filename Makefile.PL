@@ -19,6 +19,7 @@ WriteMakefile(
         'YAML' => 0.39,
         'IO::All' => 0.33, # Needed for the scripts
         'File::Spec::Functions' => 0, # Note: Forces File::Spec 0.7 or later.
+        'IO::Prompt' => 0, # For add_friends
     },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean               => { FILES => 'WWW-Myspace-*' },

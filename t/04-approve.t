@@ -46,14 +46,22 @@ if ( @friends ) {
 	}
 }
 
-# Now see if we posted that comment.
-warn "Checking for comment post using friendID " .
-	$CONFIG->{'acct2'}->{'friend_id'} .
-	" and ident " . $ident . "\n";
-$res = $myspace1->get_profile( $CONFIG->{'acct2'}->{'friend_id'} );
+SKIP: {
 
-if ( $res->content =~ /${ident}/ ) {
-	pass( 'approve_friend_requests posted comment' );
-} else {
-	fail( 'approve_friend_requests posted comment' );
+	# Now see if we posted that comment.
+	warn "Checking for comment post using friendID " .
+		$CONFIG->{'acct2'}->{'friend_id'} .
+		" and ident " . $ident . "\n";
+	$res = $myspace1->get_profile( $CONFIG->{'acct2'}->{'friend_id'} );
+	
+	# Don't try this at home.  If we find it, fine, but if not,
+	# we check to see if we got a CATPCHA response, and skip the test
+	# if we did.
+	if ( $res->content =~ /${ident}/ ) {
+		pass( 'approve_friend_requests posted comment' );
+	} else {
+		skip "Comment reported CAPTCHA, skipping approval comment verify\n", 1
+			if ( $myspace1->captcha );
+		fail( 'approve_friend_requests posted comment' );
+	}
 }

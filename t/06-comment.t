@@ -22,16 +22,22 @@ $comment->noisy(0);
 $comment->ignore_duplicates(1);
 $comment->cache_file( "comexcl" );
 $comment->delay_time(0);
-$comment->post_all( 'Just thought I\'d comment you.\n\n- Perl\n'.${ident},
+my $status = 
+	$comment->post_all( 'Just thought I\'d comment you.\n\n- Perl\n'.${ident},
 	$CONFIG->{'acct2'}->{'friend_id'} );
 
-# Now see if we posted that comment.
-my $res = $myspace1->get_profile( $CONFIG->{'acct2'}->{'friend_id'} );
+SKIP: {
 
-if ( $res->content =~ /${ident}/ ) {
-	pass( 'post_all posted comment' );
-} else {
-	fail( 'post_all posted comment' );
+	skip "Got CAPTCHA, skipping post_all comment test\n", 1 if
+		( $status eq 'CAPTCHA' );
+	# Now see if we posted that comment.
+	my $res = $myspace1->get_profile( $CONFIG->{'acct2'}->{'friend_id'} );
+	
+	if ( $res->content =~ /${ident}/ ) {
+		pass( 'post_all posted comment' );
+	} else {
+		fail( 'post_all posted comment' );
+	}
 }
 
 # Test commenting all of Perl 2's friends (checks defaults)

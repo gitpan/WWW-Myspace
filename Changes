@@ -1,5 +1,28 @@
 Revision history for WWW::Myspace
 
+0.32	2006-03-08
+		- Added add_friends script to the distribution.  Simple script to
+		  help send friend requests to friends list of another profile.
+		- Updated comment test script to skip post_all test if CAPTCHA
+		  encountered.
+		- Corrected docs for comment_friends method.
+		- Corrected potential bug in approve_friend_requests which could
+		  cause duplicate comments.
+		- Added CAPTCHA check to new friend commenting in
+		  approve_friend_requests so it will not try to post any more
+		  comments after receiving a CAPTCHA response.
+		- You can now check $myspace->captcha after runing
+		  approve_friend_requests to see if it hit a CAPTCHA response or not.
+		- Updated approve test to skip comment testing if CAPTCHA was
+		  encountered to prevent unnecessary test failures.
+		- Fixed Tom's ID in docs (it's 6221, not 6229). Note that it
+		  -was- correct in the code, just not in the docs.
+		- Fixed test script bug that would cause friends_from_profile
+		  method test to fail.
+		Comment.pm:
+		  - post_all method now returns CAPTCHA, COUNTER, or DONE like
+		    post_comments. (Only useful when delay = 0).
+
 0.31	2006-03-06
 		- Added reply_message method. Not tested.
 		- Added friends_from_profile method which returns a list of

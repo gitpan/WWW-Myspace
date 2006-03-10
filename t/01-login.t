@@ -48,7 +48,10 @@ my @other_friends =
 # so put us back in for testing.
 foreach my $id ( @friends ) {
 	if ( $id == $CONFIG->{'acct2'}->{'friend_id'} ) {
-		push( @other_friends, $id )
+		push( @other_friends, $id );
+		# They have to be in numerical order to match.
+		@other_friends = sort( @other_friends );
+		last;
 	}
 }
 

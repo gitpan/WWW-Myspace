@@ -22,3 +22,4 @@ t/config.yaml
 scripts/approve_friends
 scripts/comment_myspace
 scripts/message_group
+scripts/add_friends
