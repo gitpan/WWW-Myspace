@@ -23,3 +23,11 @@ scripts/approve_friends
 scripts/comment_myspace
 scripts/message_group
 scripts/add_friends
+sample_scripts/already_commented
+sample_scripts/approve_friends
+sample_scripts/friend_changes
+sample_scripts/get_friends
+sample_scripts/send_all
+sample_scripts/send_message
+sample_scripts/test_message
+sample_scripts/todo

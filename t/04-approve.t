@@ -31,7 +31,7 @@ if ( @friends ) {
 	# This generates "use of initialized value" warnings from
 	# HTTP::Request::Form.
 	warn "Sending friend request from acct2 to acct1\n";
-	warn 'Ignore the following "Use of uninitialized value" errors'."\n";
+#	warn 'Ignore the following "Use of uninitialized value" errors'."\n";
 	$myspace2->send_friend_request( $CONFIG->{'acct1'}->{'friend_id'} );
 
 	# Now try to approve friend requests.

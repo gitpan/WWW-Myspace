@@ -1,0 +1,12 @@
+#!/usr/bin/perl -w
+
+use WWW::Myspace;
+
+my $myspace = new WWW::Myspace;
+
+my @friends = $myspace->get_friends;
+
+foreach ( @friends ) {
+	print;
+	print "\n";
+}

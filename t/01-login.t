@@ -1,6 +1,6 @@
 #!perl -T
 
-use Test::More tests => 12;
+use Test::More tests => 15;
 #use Test::More 'no_plan';
 
 use lib 't';
@@ -100,3 +100,10 @@ if ( ( $response =~ /^P/ ) || ( $response eq 'FC' ) ||
 
 is( $response, 'P', 'Post Comment' );
 
+# Test is_band
+is( $myspace->is_band, 0,
+	"is_band identifies logged-in non-band profile correctly" );
+is( $myspace->is_band( 30204716 ), 1,
+	"is_band identifies band profile correctly" );
+is( $myspace->is_band( $CONFIG->{'acct2'}->{'friend_id'} ), 0,
+	"is_band identifies 3rd party non-band profile correctly" );

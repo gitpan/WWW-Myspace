@@ -1,333 +1,382 @@
 Revision history for WWW::Myspace
 
-0.32	2006-03-08
-		- Added add_friends script to the distribution.  Simple script to
-		  help send friend requests to friends list of another profile.
-		- Updated comment test script to skip post_all test if CAPTCHA
-		  encountered.
-		- Corrected docs for comment_friends method.
-		- Corrected potential bug in approve_friend_requests which could
-		  cause duplicate comments.
-		- Added CAPTCHA check to new friend commenting in
-		  approve_friend_requests so it will not try to post any more
-		  comments after receiving a CAPTCHA response.
-		- You can now check $myspace->captcha after runing
-		  approve_friend_requests to see if it hit a CAPTCHA response or not.
-		- Updated approve test to skip comment testing if CAPTCHA was
-		  encountered to prevent unnecessary test failures.
-		- Fixed Tom's ID in docs (it's 6221, not 6229). Note that it
-		  -was- correct in the code, just not in the docs.
-		- Fixed test script bug that would cause friends_from_profile
-		  method test to fail.
-		Comment.pm:
-		  - post_all method now returns CAPTCHA, COUNTER, or DONE like
-		    post_comments. (Only useful when delay = 0).
+0.34	2006-03-14
+		- Switched to use WWW::Mechanize
+		  - Removed dependency on HTTP::Request::Form
+		  - Fixes "Use of initialized value" errors when sending
+		    friend requests.
+		- Removed cookie_jar method. Cookies stored in memory only.
+		- Moved login functions to more logical location in the code.
+		- Fixed some docs typos.
+		- logged_in will return false if my_friend_id couldn't be set for
+		  some reason.
+		- If already_commented can't load the page, or if my_friend_id
+		  isn't set, it will return a false "true" value and set
+		  $myspace->error to a message describing the problem.
+		- Added mortality to all "scripts" - if login fails, the script
+		  will die with "Login Failed".  This prevents continuing with
+		  unpredictable results.
 
-0.31	2006-03-06
-		- Added reply_message method. Not tested.
-		- Added friends_from_profile method which returns a list of
-		  one or more other profile's friends.
-		- Updated login test script to work like the others,
-		  added tests for friend_from_profile method.
-		- send_friend_request:
-		  - Applied patch from Olaf Alders to return human-readable
-		    status codes.  Added his CAPTCHA-handling sample code
-		    to docs.
-		Message.pm:
-		  - send_all method now returns a response code (fixes a bug
-		    in message_group in which it would say "Stopped due to "
-		    instead of specifying why it had stopped).
-		- approve_friends:
-		  - Added "-gc message" argument.  If used, approve_friends, after
-		    approving and commenting new friend requests, will leave
-		    "message" as a comment for existing friends.
+0.33    2006-03-10
+        - Added signature code to Makefile.PL
+        - Added sample code to logged_in method to keep trying forever
+          until logged in.
+        - Added sample_scripts directory to MANIFEST
+        - Converted tabs into spaces in Changes file.
+        - Applied patch in bug#18055 to fix send_friend_request. Now
+          properly returns status code instead of status description
+          when called in a list context.
+        - Added dependency for Contextual::Return to Makefile.PL
+          (used in above bug fix).
+        - Added is_band method. Returns true if the profile is a band profile.
+        - Added code to send_friend_request to return "FB" if the
+          friend we're trying to add doens't accept friend requests from
+          bands, and the account we're sending from is a band.
+        - Added is_band tests to 01-login.t.
+        - Debugged response codes in send_friend_requests. The method
+          returned mostly FN and F before, codes are accurate now.
+        - Added "error" method and removed page-load warnings. They
+          are returned in "error" now and can be displayed by your script if
+          desired. See docs for "error" method.
+        - Added code to friend_request to return "FA" (Short for
+          Failed, Anonomyous adds rejected) if the user requires
+          a last name or email address to add them.
+        add_friends:
+          - Added add_friends to Makefile.PL so it'll actually install.
+          - add_friends will now die if it can't log in.
+		  - Converted tabs into spaces in code.
+		  - Fixed redundant status_codes code.
+		  - Debugged CAPTCHA prompt
+		  - Updated text.
 
-0.30	2006-03-05
-		- Added read_message method to Myspace.pm
-		- Added tests for read_message
-		- Moved Message.pm testing to 05-message.t
-		- Renamed approve.t 04-approve.t
-		- Renamed comment.t 05-comment.
-		- Changed verification RE for get_profile so that
-		  profiles marked as "private" won't produce "Page doesn't
-		  match verification pattern." warnings.
-		- Fixed bug#17999: Can't modify non-lvalue subroutine call.
-		  (When post_comment would return an FC response, the module
-		  would produce an error).
+0.32    2006-03-08
+        - Added add_friends script to the distribution.  Simple script to
+          help send friend requests to friends list of another profile.
+        - Updated comment test script to skip post_all test if CAPTCHA
+          encountered.
+        - Corrected docs for comment_friends method.
+        - Corrected potential bug in approve_friend_requests which could
+          cause duplicate comments.
+        - Added CAPTCHA check to new friend commenting in
+          approve_friend_requests so it will not try to post any more
+          comments after receiving a CAPTCHA response.
+        - You can now check $myspace->captcha after runing
+          approve_friend_requests to see if it hit a CAPTCHA response or not.
+        - Updated approve test to skip comment testing if CAPTCHA was
+          encountered to prevent unnecessary test failures.
+        - Fixed Tom's ID in docs (it's 6221, not 6229). Note that it
+          -was- correct in the code, just not in the docs.
+        - Fixed test script bug that would cause friends_from_profile
+          method test to fail.
+        Comment.pm:
+          - post_all method now returns CAPTCHA, COUNTER, or DONE like
+            post_comments. (Only useful when delay = 0).
 
-0.29	2006-02-27
-		message_group:
-		  - Now accepts a reference to a list of groups or a single group.
+0.31    2006-03-06
+        - Added reply_message method. Not tested.
+        - Added friends_from_profile method which returns a list of
+          one or more other profile's friends.
+        - Updated login test script to work like the others,
+          added tests for friend_from_profile method.
+        - send_friend_request:
+          - Applied patch from Olaf Alders to return human-readable
+            status codes.  Added his CAPTCHA-handling sample code
+            to docs.
+        Message.pm:
+          - send_all method now returns a response code (fixes a bug
+            in message_group in which it would say "Stopped due to "
+            instead of specifying why it had stopped).
+        - approve_friends:
+          - Added "-gc message" argument.  If used, approve_friends, after
+            approving and commenting new friend requests, will leave
+            "message" as a comment for existing friends.
 
-0.28	2006-02-26
-		- Fixed a bug in post_comment that would cause comments with
-		  multiple lines to display "<br>" tags when posted to pages that
-		  don't allow HTML comments.
-		- Made same change in send_message, which makes no difference
-		  in MacOS X, but might on other platforms that interpret "\n"
-		  differently.  Should be "safer".
-		- Updated test scripts to post multi-line messages.
+0.30    2006-03-05
+        - Added read_message method to Myspace.pm
+        - Added tests for read_message
+        - Moved Message.pm testing to 05-message.t
+        - Renamed approve.t 04-approve.t
+        - Renamed comment.t 05-comment.
+        - Changed verification RE for get_profile so that
+          profiles marked as "private" won't produce "Page doesn't
+          match verification pattern." warnings.
+        - Fixed bug#17999: Can't modify non-lvalue subroutine call.
+          (When post_comment would return an FC response, the module
+          would produce an error).
 
-0.27	2006-02-24
-		- Added "An error has occurred trying to send this message" error RE.
+0.29    2006-02-27
+        message_group:
+          - Now accepts a reference to a list of groups or a single group.
 
-		message_group:
-		- Now displays the reason it stopped (CAPTCHA, USAGE, COUNTER, or DONE).
-		
+0.28    2006-02-26
+        - Fixed a bug in post_comment that would cause comments with
+          multiple lines to display "<br>" tags when posted to pages that
+          don't allow HTML comments.
+        - Made same change in send_message, which makes no difference
+          in MacOS X, but might on other platforms that interpret "\n"
+          differently.  Should be "safer".
+        - Updated test scripts to post multi-line messages.
 
-0.26	2006-02-20
-		- Included approve_friends, message_group, and comment scripts
-		  in distribution.
-		- Added browse method, but not yet functional.  If you want to
-		  help debug, please do. Otherwise, don't use it yet.
-		- Added CAPTCHA handling (alpha stage):
-		  - post_comment sets $myspace->captcha and returns FC
-		  - Call post_comment with ID, message, captcha response to
-		    continue.
-		    Note: Using this is a bit tricky, needs better examples.
-		- Fixed "t/02-dual.........Can't open test config file
-		  readline() on closed filehandle CONFIG at t/TestConfig.pm
-		  line 50." error in test.
-		- CHANGED submit_friend_request. This implements feature request
-		  17587, but IS NOT BACKWARDS COMPATIBLE. It will DIE if you call
-		  it with more than one friend, so that it can tell you to update
-		  your code.  Now returns a status code like post_comment instead
-		  of a true/false value.
-		- Added submit_friend_requests method for multiple adds (but see
-		  docs for a better example).
+0.27    2006-02-24
+        - Added "An error has occurred trying to send this message" error RE.
 
-0.25	2006-02-20
-		- Added debugging code.
-		- Updated URLs for get_friends sub-methods. Versions before
-		  this one will not return all friends.
-		- Added warning if friend_count and number of friends returned
-		  by get_friends differs by more than 10 friends or 5% of
-		  friend_count.
-		- Added page verification RE to get_friends to help ensure all
-		  friends are accounted for.
+        message_group:
+        - Now displays the reason it stopped (CAPTCHA, USAGE, COUNTER, or DONE).
+        
 
-0.24	2006-02-19
-		- Added logged_in method. Returns true if login was successful.
-		- Added login failure tests to test scripts.
-		- Updated for changes in myspace.com. These fix install test
-		  errors and the get_friends method (whose URL relies on
-		  friend_count) as well.
-		  - user_name now gets name from "Hello, <name>!" line.
-		  - Included test for optional "<span>" in friend_count.
-		  
-		  PREVIOUS VERSION WILL FAIL INSTALL TESTS AND get_friends,
-		  user_name, AND friend_count METHODS (and possibly others)
-		  WILL NOT WORK.
+0.26    2006-02-20
+        - Included approve_friends, message_group, and comment scripts
+          in distribution.
+        - Added browse method, but not yet functional.  If you want to
+          help debug, please do. Otherwise, don't use it yet.
+        - Added CAPTCHA handling (alpha stage):
+          - post_comment sets $myspace->captcha and returns FC
+          - Call post_comment with ID, message, captcha response to
+            continue.
+            Note: Using this is a bit tricky, needs better examples.
+        - Fixed "t/02-dual.........Can't open test config file
+          readline() on closed filehandle CONFIG at t/TestConfig.pm
+          line 50." error in test.
+        - CHANGED submit_friend_request. This implements feature request
+          17587, but IS NOT BACKWARDS COMPATIBLE. It will DIE if you call
+          it with more than one friend, so that it can tell you to update
+          your code.  Now returns a status code like post_comment instead
+          of a true/false value.
+        - Added submit_friend_requests method for multiple adds (but see
+          docs for a better example).
 
-0.23	2006-02-11
-		- Added "profile undergoing routine maintenance" error RE to
-		  list of error pages.
-		- Added add_to_friends convenience method.
-		- Updated URL for inbox friends check. Fixes friends_who_emailed
-		  method and tests so install works.
-		- Updated $SEND_MESSAGE_FORM URL. Fixes mail sending and tests.
-		- Fixed POD for add_to_friends.
+0.25    2006-02-20
+        - Added debugging code.
+        - Updated URLs for get_friends sub-methods. Versions before
+          this one will not return all friends.
+        - Added warning if friend_count and number of friends returned
+          by get_friends differs by more than 10 friends or 5% of
+          friend_count.
+        - Added page verification RE to get_friends to help ensure all
+          friends are accounted for.
 
-		  PREVIOUS VERSIONS WILL FAIL INSTALL TESTS AND CAN'T SEND
-		  MESSAGES.
+0.24    2006-02-19
+        - Added logged_in method. Returns true if login was successful.
+        - Added login failure tests to test scripts.
+        - Updated for changes in myspace.com. These fix install test
+          errors and the get_friends method (whose URL relies on
+          friend_count) as well.
+          - user_name now gets name from "Hello, <name>!" line.
+          - Included test for optional "<span>" in friend_count.
+          
+          PREVIOUS VERSION WILL FAIL INSTALL TESTS AND get_friends,
+          user_name, AND friend_count METHODS (and possibly others)
+          WILL NOT WORK.
 
-0.22	2006-02-10
-		- Added regexp for "This user's profile has been temporarily
-		  disabled for special maintenance" error.
-		- Added an array of regexps for error page handling.
-		- Added ability to explicitly verify certain pages in get_pages.
-		  - Added explicit verify for get_profile method.
-		- Updated known issues.
-		- Added explicit check for verify form for post_comments.
-		- Added dual RE check options for submit_form.
+0.23    2006-02-11
+        - Added "profile undergoing routine maintenance" error RE to
+          list of error pages.
+        - Added add_to_friends convenience method.
+        - Updated URL for inbox friends check. Fixes friends_who_emailed
+          method and tests so install works.
+        - Updated $SEND_MESSAGE_FORM URL. Fixes mail sending and tests.
+        - Fixed POD for add_to_friends.
 
-0.21	2006-02-07
-		- Added example and "See also WWW::Myspace::Message" docs for
-			send_message due to a user question.
-		- Added "See also WWW::Myspace::Comment" for post_comment.
-		- Removed unnecessary pre-requesite "IO::All" from Makefile.PL
-		- Fixed condition in 03-delete.t in which test would fail if
-		  Perl 2 was not in friend list.
-		- Added code to check for "unexpected error" page.
-		- Made get_page and submit_form functions much more robost.
-		- Updated URLs in send_friend_request, delete_friends,
-		  post_comment to use new myspace URLs.
-		- Added flag to send_message to have it attach an "Add to Friends"
-		  button. This is mostly to save people having to update their
-		  message files manually if the code for this changes again.
-		- Fixed delete_friends method, broken by myspace change.
-		- Numerous other changes and bug fixes from extensive changes at
-		  Myspace.com.
-		- Reinforcement of test script items so that tests should pass,
-		  so that end-user installations can include auto-update code
-		  without forcing install.
-		Message.pm (0.8):
-		- Added add_to_friends method which adds an "Add to friends"
-		  button after the message if set to true.
-		  If you include an "add to friends" button in your messages,
-		  YOU SHOULD UPDATE YOUR CODE TO USE THIS METHOD instead.
+          PREVIOUS VERSIONS WILL FAIL INSTALL TESTS AND CAN'T SEND
+          MESSAGES.
 
-		  PREVIOUS VERSIONS WILL ENCOUNTER MANY ERRORS:
-		  Posting comments, deleting friends, sending friend requests.
-		  Install tests will fail.
+0.22    2006-02-10
+        - Added regexp for "This user's profile has been temporarily
+          disabled for special maintenance" error.
+        - Added an array of regexps for error page handling.
+        - Added ability to explicitly verify certain pages in get_pages.
+          - Added explicit verify for get_profile method.
+        - Updated known issues.
+        - Added explicit check for verify form for post_comments.
+        - Added dual RE check options for submit_form.
+
+0.21    2006-02-07
+        - Added example and "See also WWW::Myspace::Message" docs for
+            send_message due to a user question.
+        - Added "See also WWW::Myspace::Comment" for post_comment.
+        - Removed unnecessary pre-requesite "IO::All" from Makefile.PL
+        - Fixed condition in 03-delete.t in which test would fail if
+          Perl 2 was not in friend list.
+        - Added code to check for "unexpected error" page.
+        - Made get_page and submit_form functions much more robost.
+        - Updated URLs in send_friend_request, delete_friends,
+          post_comment to use new myspace URLs.
+        - Added flag to send_message to have it attach an "Add to Friends"
+          button. This is mostly to save people having to update their
+          message files manually if the code for this changes again.
+        - Fixed delete_friends method, broken by myspace change.
+        - Numerous other changes and bug fixes from extensive changes at
+          Myspace.com.
+        - Reinforcement of test script items so that tests should pass,
+          so that end-user installations can include auto-update code
+          without forcing install.
+        Message.pm (0.8):
+        - Added add_to_friends method which adds an "Add to friends"
+          button after the message if set to true.
+          If you include an "add to friends" button in your messages,
+          YOU SHOULD UPDATE YOUR CODE TO USE THIS METHOD instead.
+
+          PREVIOUS VERSIONS WILL ENCOUNTER MANY ERRORS:
+          Posting comments, deleting friends, sending friend requests.
+          Install tests will fail.
 
 
-0.20	2006-02-04
-		- Added Tom's friend_user_name method and test for it.
-		- Added more output info to approve.t test.
+0.20    2006-02-04
+        - Added Tom's friend_user_name method and test for it.
+        - Added more output info to approve.t test.
 
-0.19	2006-02-04
-		Maintenance release
-		- Added missing test files to distribution
+0.19    2006-02-04
+        Maintenance release
+        - Added missing test files to distribution
 
-0.18	2006-02-02
-		- Added bug reporting note to docs.
-		Message.pm (0.7):
-		- Counter now only counts successful posts.
-		Comment.pm (0.11):
-		- Counter now only counts successful posts.		
+0.18    2006-02-02
+        - Added bug reporting note to docs.
+        Message.pm (0.7):
+        - Counter now only counts successful posts.
+        Comment.pm (0.11):
+        - Counter now only counts successful posts.     
 
-0.17	2006-02-01/6:43pm
-		- Updated Login script due to change in myspace.com login form.
-		Unless Myspace.com changes the form back, NO PREVIOUS VERSION
-		WILL WORK as of the date/time of this version above.
+0.17    2006-02-01/6:43pm
+        - Updated Login script due to change in myspace.com login form.
+        Unless Myspace.com changes the form back, NO PREVIOUS VERSION
+        WILL WORK as of the date/time of this version above.
 
-0.16	2006-01-26/8:09pm
-		- Set test count correctly in approve.t
-		Comment.pm:
-		- Added post_all method
-		- Added comment.t test.
-		- Fixed a condition which could cause an "undefined variable"
-		  warning when reset_exclusions is called.
-		- Fixed a bug that would produce an error:
-		  Can't use an undefined value as an ARRAY reference at
-		  /path/to/WWW/Myspace/Comment.pm line 124, <STDIN> line 2.
-		  if post_comments was called without any friends.
-		  (RT Bug 17379: http://rt.cpan.org/Ticket/Display.html?id=17379).
-		- Added test for defaults to comment.t
+0.16    2006-01-26/8:09pm
+        - Set test count correctly in approve.t
+        Comment.pm:
+        - Added post_all method
+        - Added comment.t test.
+        - Fixed a condition which could cause an "undefined variable"
+          warning when reset_exclusions is called.
+        - Fixed a bug that would produce an error:
+          Can't use an undefined value as an ARRAY reference at
+          /path/to/WWW/Myspace/Comment.pm line 124, <STDIN> line 2.
+          if post_comments was called without any friends.
+          (RT Bug 17379: http://rt.cpan.org/Ticket/Display.html?id=17379).
+        - Added test for defaults to comment.t
 
-0.15	2006-01-25/3:12pm
-		- Fixed condition in submit_form so it'll try 5 times with 2
-		  second delay if there's a network error.
-		- Updated test suite for new max_count in Message and removed
-		  extra "approve_friends" test in 01-login.t
-	    - Added handling of private profiles in send_message - returns "FF"
-	    - send_message converts literal '\n' into "\n".
-	    - Added handling of away messages - returns "FA"
-	    - Added handling of excess usage - returns "FE"
-		Message.pm:
-		  - Added result code display (i.e. why are we sleeping?) when
-		    sleeping and "noisy" is on.
-		  - Det default max_count to 300.
-		  - Added handling of private profiles and away messages.
-		  - Added handling of usage being exceeded - returns "USAGE".
+0.15    2006-01-25/3:12pm
+        - Fixed condition in submit_form so it'll try 5 times with 2
+          second delay if there's a network error.
+        - Updated test suite for new max_count in Message and removed
+          extra "approve_friends" test in 01-login.t
+        - Added handling of private profiles in send_message - returns "FF"
+        - send_message converts literal '\n' into "\n".
+        - Added handling of away messages - returns "FA"
+        - Added handling of excess usage - returns "FE"
+        Message.pm:
+          - Added result code display (i.e. why are we sleeping?) when
+            sleeping and "noisy" is on.
+          - Det default max_count to 300.
+          - Added handling of private profiles and away messages.
+          - Added handling of usage being exceeded - returns "USAGE".
 
-0.14	2006-01-25/11:41am
-		- Added loop code to submit_form - will now try each
-		  submit 5 times if the submit fails.
-		- Added optional "message" argument to approve_friend_requests.
-		  You can now call approve_friend_requests( message )
-		  and message will be posted to each approved friend.
-		- Added TODO and CONTRIBUTING section to docs.
-		- Updated docs for all methods.
-		- Updated get_page to attempt GET 20 times instead of forever.
-		- Added methods:
-			- send_friend_request
-			- add_as_friend
-			- delete_friend
-		Comment.pm (0.9):
-			- Reworked module internals. Made Spiffy.
-			- Numerous minor bug fixes.
-			- Renamed "HTML" accessor "html".
-			- Added "noisy" accessor.
-			- Added "cache_file" to conform to Message and Myspace.
+0.14    2006-01-25/11:41am
+        - Added loop code to submit_form - will now try each
+          submit 5 times if the submit fails.
+        - Added optional "message" argument to approve_friend_requests.
+          You can now call approve_friend_requests( message )
+          and message will be posted to each approved friend.
+        - Added TODO and CONTRIBUTING section to docs.
+        - Updated docs for all methods.
+        - Updated get_page to attempt GET 20 times instead of forever.
+        - Added methods:
+            - send_friend_request
+            - add_as_friend
+            - delete_friend
+        Comment.pm (0.9):
+            - Reworked module internals. Made Spiffy.
+            - Numerous minor bug fixes.
+            - Renamed "HTML" accessor "html".
+            - Added "noisy" accessor.
+            - Added "cache_file" to conform to Message and Myspace.
 
-0.13	2006-01-20/7:43pm
-		Fixed approve_friend_requests method. Was skipping valid friend
-		requests.
+0.13    2006-01-20/7:43pm
+        Fixed approve_friend_requests method. Was skipping valid friend
+        requests.
 
-0.12	2006-01-17/1:20pm
-		Included Comment.pm, FriendChanges.pm, and Message.pm in
-		distribution.
-		Fixed bugs in cache_dir and cache_file handling.
-		Made pathname handling OS-independent using File::Spec.
-		Added friend_count and user_name accessors.
-		Fixed retreival of user's friend list in get_friends.
-		Added make_cache_dir method.
-		Comment.pm:
-			- Added exlusions_file method.
-			- Renamed "set_HTML" method "HTML". Made it a
-			  standard accessor method.
-		FriendChanges.pm:
-			- Set default cache file to $myspace->cache_dir/friend_cache.
-			- Added cache_file accessor method.
-			- Obsoleted "set_cache_file" method.
-		Message.pm, Comment.pm, FriendChanges.pm:
-			- When cache_dir method is called to retreive its default
-			  value, it calls the make_cache_dir method in the
-			  WWW::Myspace object to create cache_dir if it
-			  doesn't exist.
-			- File handling done by File::Spec for cross-platform
-			  portability.
-		Message.pm:
-			- Added extensive test suite.
-			- Added "messaged" method.
-			- Stabilized code to beta release state. Passes test suite.
-			- Fixed bugs.
-			- Noted obscure known "bugs".
+0.12    2006-01-17/1:20pm
+        Included Comment.pm, FriendChanges.pm, and Message.pm in
+        distribution.
+        Fixed bugs in cache_dir and cache_file handling.
+        Made pathname handling OS-independent using File::Spec.
+        Added friend_count and user_name accessors.
+        Fixed retreival of user's friend list in get_friends.
+        Added make_cache_dir method.
+        Comment.pm:
+            - Added exlusions_file method.
+            - Renamed "set_HTML" method "HTML". Made it a
+              standard accessor method.
+        FriendChanges.pm:
+            - Set default cache file to $myspace->cache_dir/friend_cache.
+            - Added cache_file accessor method.
+            - Obsoleted "set_cache_file" method.
+        Message.pm, Comment.pm, FriendChanges.pm:
+            - When cache_dir method is called to retreive its default
+              value, it calls the make_cache_dir method in the
+              WWW::Myspace object to create cache_dir if it
+              doesn't exist.
+            - File handling done by File::Spec for cross-platform
+              portability.
+        Message.pm:
+            - Added extensive test suite.
+            - Added "messaged" method.
+            - Stabilized code to beta release state. Passes test suite.
+            - Fixed bugs.
+            - Noted obscure known "bugs".
 
-0.11	2006-01-19/3:07am
-		CPAN maintenance release. Removed stray ._ files from dist.
+0.11    2006-01-19/3:07am
+        CPAN maintenance release. Removed stray ._ files from dist.
 
-0.10	2006-01-16/8:12pm
-		Fixed setting of HOME_DIR to work if $ENV{HOME} is not
-		set (i.e. if running in a CGI script). Updated docs.
+0.10    2006-01-16/8:12pm
+        Fixed setting of HOME_DIR to work if $ENV{HOME} is not
+        set (i.e. if running in a CGI script). Updated docs.
 
-0.09	2006-01-11/10:24pm
-		Chnaged name from "Myspace" to "WWW::Myspace"
-		Made "Spiffy".
-		Updated docs.
-		Changed cache file to use $HOME/.www-myspace/login_cache by default.
-		Fixed bugs:
-		Known issues:
-			- get_friends method does not work if user has > 40 friends
-			  (bug introduced by change in myspace site).
-			- post_comment dies if it is told to post to a friendID that
-			  is not a friend of the logged-in user. (Myspace displays
-			  an error instead of a form).
-		Added test suite.
+0.09    2006-01-11/10:24pm
+        Chnaged name from "Myspace" to "WWW::Myspace"
+        Made "Spiffy".
+        Updated docs.
+        Changed cache file to use $HOME/.www-myspace/login_cache by default.
+        Fixed bugs:
+        Known issues:
+            - get_friends method does not work if user has > 40 friends
+              (bug introduced by change in myspace site).
+            - post_comment dies if it is told to post to a friendID that
+              is not a friend of the logged-in user. (Myspace displays
+              an error instead of a form).
+        Added test suite.
 
-0.08	2006-01-07/12:52pm
-		*** REQUIRED VERSION AFTER 1/7/2006 ***
-		Added explicit load of "Home" page when logging in.
-		Note that this was done beacuse Myspace added an
-		ad page which breaks any version of this module prior
-		to this one.
+0.08    2006-01-07/12:52pm
+        *** REQUIRED VERSION AFTER 1/7/2006 ***
+        Added explicit load of "Home" page when logging in.
+        Note that this was done beacuse Myspace added an
+        ad page which breaks any version of this module prior
+        to this one.
 
-0.07	2006-01-03/7:51pm
-		Added CAPTCHA response code "FC" to send_message method. send_message
-		returns FC if the $CAPTCHA regexp is found after submitting a message
-		form.
+0.07    2006-01-03/7:51pm
+        Added CAPTCHA response code "FC" to send_message method. send_message
+        returns FC if the $CAPTCHA regexp is found after submitting a message
+        form.
 
-0.06	2005-12-27/5:04pm
-		Added friends_in_group method. Returns list of "friends" in a
-		Myspace group when passed the group ID.
+0.06    2005-12-27/5:04pm
+        Added friends_in_group method. Returns list of "friends" in a
+        Myspace group when passed the group ID.
 
-0.05	2005-12-14/7:49pm
-		Added approve_friends method.
+0.05    2005-12-14/7:49pm
+        Added approve_friends method.
 
-0.04	2005-12-11/9:38pm
-		Minor documentation tweaks: Updated BUGS and Copyright secsions,
-		added "send_messages" method in SYNOPSIS.
+0.04    2005-12-11/9:38pm
+        Minor documentation tweaks: Updated BUGS and Copyright secsions,
+        added "send_messages" method in SYNOPSIS.
 
-0.03	2005-12-11/9:21pm
-		Added send_message method.
-		Added already_commented method.
-		Updated documentation to be in-line in the package file.
+0.03    2005-12-11/9:21pm
+        Added send_message method.
+        Added already_commented method.
+        Updated documentation to be in-line in the package file.
 
-0.02	2005-12-08/10:41pm
-		post_comments now adds "<br>" tags to the message
-		like myspace's Javascript does.
+0.02    2005-12-08/10:41pm
+        post_comments now adds "<br>" tags to the message
+        like myspace's Javascript does.
 
 0.01    2005-12-05/1:14
         First version, released on an unsuspecting world.

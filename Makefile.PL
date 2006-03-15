@@ -1,8 +1,10 @@
 use strict;
 use warnings;
 use ExtUtils::MakeMaker;
+#use Module::Signature qw(sign verify SIGNATURE_OK);
 
 WriteMakefile(
+    (MM->can('signature_target') ? (SIGN => 1) : ()),
     NAME                => 'WWW::Myspace',
     AUTHOR              => 'Grant Grueninger <grantg@cpan.org>',
     VERSION_FROM        => 'lib/WWW/Myspace.pm',
@@ -11,15 +13,18 @@ WriteMakefile(
     'EXE_FILES'         => [qw( scripts/approve_friends
                                 scripts/comment_myspace
                                 scripts/message_group
+								scripts/add_friends
                               )],
     PREREQ_PM => {
         'Test::More' => 0,
-        'HTTP::Request::Form' => 0,
+#        'HTTP::Request::Form' => 0,
         'Spiffy' => 0.24,
         'YAML' => 0.39,
         'IO::All' => 0.33, # Needed for the scripts
         'File::Spec::Functions' => 0, # Note: Forces File::Spec 0.7 or later.
         'IO::Prompt' => 0, # For add_friends
+        'Contextual::Return' => 0, # For send_friend_request method
+        'WWW::Mechanize' => 0,
     },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean               => { FILES => 'WWW-Myspace-*' },

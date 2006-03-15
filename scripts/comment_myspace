@@ -2,7 +2,7 @@
 ######################################################################
 # comment_myspace
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: comment_myspace,v 1.2 2006/02/21 02:59:29 grant Exp $
+# $Id: comment_myspace,v 1.3 2006/03/15 01:49:48 grant Exp $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -172,6 +172,7 @@ if ( $args{"username"} ) {
 } else {
 	$myspace = new WWW::Myspace;
 }
+die "Login failed\n" unless ( $myspace->logged_in );
 
 # Get list of friends (comment would do the get_friends thing for us, 
 # but we'll do it here so we can display more complete info to the user).

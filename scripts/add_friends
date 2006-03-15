@@ -2,7 +2,7 @@
 ######################################################################
 # add_friends
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: add_friends,v 1.1 2006/03/09 07:54:02 grant Exp $
+# $Id: add_friends,v 1.6 2006/03/15 02:28:19 grant Exp $
 ######################################################################
 # Copyright (c) 2006 Grant Grueninger, Commercial Systems Corp.
 #
@@ -45,20 +45,10 @@ use WWW::Myspace;
 # to Olaf Alders for this code).
  
 my $myspace = new WWW::Myspace;
+die "Login failed\n" unless ( $myspace->logged_in );
 
-my %status_codes = (
-
-    FF  =>  'Failed, this person is already your friend.',
-    FN  =>  'Failed, network error (couldn\'t get the page, etc).',
-    FP  =>  'Failed, you already have a pending friend request for this person',
-    FC  =>  'Failed, CAPTCHA response requested.',
-    P   =>  'Passed! Verification string received.',
-    F   =>  'Failed, verification string not found on page after posting.',
-);
-
-#my $sleep = 10;
-
-# pass a list of friend ids to this sub, i.e.:
+# Get the friends from the specified profile and call our subroutine.
+print "Getting friend list...\n";
 &friend_request( $myspace->friends_from_profile( @ARGV ) ); 
 
 ######################################################################
@@ -67,25 +57,27 @@ my %status_codes = (
 sub friend_request {
 
     my @ids = @_;
-    my ( $status, $status_desc );
+    my ( $status, $status_desc, %status_codes );
 
     foreach my $id ( @ids ) {
 
-		print "Sending to $id: ";
+        print "Sending to $id: ";
         ( $status, $status_desc ) = $myspace->send_friend_request( $id );
         ++$status{$status};
-		print $status_desc . "\n";
+        $status_codes{$status} = $status_desc unless
+        	defined $status_codes{$status};
+        print $status_desc . "\n";
 
-        print "$id:\t$status\n";
+#        print "$id:$status\n";
 
         if ($status eq 'FC') {
 
             print "CAPTCHA response. Please fill in the form at ".
                "the following url before continuing:\n\n" .
-            print "http://collect.myspace.com/index.cfm?" .
+               "http://collect.myspace.com/index.cfm?" .
                "fuseaction=invite.addfriend_verify&friendID=$id\n\n";
 
-            my $continue = prompt "Continue (y/n)? ", -yn;
+            my $continue = prompt -tp, "Continue (y/n)? ", -yn;
 
             unless ($continue) {
                 print "Exiting.\n";

@@ -1,0 +1,29 @@
+#!/usr/bin/perl -w -I../lib
+######################################################################
+# approve_friends
+# Sccsid:  %Z%  %M%  %I%  Delta: %G%
+# $Id: approve_friends,v 1.3 2006/01/18 01:59:34 grant Exp $
+######################################################################
+# Copyright (c) 2004 Grant Grueninger, Commercial Systems Corp.
+#
+# Description:
+
+#---------------------------------------------------------------------
+# Setup Variables
+
+# Debugging?
+#$DEBUG=0;
+
+#---------------------------------------------------------------------
+# Libraries
+
+use WWW::Myspace;
+
+######################################################################
+# Main Program
+
+my $myspace = new WWW::Myspace;
+
+my @friends = $myspace->approve_friend_requests;
+
+print "Approved " . @friends . " friends: @friends\n";
