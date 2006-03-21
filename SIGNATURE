@@ -1,0 +1,57 @@
+This file contains message digests of all files listed in MANIFEST,
+signed via the Module::Signature module, version 0.53.
+
+To verify the content in this distribution, first make sure you have
+Module::Signature installed, then type:
+
+    % cpansign -v
+
+It will check each file's integrity, as well as the signature's
+validity.  If "==> Signature verified OK! <==" is not displayed,
+the distribution may already have been compromised, and you should
+not run its Makefile.PL or Build.PL.
+
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA1
+
+SHA1 40a4a14cc3c798c6c75ba902d71f5253a669859e Changes
+SHA1 ff1b12a8b92db8a323ce69c6a7ba6f9727f59f10 MANIFEST
+SHA1 4648620ed12e70329119913f5e196b1803ca11c0 META.yml
+SHA1 9c719eef164dd933c9d889170d06bdb02ece5948 Makefile.PL
+SHA1 45b20d301f7eca2e6a178b3e182faa869db556f1 README
+SHA1 c7c6b1c87373ea65f6c1fc662e14f12a312e2701 lib/WWW/Myspace.pm
+SHA1 358d78294294d25b54006ce715cba6cc4ef4569a lib/WWW/Myspace/Comment.pm
+SHA1 38a90e255038038106e13b4ddb40c1df0d5437b6 lib/WWW/Myspace/FriendChanges.pm
+SHA1 3f7816a15b7e443504ebf99aae6fc7d0bc25cd94 lib/WWW/Myspace/Message.pm
+SHA1 c0f6292c0e9cf0bf26fdd9af76ef4972dfedda9b sample_scripts/already_commented
+SHA1 5cc5aaeb936634a04b3f211de9b54a877f1f190c sample_scripts/approve_friends
+SHA1 d2d4e8f3f41e64bfcdcd5ea7b92e7c1d189c7357 sample_scripts/friend_changes
+SHA1 0221c97b2a23b02b7f49eb983b3a62b55dc7aa2e sample_scripts/get_friends
+SHA1 6dd711c072314ef605fdd0ae3977e5310a1c212b sample_scripts/get_inbox
+SHA1 3b8833ea6b9740b785eb132f8b8b22ad4a7ea8a3 sample_scripts/send_all
+SHA1 8bedcd121a990d11a4d54768c7f33c5b5c040e0a sample_scripts/send_message
+SHA1 e8257f72cc6693060b0938fa1a246cf3b1fa7a3b sample_scripts/test_message
+SHA1 699642dcb21e4183b3e662f8427ed4a357089377 sample_scripts/todo
+SHA1 bb350ba33232bf9f6a0e5af2ab5d54ee8c6646c8 scripts/add_friends
+SHA1 f2b893e4fc162415a24975b8cd2edf3cc2aecd3a scripts/approve_friends
+SHA1 73f816f6422e1b4ebe74be51dc84b03068709b04 scripts/comment_myspace
+SHA1 75abc33f033baa4a968f97418da22b41827cd92c scripts/message_group
+SHA1 e213c4c6b19ce81fa956066e711a2e80fc84eb31 t/00-load.t
+SHA1 0f392518d7678fb0950c2e417e79ba873daedc0c t/01-login.t
+SHA1 73febcbd4d8413d972a4ef99fb18adc7dd15fb3b t/02-dual.t
+SHA1 34ffa2d5dbb6b647277b0d65c696c15dc18616ed t/03-delete.t
+SHA1 13a6a67139f0c0b5361a6159634b99b146174eae t/04-approve.t
+SHA1 07ae649084f6bfbc96fe10a4b04e84a7e539dfc7 t/05-message.t
+SHA1 9e7dc12cbd69d771fd2ebefd485da7b300a64f9c t/06-comment.t
+SHA1 95d0c4673e4321d0e3fbd27e6a4cdf35a8085980 t/TestConfig.pm
+SHA1 8ea665099085b85a1f2005b0e9dc943587bd68cd t/boilerplate.t
+SHA1 c1c3f9eca0566db6b89c1cc50cc21968c0257ea0 t/config.yaml
+SHA1 6da39b48ce64b584e4c3274bff96fc76ff484820 t/pod-coverage.t
+SHA1 0190346d7072d458c8a10a45c19f86db641dcc48 t/pod.t
+-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v1.4.2.2 (Darwin)
+
+iD8DBQFEID6QNksOcqgVcjsRAk+EAKDXnn2iENA1GQpTv3db3Hh77IAXbwCcDQri
+9sIVARewPt40dpoRZ6lxr/w=
+=nBPO
+-----END PGP SIGNATURE-----

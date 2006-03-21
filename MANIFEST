@@ -1,6 +1,6 @@
 Changes
 MANIFEST
-META.yml # Will be created by "make dist"
+#META.yml # Will be created by "make dist"
 Makefile.PL
 README
 lib/WWW/Myspace.pm
@@ -31,3 +31,6 @@ sample_scripts/send_all
 sample_scripts/send_message
 sample_scripts/test_message
 sample_scripts/todo
+sample_scripts/get_inbox
+META.yml                                 Module meta-data (added by MakeMaker)
+SIGNATURE                                Public-key signature (added by MakeMaker)

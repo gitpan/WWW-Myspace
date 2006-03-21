@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm,v 1.64 2006/03/15 02:59:49 grant Exp $
+# $Id: Myspace.pm,v 1.68 2006/03/16 17:11:55 grant Exp $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -27,26 +27,17 @@ use Contextual::Return;
 use WWW::Mechanize;
 use File::Spec::Functions;
 
-
-#use URI::URL;
-#use LWP::UserAgent;
-#use HTTP::Request;
-#use HTTP::Request::Common;
-#use HTTP::Request::Form;
-#use HTML::TreeBuilder 3.0;         
-
-
 =head1 NAME
 
 WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.34
+Version 0.35
 
 =cut
 
-our $VERSION = '0.34';
+our $VERSION = '0.35';
 
 =head1 SYNOPSIS
 
@@ -142,6 +133,11 @@ our $VIEW_COMMENT_FORM="http://comments.myspace.com/index.cfm?fuseaction=user&ci
 # What's the URL to view a user's profile? We'll append the friendID to the
 # end of this string.
 our $VIEW_PROFILE_URL="http://profile.myspace.com/index.cfm?fuseaction=user.viewprofile&friendID=";
+
+# Mail Inbox URL
+# What's the URL to read a page from our inbox?
+our $MAIL_INBOX_URL="http://mail.myspace.com/index.cfm?fuseaction=mail.inbox" .
+			"&page=";
 
 # What's the URL to read a message if we know the messageID?
 our $READ_MESSAGE_URL='http://mail.myspace.com/index.cfm?fuseaction=mail.readmessage&messageID=';
@@ -789,6 +785,7 @@ sub make_cache_dir {
 =head2 browse
 
 XXX - NOT YET FUNCTIONAL
+
 XXX - More debugging needs to be done to ensure accurate
 results, and tests need to be added to the test suite for it.
 It is working only in Basic search mode, and doesn't seem to
@@ -1074,8 +1071,7 @@ sub _get_friend_page {
 	
 	# Set the URL string for the right set of pages
 	if ( $source eq "inbox" ) {
-		$url = "http://mail.myspace.com/index.cfm?fuseaction=mail.inbox" .
-			"&page=${page}";
+		$url = $MAIL_INBOX_URL . $page;
 	} elsif ( $source eq "group" ) { 
 		$url = "http://groups.myspace.com/index.cfm?fuseaction=".
 			"groups.viewMembers&groupID=${id}&page=${page}";
@@ -1657,6 +1653,85 @@ sub already_commented {
 		return 0;
 	}
 
+}
+
+=head2 inbox
+
+Returns a reference to an array of hash references that contain data
+about the messages in your Myspace message inbox. The hashes contain:
+
+ sender (friendID)
+ status (Read, Unread, Sent, Replied)
+ message_id (The unique ID of the message)
+ subject (The subject of the message)
+
+The messages are returned IN ORDER with the newest first to oldest last
+(that is, the same order in which they'd appear if you were looking through
+your inbox).
+
+I'm sure reading that first line made you as dizzy as it made me typing it.
+I think this says it all much more clearly:
+
+ EXAMPLE
+ 
+ # This script displays the contents of your inbox.
+ use WWW::Myspace;
+
+ $myspace = new WWW::Myspace;
+ 
+ print "Getting inbox...\n";
+ my $messages = $myspace->inbox;
+
+ # Display data for each message 
+ foreach $message ( @{$messages} ) {
+   print "Sender: " . $message->{sender} . "\n";
+   print "Status: " . $message->{status} . "\n";
+   print "messageID: " . $message->{message_id} . "\n";
+   print "Subject: " . $message->{subject} . "\n\n";
+ }
+
+(This script is in the sample_scripts directory, named "get_inbox").
+
+=cut
+
+sub inbox {
+
+	my $page="";
+	my $page_no = 0;
+	my @messages = ();
+
+	# Loop until we get an empty page or there isn't a "next" link.
+	while ( 1 ) {
+
+		# Get the page
+		$page = $self->get_page( $MAIL_INBOX_URL . $page_no );
+
+		# Get the message data.
+
+		push @messages, $self->_get_messages_from_page( $page->content );
+
+		last unless ( $page->content =~ /">Next<\/a>( |&nbsp;)\&gt;/i );
+		
+		# Next!
+		$page_no++;
+		
+	}
+
+	return \@messages;
+
+}
+
+# Take a page, return a list of message data
+sub _get_messages_from_page {
+
+	my ( $page ) = @_;
+	my @messages = ();
+	while ( $page =~
+			s/.*?UserID=([^;]+);.*?(Unread|Read|Sent|Replied).*?messageID=([^&]+)&.*?>([^<]+)<//sm ) {
+		push @messages, { sender => $1, status => $2, message_id => $3, subject => $4 }
+	}
+	
+	return @messages;
 }
 
 =head2 read_message( message_id )
@@ -2518,6 +2593,8 @@ sub submit_form {
 		$res = $url;
 	} else {
 		$res = $self->get_page( $url, $regexp1 );
+		# If we couldn't get the page, return failure.
+		return 0 if $self->error;
 	}
 
 	# Select the form they wanted, or return failure if we can't.
@@ -2657,6 +2734,14 @@ if myspace changes in a way that breaks the method.
 Add checks to all methods to self-diagnose to detect changes in myspace
 site that break this module.
 
+Move add_friends to AddFriends.pm
+
+Add methods to AddFriends.pm to: 1-exlude friends, 2-exclude pending
+friends, 3-cache like Comment.pm, 4-exclude friends in the "messaged"
+cache file.
+
+Add test to 05-message to send a message, find it with inbox, and check its
+contents. Do this in addition to the existing read_message test.
 
 =head1 CONTRIBUTING
 

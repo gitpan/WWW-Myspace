@@ -1,0 +1,15 @@
+#!/usr/bin/perl -w
+
+use WWW::Myspace;
+
+$myspace = new WWW::Myspace;
+
+print "Getting inbox...\n";
+my $messages = $myspace->inbox;
+
+foreach $message ( @{$messages} ) {
+  print "Sender: " . $message->{sender} . "\n";
+  print "Status: " . $message->{status} . "\n";
+  print "messageID: " . $message->{message_id} . "\n";
+  print "Subject: " . $message->{subject} . "\n\n";
+}

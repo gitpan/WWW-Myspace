@@ -1,5 +1,17 @@
 Revision history for WWW::Myspace
 
+0.35	2006-03-15
+		- Added inbox method. Returns the contents of your inbox complete
+		  with sender, messageID, subject, and status (read, unread, sent,
+		  replied).
+		- Removed commented-out libraries deprecated in version 0.34.
+		- Added get_inbox sample script.
+		- submit_form now properly returns a failure code if it can't
+		  load the form, instead of letting WWW::Mechanize choke on it.
+		  This hopefully fixes bug#18232, where post_comments can fail
+		  with no such field 'f_comments' at /.../WWW/Mechanize.pm line 1178.
+		  
+
 0.34	2006-03-14
 		- Switched to use WWW::Mechanize
 		  - Removed dependency on HTTP::Request::Form
