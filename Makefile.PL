@@ -1,10 +1,9 @@
 use strict;
 use warnings;
 use ExtUtils::MakeMaker;
-#use Module::Signature qw(sign verify SIGNATURE_OK);
 
 WriteMakefile(
-    (MM->can('signature_target') ? (SIGN => 1) : ()),
+#    (MM->can('signature_target') ? (SIGN => 1) : ()),
     NAME                => 'WWW::Myspace',
     AUTHOR              => 'Grant Grueninger <grantg@cpan.org>',
     VERSION_FROM        => 'lib/WWW/Myspace.pm',

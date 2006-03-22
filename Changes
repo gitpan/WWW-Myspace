@@ -1,5 +1,8 @@
 Revision history for WWW::Myspace
 
+0.36	2006-03-22 - maintenance release, replaces 0.35.
+		- Removed signature code - was breaking install.
+
 0.35	2006-03-15
 		- Added inbox method. Returns the contents of your inbox complete
 		  with sender, messageID, subject, and status (read, unread, sent,
