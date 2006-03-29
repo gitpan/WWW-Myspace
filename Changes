@@ -1,5 +1,22 @@
 Revision history for WWW::Myspace
 
+0.37	2006-03-22
+		- Added "We\'re doing some maintenance on the mail for certain users"
+		  error message to errors array.
+		- Fixed and added example to friends_from_profile method's docs.
+		- if get_friends is called in a HASHREF context, it returns
+		  a hash of info about each friend (currently just the page they're
+		  on in the friends list).
+		- Added version 0.01 of FriendAdder.pm to the distribution
+		- Added 07-friend_adder test script
+		- Added cool_new_people method to Myspace.pm
+		- Added 08-cool_new_people test script 
+		comment_myspace:
+		- Added -i flag to comment_myspace.  Causes comment_myspace to ignore
+		  duplicates when posting comments.
+		- Added -r flag to comment_myspace.  Reset the exclusions file before
+		  running.
+
 0.36	2006-03-22 - maintenance release, replaces 0.35.
 		- Removed signature code - was breaking install.
 

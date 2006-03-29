@@ -1,4 +1,4 @@
-# $Id: Comment.pm,v 1.12 2006/03/09 08:44:46 grant Exp $
+# $Id: Comment.pm 24 2006-03-28 21:22:04Z grantg $
 
 package WWW::Myspace::Comment;
 
@@ -12,11 +12,11 @@ WWW::Myspace::Comment - Auto-comment your MySpace friends from Perl scripts
 
 =head1 VERSION
 
-Version 0.12
+Version 0.13
 
 =cut
 
-our $VERSION = '0.12';
+our $VERSION = '0.13';
 
 =head1 SYNOPSIS
 
@@ -450,6 +450,13 @@ sub post_comments {
 					$result = "PP"; # Posted Previously
 				} else {
 					$result = $myspace->post_comment( $id, $self->message );
+					# Try a workaround if we got a CAPTCHA response
+					if ( ( $result eq 'FC' ) &&
+						( defined $self->{send_message_on_captcha} ) ) {
+						$self->_send_message;
+						$result = $myspace->post_comment( $id, $self->message );
+					}
+
 					$counter++ if ( $result =~ /^P/ );
 				}
 				# Log our attempt and the result
@@ -561,6 +568,10 @@ sub post_all {
 
 }
 
+sub _send_message {
+	print "Sending message...\n";
+	$self->myspace->send_message( 48449904, 'Hello', 'Just saying hi!', 0 );
+}
 
 =head2 ignore_duplicates( [ 1 | 0 ] )
 

@@ -13,15 +13,15 @@ comment_myspace - Leave a comment for your Myspace friends
 
 =head1 VERSION
 
-Version 0.01
+Version 0.02
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 =head1 SYNOPSIS
 
- usage: comment_myspace ( -m message | -f filename ) [-y] [-d]
+ usage: comment_myspace ( -m message | -f filename ) [-y] [-d] [-i] [-r]
      [-n max_count] [-u username -p password] [-c cache_file]
      [friendID ...]
 
@@ -71,6 +71,23 @@ want to people you didn't want to...
 
 Inserts a random delay before running. Do this is you're running the
 script from crontab to make it look more like a human.
+
+=item -i
+
+Ignore Duplicates.  If the -i flag is passed, comment_myspace will not
+check the profile page for duplciate comments, it will just post.
+
+=item -r
+
+Reset the exclusions file.  comment_myspace remembers who it has commented
+before and won't comment them again.  Using the -r flag resets this list
+(maybe I should call it -f for "forget?" :)
+Use this if you want to post a new comment to people and you don't
+care if you've commented them before. Note that unless you
+use the -i flag also, comment_myspace will still skip profiles on which
+it sees your profile link already.
+
+The reset is done -before- commenting begins.
 
 =item -n max_count
 
@@ -191,8 +208,23 @@ if ( $args{'max_count'} ) {
 	$comment->max_count( $args{'max_count'} )
 }
 
+# Set ignore_exclusinos if we need to
+if ( defined $args{'ignore_duplicates'} ) {
+	$comment->ignore_duplicates(1);
+}
+
+# Set bypass
+if ( defined $args{'bypass'} ) {
+	$comment->{send_message_on_captcha} = 1;
+}
+
 # Set the exclusions file if they gave us one.
 $comment->cache_file( $args{'cache_file'} ) if ( defined $args{'cache_file'} );
+
+# Reset exclusions file if we need to
+if ( defined $args{'reset_exclusions'} ) {
+	$comment->reset_exlucions('all')
+}
 
 # Get the list of exclusions (we just want the count, really, but
 # this does it.
@@ -248,6 +280,12 @@ sub parse_args {
 			$args{'cache_file'}=shift( @passed_args );
 		} elsif ( $arg eq "-n" ) {
 			$args{'max_count'}=shift( @passed_args );
+		} elsif ( $arg eq "-i" ) {
+			$args{'ignore_duplicates'}=1;
+		} elsif ( $arg eq "-r" ) {
+			$args{'reset_exclusions'}=1;
+		} elsif ( $arg eq "-b" ) {
+			$args{'bypass'}=1;
 		} elsif ( $arg =~ /^[0-9]+$/ ) {
 			push ( @friend_ids, $arg );
 		} else {
@@ -308,7 +346,7 @@ sub parse_args {
 sub fail {
 
 	print <<EOT;
- usage: comment_myspace ( -m message | -f filename ) [-y] [-d]
+ usage: comment_myspace ( -m message | -f filename ) [-y] [-d] [-i]
      [-n max_count] [-u username -p password] [-c cache_file]
      [friendID ...]
 EOT

@@ -1,4 +1,4 @@
-# $Id: Message.pm,v 1.9 2006/03/07 22:16:01 grant Exp $
+# $Id: Message.pm 14 2006-03-25 20:21:45Z grantg $
 
 package WWW::Myspace::Message;
 

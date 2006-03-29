@@ -133,7 +133,8 @@ You can also look for information at:
 
 COPYRIGHT AND LICENCE
 
-Copyright (C) 2005 Grant Grueninger
+This module copyright (C) 2005-2006 Grant Grueninger except
+FriendAdder.pm, (c) 2006 Olaf Alders.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.

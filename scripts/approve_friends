@@ -123,6 +123,20 @@ my @friends = $myspace->approve_friend_requests;
 # If we approved any, comment them
 my $comment = WWW::Myspace::Comment->new( $myspace );
 $comment->set_noisy(1);
+
+# Set the comment counter
+my $max_count;
+if ( defined $args->{'bypass'} ) {
+	$max_count = 400;
+	$comment->{send_message_on_captcha} = 1;
+} else {
+	$max_count = 50;
+}
+
+# Set the cache file if necessary
+$comment->cache_file( $args->{'cache_file'} )
+	if ( defined $args->{'cache_file'} );
+
 if ( @friends ) {
 	print "Approved " . @friends . " new friends: @friends\n";
 	
@@ -130,21 +144,20 @@ if ( @friends ) {
 
 		print "Leaving comments...\n";
 	
-		# If we're posting less than 50 friends, comment them all.
+		# If we're posting less than $max_count friends, comment them all.
 		$comment->ignore_duplicates(1) if ( ( ! $args->{'general_comment'} ) &&
-			( @friends < 50 ) );
-		$comment->cache_file( $args->{'cache_file'} )
-			if ( defined $args->{'cache_file'} );
+			( @friends < $max_count ) );
 		( ! $DEBUG ) && $comment->post_comments( $args->{'message'}, @friends );
 	}
 	
 }
 
-if ( $args->{'general_comment'} && ( @friends < 50 ) ) {
+if ( $args->{'general_comment'} && ( @friends < $max_count ) ) {
 	print "Leaving comments for other friends...\n";
 
-	# Leave 50 total comments, including those we left above
-	$comment->max_count( 50 - @friends );
+	# Leave $max_count total comments, including those we left above
+	$comment->max_count( $max_count - @friends );
+	print "Sending to " . $comment->max_count . " friends\n";
 	( $DEBUG ) && print "I'd be sending this to ". $comment->max_count .
 		" friends if I weren't in debug mode:\n" . $args->{'general_comment'} .
 		"\n";
@@ -187,6 +200,8 @@ sub parse_args {
 			$args->{'cache_file'} = shift( @passed_args );
 		} elsif ( $arg eq "-gc" ) {
 			$args->{'general_comment'} = shift( @passed_args );
+		} elsif ( $arg eq "-b" ) {
+			$args->{'bypass'} = 1;
 		} else {
 			print "Invalid argument: $arg\n";
 			&fail()

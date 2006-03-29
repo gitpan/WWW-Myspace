@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm,v 1.68 2006/03/16 17:11:55 grant Exp $
+# $Id: Myspace.pm 23 2006-03-28 21:12:53Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -24,6 +24,7 @@ use Spiffy -Base;
 
 use Carp;
 use Contextual::Return;
+use Locale::SubCountry;
 use WWW::Mechanize;
 use File::Spec::Functions;
 
@@ -33,11 +34,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.36
+Version 0.37
 
 =cut
 
-our $VERSION = '0.36';
+our $VERSION = '0.37';
 
 =head1 SYNOPSIS
 
@@ -176,6 +177,10 @@ our @ERROR_REGEXPS = (
 	
 	'An Error has occurred!!.*'.
 	'An error has occurred (while )?trying to send this message.',
+	
+	'We\'re doing some maintenance on the mail for certain users\.  '.
+	'You can take this opportunity to leave your friend a swell comment '.
+	'while we work on it\. :\)',
 
 );
 
@@ -859,7 +864,21 @@ Tom, because he's everybody's friend and when you're debugging your band
 central CGI page it's probably best to limit your mistakes to
 actual friends.
 
-    @friends = $myspace->get_friends;
+ @friends = $myspace->get_friends;
+
+As of version 0.37, get_friends is context sensitive and returns
+additional information about each friend if called in a hashref context.
+Currently the only information is the page number on which the friend
+was found. This is handy if, say, you have a lot of friends and you want
+to add one to your top 8 but you don't know what page they're on.
+
+ # Find a friend lost in your friends list
+ $lost_friend=12345;
+ $friends = $myspace->get_friends;
+ print "Found friend $lost_friend on page " .
+    $friends->{"$lost_friend"}->{page_no} . "!\n";
+
+Myspace trivia: The friends on friends lists are sorted by friendID.
 
 =cut
 
@@ -893,7 +912,9 @@ sub get_friends {
 		# Add them to the list
 		# (This prevents duplicates for inbox, comments, etc)
 		foreach $id ( @friends_on_page ) {
-			$friend_ids{"$id"}++;
+			$friend_ids{"$id"}={
+				'page_no' => $page + 1
+			}
 		}
 
 		last unless ( $friends_page->content =~ /">Next<\/a>( |&nbsp;)\&gt;/i );
@@ -936,7 +957,11 @@ sub get_friends {
 	}
 	
 	# Return our findings
-	return ( sort( keys( %friend_ids ) ) );
+    return (
+		LIST { sort( keys( %friend_ids ) ) }
+		HASHREF { \%friend_ids }
+	);
+
 }
 
 #---------------------------------------------------------------------
@@ -953,7 +978,21 @@ You're welcome.
  Examples:
  
  # Band 12345 and 54366 sound like us, get their friends list
- @similar_bands_friends=$myspace->( 12345, 54366 );
+ @similar_bands_friends=$myspace->friends_from_profile( 12345, 54366 );
+ 
+ # a further example
+ # before you do anything with these
+ # ids, make sure you don't already
+ # have them as friends:
+ use List::Compare;
+ my @current_friends = $myspace->get_friends;
+ my @potential_friends = $myspace->friends_from_profile( 12345, 54366 );
+ my $lc = List::Compare->new(
+    { lists =>
+      [\@current_friends, \@potential_friends],
+      accelerated => 1
+    } );
+ my @unique_ids = $lc->get_complement;
 
 =cut
 
@@ -2301,7 +2340,7 @@ sub send_friend_request {
 		FN	=>	'Failed, network error (couldn\'t get the page, etc).',
 		FP	=>	'Failed, you already have a pending friend request for this person',
 		FB  =>  'Failed, this person does not accept friend requests from bands.',
-		FA  =>  'Failed, this person requires an email addres or last name to add them',
+		FA  =>  'Failed, this person requires an email address or last name to add them',
 		FC	=>	'Failed, CAPTCHA response requested.',
 		P	=>	'Passed! Verification string received.',
 		F	=>	'Failed, verification string not found on page after posting.',
@@ -2576,6 +2615,7 @@ page returned by the first post.
 
 =cut
 
+ 
 sub submit_form {
 
 	my ( $url, $form_no, $button, $fields_ref, $regexp1, $regexp2, $base_url ) = @_;
@@ -2628,6 +2668,153 @@ sub submit_form {
 	$self->{current_page} = $res;
 	return $mech->success;
 
+}
+
+=head2 cool_new_people( $country_code )
+
+This method provides you with a list of "cool new people".
+Currently Myspace saves the "cool new people" data
+to a JavaScript file which is named something like this: 
+
+http://viewmorepics.myspace.com/js/coolNewPeople_us.js
+
+Since these files are named using country codes, you'll need to provide
+the ISO 3166-1 two letter code country code for the list you'd like to
+get.  For example,
+
+ $myspace->cool_new_people( 'US' )
+
+When called in a list context, this function returns the friend ids of
+the cool folks:
+
+ my @friend_ids = $myspace->cool_new_people( 'US' );
+
+If you treat the return value as a hash reference, you'll get a hash
+keyed on friend ids.  The values consist of hash references containing
+the urls of the friend thumbnails (thumb_url) as well as their display
+names (friend_user_name).  There will probably be about 200 keys
+returned in the hash.
+
+
+ my $cool = $myspace->cool_new_people('US');
+ my %cool_new_people = %{$cool};
+
+ %cool_new_people = {
+ 
+ ...
+ 
+     'friend_id' => {
+         'thumb_url'         => 'url_to_jpg_here',
+         'friend_user_name'  => 'friend display name here'
+     },
+ 
+ ...
+ 
+ }
+
+So far, we know of 4 country-specific cool new people lists: AU, CA,
+UK/GB and US  Submitting any of these values to the function should
+return valid friend ids.  If you want to check for other countries for
+which cool people lists may exist, you can do something like this:
+
+ use Locale::SubCountry;
+
+ my $world         = new Locale::SubCountry::World;
+ my %countries     = $world->code_full_name_hash();  
+ my @country_codes = sort keys %countries;
+
+ foreach my $country_code ( @country_codes ) {
+     my %cool_people = $myspace->cool_new_people($country_code);
+     if (%cool_people) {
+         print "$country_code $countries{$country_code} has cool folks\n";
+     }
+     else {
+        print "****** $country_code\n";
+     }
+ }
+                        
+=cut
+
+sub cool_new_people {
+
+    my $country_code    = shift;
+    my $country_code_uc = "\U$country_code";
+    my %cool_people     = ( );
+    
+    $self->error(0);  # Lets the calling script check for error being true.
+    
+    # special case for UK
+    if ($country_code_uc  eq 'UK') {
+        $country_code_uc = 'GB';
+    }
+    
+    # get a list of valid country codes
+    my $world = new Locale::SubCountry::World;
+    my %countries = $world->code_full_name_hash();  
+    
+    if (exists $countries{$country_code_uc}) {
+
+        my $country_code_lc = "\L$country_code";
+        my $javascript_url =
+            'http://viewmorepics.myspace.com/js/coolNewPeople_'.
+            $country_code_lc.'.js';
+        
+        #my $res = $self->get_page( $javascript_url );
+        
+        # get_page helps circumvent myspace errors by checking for
+        # errors and trying many times. If you DON'T want to do that
+        # (and maybe you don't for this), then you'd do this instead:
+        
+        my $res = $self->{mech}->get( $javascript_url );
+
+        unless ($res->is_success) {
+        
+            if ($res->code == 404) {
+           
+                # Do this instead of warning - lets the scripter have more control.
+                $self->error("Unable to find cool new friends for $country_code_uc ($countries{$country_code_uc})");
+                # warn "Unable to find cool new friends for $country_code_uc ($countries{$country_code_uc})";
+            }
+            else {
+                
+                $self->error( $res->status_line . " $javascript_url\n" );
+                return 0;
+                
+                # don't die in modules, scripters will be mad. :)
+                # die $mech->response->status_line, "$javascript_url\n";
+            }
+        }
+        
+        my $html = $res->content;
+        my @lines = split(/\n/, $html);
+
+        foreach my $line (@lines) {
+
+            if ($line =~ /new coolNewPerson\('(.*?)', '(\d*?)', '(http.*?)'/) {
+                $cool_people{$2} = { friend_user_name => $1, thumb_url => $3 };
+            }
+        }
+    }
+    
+    else {
+        
+        $self->error( qq[You supplied: $country_code  You must supply a valid 2 character country code. For example cool_new_people('US')] );
+        
+        # Note: if the script is providing the value and it's bad, you can "croak".
+        # If the user is providing the value and we're supposed to validate it,
+        # set error and return a false value (or some indication of failure).
+        # Note that they can: "if ( $myspace->error ) { ... }" also.
+        # But you want to make sure the return value doesn't blow up their
+        # script (and this shouldn't in this case).
+        return 0;
+        
+        #die qq[You supplied: $country_code  You must supply a valid 2 character country code. For example cool_new_people('US')];
+    }
+    
+    return 
+        LIST   { keys %cool_people }
+        HASHREF   { \%cool_people }
+    ;
 }
 
 #---------------------------------------------------------------------

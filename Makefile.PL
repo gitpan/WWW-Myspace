@@ -12,7 +12,7 @@ WriteMakefile(
     'EXE_FILES'         => [qw( scripts/approve_friends
                                 scripts/comment_myspace
                                 scripts/message_group
-								scripts/add_friends
+                                scripts/add_friends
                               )],
     PREREQ_PM => {
         'Test::More' => 0,
@@ -21,9 +21,14 @@ WriteMakefile(
         'YAML' => 0.39,
         'IO::All' => 0.33, # Needed for the scripts
         'File::Spec::Functions' => 0, # Note: Forces File::Spec 0.7 or later.
-        'IO::Prompt' => 0, # For add_friends
-        'Contextual::Return' => 0, # For send_friend_request method
-        'WWW::Mechanize' => 0,
+        'Contextual::Return'    => 0, # For send_friend_request method
+        'Config::General'       => 0, # FriendAdder.pm
+        'IO::Prompt'            => 0, # For FriendAdder.pm 
+        'List::Compare'         => 0, # FriendAdder.pm
+        'Locale::SubCountry'    => 0, # FriendAdder.pm, cool_new_people
+        'Math::Round'           => 0, # FriendAdder.pm
+        'Params::Validate'      => 0, # FriendAdder.pm
+        'WWW::Mechanize'        => 0,
     },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean               => { FILES => 'WWW-Myspace-*' },
