@@ -1,5 +1,58 @@
 Revision history for WWW::Myspace
 
+0.38	2006-03-28
+		- Removed extra "&"s from end of URLs in get_friends routines.
+		- get_friends methods (friends_from_profile, etc) will display
+		  a warning if it encounters a page with no friendIDs.
+		- get_friends methods will display a warning if the friend count
+		  is off of myspace's friend count by more than 5% when getting
+		  friends from another user's profile (already did this when
+		  getting our friends).
+		- get_friends methods will display a warning and return if they
+		  fail to get a page.
+		- Enhanced get_friends sample script
+		- Fixed bug that was making get_page fail too easily.
+		- Added version 0.02 of FriendAdder.pm to the distribution
+		- FriendAdder.pm is now (mostly) documented
+		- FriendAdder->friend_request() renamed to
+		  FriendAdder->send_friend_requests()
+		- Added convenience method FriendAdder->add_to_friends() for
+		  FriendAdder->send_friend_requests()
+		- Added version 0.01 of Myspace::Data.pm to the distribution
+		- Added test 09-data.t for Myspace::Data
+		- Added test 10-mybase.t for MyBase.pm
+		- FriendAdder.pm now uses MyBase.pm as a base class
+		- Added MyBase.pm to dist (for internal modules to use).
+		- Fixed bug in message_group - docs said to add "delay: 0"
+		  to the config file to stop it from sleeping. Correct setting
+		  is "delay_time: 0".  Fixed docs, and made "delay: 0" work
+		  also so it'll work as expected for people with old config files.
+		- Removed dependency on IO::All in approve_friends, message_group,
+		  and Message.pm (no longer required in the distribution, removed
+		  from Makefile.PL also).
+		- Updated output in approve_friends to display result of commenting
+		  (DONE, CAPTCHA, COUNTER). DONE means you've commented all your
+		  friends.
+		- send_friend_request now checks to make sure there's a button
+		  before posting to avoid:
+		  "Can't call method "click" on an undefined value at
+		  /usr/local/ActivePerl-5.8/lib/site_perl/5.8.7/WWW/Mechanize.pm
+		  line 1345."
+		- send_friend_request now returns FN if a known error page is returned
+		  even after the multiple attempts get_page makes at retreiving the
+		  page. Before it could cause the error above also.
+		- Fixed a bug in which get_friends would produce a "use of
+		  unitialized value" error if called with no arguments.
+		- Updated VERIFY_COMMENT_POST due to change in myspace.com profile
+		  page display.
+		- Added eval around the "click" in submit_form to prevent the error
+		  above from all methods.  Failed form load will now just fail,
+		  not "die".
+		- Added RE checks to post_comment to strengthen initial load.
+		  Helps overcome FN post errors due to network problems.
+		  
+		  EARLIER VERSIONS WILL REPORT FALSE COMMENT POST FAILURES.
+
 0.37	2006-03-22
 		- Added "We\'re doing some maintenance on the mail for certain users"
 		  error message to errors array.

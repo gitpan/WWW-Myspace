@@ -1,19 +1,21 @@
 # http://module-build.sourceforge.net/META-spec.html
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         WWW-Myspace
-version:      0.37
+version:      0.38
 version_from: lib/WWW/Myspace.pm
 installdirs:  site
 requires:
+    Class::DBI:                    0
+    Class::DBI::Loader:            0
     Config::General:               0
     Contextual::Return:            0
     File::Spec::Functions:         0
-    IO::All:                       0.33
     IO::Prompt:                    0
     List::Compare:                 0
     Locale::SubCountry:            0
     Math::Round:                   0
     Params::Validate:              0
+    Scalar::Util:                  0
     Spiffy:                        0.24
     Test::More:                    0
     WWW::Mechanize:                0

@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 23 2006-03-28 21:12:53Z grantg $
+# $Id: Myspace.pm 58 2006-04-01 09:36:34Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -34,11 +34,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.37
+Version 0.38
 
 =cut
 
-our $VERSION = '0.37';
+our $VERSION = '0.38';
 
 =head1 SYNOPSIS
 
@@ -51,6 +51,7 @@ retreive profile data, send messages, and post comments.
     my $myspace = WWW::Myspace->new ($account, $password);
         OR
     my $myspace = new WWW::Myspace; # Prompts for email and password
+    unless ( $myspace->logged_in ) { die "Login failed: " . $myspace->error }
     
     my ( @friends ) = $myspace->get_friends();
 
@@ -108,12 +109,10 @@ our $FRIEND_REGEXP="fuseaction=user\.viewprofile\&friendID=";
 # tell us if the post was successful. What RE should we look for
 # that we'll only see if the post was successful (this is currently
 # the user's profile page, so we look for text that'll be near the top of the page).
-our $VERIFY_COMMENT_POST='<span class="nametext">[^\<]*<\/span>.*View [Mm]ore [Pp]ics';
+our $VERIFY_COMMENT_POST='<span class="nametext">[^\<]*<\/span>.*View (More Pics|My:)';
 
 # After loading a person's profile page, we look for this RE to
 # verify that we actually got the page.
-# It just so happens that when we post a comment, it takes us back to
-# their profile, so these are the same.
 our $VERIFY_GET_PROFILE='<span class="nametext">[^\<]*<\/span>';
 
 # On the page following posting a comment, what should we look for
@@ -418,6 +417,57 @@ sub _get_friend_id {
 # Value return methods
 # These methods return internal data that is of use to outsiders
 
+=head2 logged_in
+
+Returns true if login was successful. When you call the new method
+of WWW::Myspace, the class logs in using the username and password you
+provided (or that it prompted for).  It then retreives your "home"
+page (the one you see when you click the "Home" button on myspace.com,
+and checks it against an RE.  If the page matches the RE, logged_in is
+set to a true value. Otherwise it's set to a false value.
+
+ Notes:
+ - This method is only set on login. If you're logged out somehow,
+   this method won't tell you that (yet - I may add that later).
+ - The internal login method calls this method to set the value.
+   You can (currently) call logged_in with a value, and it'll set
+   it, but that would be stupid, and it might not work later
+   anyway, so don't.
+
+ Examples:
+
+ my $myspace = new WWW::Myspace;
+ unless ( $myspace->logged_in ) {
+ 	die "Login failed\n";
+ }
+ 
+ # This will try forever to log in
+ my $myspace;
+
+ do {
+    $myspace = new WWW::Myspace( $username, $password );
+ } until ( $myspace->logged_in );
+
+=cut
+
+field logged_in => 0;
+
+=head2 error
+
+This value is set by some methods to return an error message.
+If there's no error, it returns a false value, so you can do this:
+
+ $myspace->get_profile( 12345 );
+ if ( $myspace->error ) {
+ 	 warn $myspace->error . "\n";
+ } else {
+ 	 # Do stuff
+ }
+
+=cut
+
+field 'error' => 0;
+
 =head2 my_friend_id
 
 Returns the friendID of the user you're logged in as.
@@ -663,62 +713,13 @@ sub current_page {
 
 }
 
-=head2 logged_in
-
-Returns true if login was successful. When you call the new method
-of WWW::Myspace, the class logs in using the username and password you
-provided (or that it prompted for).  It then retreives your "home"
-page (the one you see when you click the "Home" button on myspace.com,
-and checks it against an RE.  If the page matches the RE, logged_in is
-set to a true value. Otherwise it's set to a false value.
-
- Notes:
- - This method is only set on login. If you're logged out somehow,
-   this method won't tell you that (yet - I may add that later).
- - The internal login method calls this method to set the value.
-   You can (currently) call logged_in with a value, and it'll set
-   it, but that would be stupid, and it might not work later
-   anyway, so don't.
-
- Examples:
-
- my $myspace = new WWW::Myspace;
- unless ( $myspace->logged_in ) {
- 	die "Login failed\n";
- }
- 
- # This will try forever to log in
- my $myspace;
-
- do {
-    $myspace = new WWW::Myspace( $username, $password );
- } until ( $myspace->logged_in );
-
-=cut
-
-field logged_in => 0;
-
-=head2 error
-
-This value is set by some methods to return an error message.
-If there's no error, it returns a false value, so you can do this:
-
- $myspace->get_profile( 12345 );
- if ( $myspace->error ) {
- 	 warn $myspace->error . "\n";
- } else {
- 	 # Do stuff
- }
-
-=cut
-
-field 'error' => 0;
 
 =head2 cache_dir
 
 WWW::Myspace stores the last account/password used in a cache file
 for convenience if the user's entering it. Other modules store other
 cache data as well.
+
 cache_dir sets or returns the directory in which we should store cache
 data. Defaults to $ENV{'HOME'}/.www-myspace.
 
@@ -884,9 +885,8 @@ Myspace trivia: The friends on friends lists are sorted by friendID.
 
 sub get_friends {
 
-	my $source="";
-	my $source_id = "";
-	( $source, $source_id ) = @_;
+	my ( $source, $source_id ) = @_;
+	$source = "" unless defined $source;
 
 	# Browse starts at page 1, the rest start at 0.	
 	my $page=0; $page++ if ( ( defined $source ) && ($source eq 'browse' ) );
@@ -902,11 +902,15 @@ sub get_friends {
 
 		# Get the page
 		$friends_page = $self->_get_friend_page( $page, $source, $source_id );
+		if ( $self->error ) {
+			warn "get_friends failed on page $page: " . $self->error . "\n";
+			last;
+		}
 
 		# Grep the friend IDs out
 		@friends_on_page = $self->get_friends_on_page( $friends_page->content );
 		( $DEBUG ) && print "Done with page $page\n";
-		last unless ( @friends_on_page );
+		
 #		warn "Got ". @friends_on_page . " friends\n";
 
 		# Add them to the list
@@ -918,7 +922,11 @@ sub get_friends {
 		}
 
 		last unless ( $friends_page->content =~ /">Next<\/a>( |&nbsp;)\&gt;/i );
-		
+
+		# Warn if we got a page with no friendIDs on it.
+		# (XXX This should probably throw an error)
+		unless ( @friends_on_page ) { warn "Page $page had no friends\n" }
+
 		# Next!
 		$self->{_last_friend_page} = $page;
 		$page++;
@@ -931,16 +939,23 @@ sub get_friends {
 	# safety check. We see if the friend count is within 5% of the
 	# number of friends returned (no, myspace's friend counter is never
 	# actually right.....)
-	unless ( $source ) {
+	
+	if ( ( $source eq "" ) || ( $source eq "profile" ) ) {
+		my $myspace_friend_count;
+		if ( $source ) {
+			$myspace_friend_count = $self->{_friend_count};
+		} else {
+			$myspace_friend_count = $self->friend_count;
+		}
 		my @friends = keys( %friend_ids );
 		my $friend_count = @friends;
-		my $error_allowed = $self->friend_count * .05;
-		my $error_offset = abs ( $self->friend_count - $friend_count );
+		my $error_allowed = $myspace_friend_count * .05;
+		my $error_offset = abs ( $myspace_friend_count - $friend_count );
 		if ( $error_allowed < 10 ) { $error_allowed = 10 };
 		
 		if ( $error_offset > $error_allowed ) {
 			warn "WARNING: get_friends returned $friend_count friends, ".
-			"but should have returned around " . $self->friend_count . ".";
+			"but should have returned around " . $myspace_friend_count . ".";
 		}
 	}
 
@@ -1150,7 +1165,7 @@ sub _get_friend_page {
 			# First page
 			$url = "http://home.myspace.com/index.cfm?".
 				"fuseaction=user.viewfriends&".
-				"friendID=" . $id . "&";
+				"friendID=" . $id;
 #				"FriendCount=" . $self->friend_count . "&" .
 #				"userName=" . $self->user_name;
 #			warn "Processing friendID " . $id . "\n";
@@ -1164,7 +1179,8 @@ sub _get_friend_page {
 				"page=" . $page . "&" .
 				"prevPage=" . $self->{_last_friend_page} . "&" .
 				"PREVPageFirstONERETURENED=" . $self->{_low_friend_id}."&".
-				"PREVPageLASTONERETURENED=" . $self->{_high_friend_id} . "&";
+				"PREVPageLASTONERETURENED=" . $self->{_high_friend_id};
+#				. "&";
 #				"f_search=&searchby=&" . 
 #				"lastpageofset=" . $self->{_total_friend_pages} . "&".
 #				"TotalRecords=" . $self->friend_count;
@@ -1312,10 +1328,10 @@ sub _page_ok {
 
 		$self->error("Error getting page: \n" .
 			"  " . $res->status_line);
+		$page_ok = 0;
 
 #		warn "Error getting page: \n" .
 #			"  " . $res->status_line . "\n";
-#		$page_ok = 0;
 
 	}
 
@@ -1376,7 +1392,7 @@ sub get_friends_on_page {
 	$self->{_low_friend_id} = 0;
 	foreach $line ( @lines ) {
 		if ( $line =~ /${FRIEND_REGEXP}([0-9]+)/i ) {
-			unless ( ( "$1" == $self->{my_friend_id} ) || ( "$1" == 6221 ) ) {
+			unless ( ( "$1" == $self->my_friend_id ) || ( "$1" == 6221 ) ) {
 				$friend_ids{"$1"}++;
 				
 				# The following are used to construct the URL
@@ -1492,7 +1508,9 @@ sub post_comment {
 		( $DEBUG ) && print "Getting comment form..\n";
 		$submitted = 
 			$self->submit_form( "${VIEW_COMMENT_FORM}${friend_id}", 1,
-							"", { 'f_comments' => "$message" }, '', 'f_comments'
+							"", { 'f_comments' => "$message" },
+							"f_comments|($CAPTCHA)|($NOT_FRIEND_ERROR)",
+							'f_comments'
 						);
 		
 		# If we posted ok, confirm the comment
@@ -2354,7 +2372,7 @@ sub send_friend_request {
 	my $res = $self->get_page( $ADD_FRIEND_URL . $friend_id );
 
 	# Check for network failure
-	unless ( $res->is_success ) {
+	if ( $self->error ) {
 		$return_code='FN';
 	}
 
@@ -2388,6 +2406,25 @@ sub send_friend_request {
 		$return_code = 'FP';
 	}
 
+	# Now see if we have a button to click.
+	# MUST BE LAST.
+	# (This probably could return a different code, but it means we don't
+	# have a button and we don't know why).
+	# XXX You may want to loop this entire statement, because currently:
+	# - get_page gets a page, checking for any known error messages.
+	# - this if statement checks for known errors we might receive
+	# - This final statement makes sure we have a button to click so
+	#   we don't bomb in "submit_form".
+	# - BUT, if we get an error page get_page doesn't know (i.e. they
+	#   change an error message or something), we probbaly
+	#   want to retry this page.
+	# You might want to change this whole section to:
+	# do { $res = $self->get_page ... ;
+	# $attempts++; } until ( ( $attempts > 20 ) || ( $page =~ /<input type="submit" ...) );
+	elsif ( $page !~ /<input[^>]+type="submit"[^>]+value="Add to Friends"[^>]*>/i ) {
+		$return_code ='F';
+	}
+	
 	unless ( $return_code ) {
 		# Post the add request form
 		$res = $self->submit_form(
@@ -2654,11 +2691,15 @@ sub submit_form {
 	my $attempts = 5;
 	do
 	{
-		if ( $button ) {
-			$res = $mech->click_button( "$button" );
-		} else {
-			$res = $mech->click();
-		}
+		eval {
+			if ( $button ) {
+				$res = $mech->click_button( "$button" );
+			} else {
+				$res = $mech->click();
+			}
+		};
+		# If it died (it will if thre's no button), just return failure.
+		return 0 if ( $@ );
 
 		$attempts--;
 
@@ -2866,6 +2907,12 @@ idea.
 
 =item -
 
+Myspace.pm dies in submit_form if it attempts to click a button
+on a page that doesn't have one.  Needs to check to make sure there's
+a button before clicking and return false if there isn't.
+
+=item -
+
 Some myspace error pages are not accounted for, such as their new
 Server Application error page.  If you know enough about web development
 to identify an error page that would return a successful HTTP
@@ -2921,14 +2968,19 @@ if myspace changes in a way that breaks the method.
 Add checks to all methods to self-diagnose to detect changes in myspace
 site that break this module.
 
-Move add_friends to AddFriends.pm
+Move add_friends to FriendAdder.pm
 
-Add methods to AddFriends.pm to: 1-exlude friends, 2-exclude pending
+Add methods to FriendAdder.pm to: 1-exlude friends, 2-exclude pending
 friends, 3-cache like Comment.pm, 4-exclude friends in the "messaged"
 cache file.
 
 Add test to 05-message to send a message, find it with inbox, and check its
 contents. Do this in addition to the existing read_message test.
+
+get_friends needs to throw an error, or at least set error, if it can't
+return the full list of friends (i.e. if either of the "warn" statements
+are triggered)
+
 
 =head1 CONTRIBUTING
 

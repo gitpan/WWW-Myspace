@@ -1,4 +1,4 @@
-# $Id: Message.pm 14 2006-03-25 20:21:45Z grantg $
+# $Id: Message.pm 50 2006-03-31 10:04:01Z grantg $
 
 package WWW::Myspace::Message;
 
@@ -13,11 +13,11 @@ WWW::Myspace::Message - Auto-message your MySpace friends from Perl scripts
 
 =head1 VERSION
 
-Version 0.09
+Version 0.10
 
 =cut
 
-our $VERSION = '0.09';
+our $VERSION = '0.10';
 
 =head1 SYNOPSIS
 
@@ -673,8 +673,6 @@ sub load {
 	# Load the data. We use eval to delay loading these modules
 	# as load and save aren't frequently used.
 	open( STOREFILE, "<", $file ) or croak $!;
-#	eval 'use YAML; use IO::All; my $x = io( $file )->slurp; '.
-#		'( $data ) = Load( $x );';
 	foreach $line ( <STOREFILE> ) {	$x .= $line }
 	close STOREFILE;
 	

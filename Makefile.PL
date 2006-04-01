@@ -19,7 +19,7 @@ WriteMakefile(
 #        'HTTP::Request::Form' => 0,
         'Spiffy' => 0.24,
         'YAML' => 0.39,
-        'IO::All' => 0.33, # Needed for the scripts
+#        'IO::All' => 0.33, # Needed for the scripts
         'File::Spec::Functions' => 0, # Note: Forces File::Spec 0.7 or later.
         'Contextual::Return'    => 0, # For send_friend_request method
         'Config::General'       => 0, # FriendAdder.pm
@@ -28,6 +28,9 @@ WriteMakefile(
         'Locale::SubCountry'    => 0, # FriendAdder.pm, cool_new_people
         'Math::Round'           => 0, # FriendAdder.pm
         'Params::Validate'      => 0, # FriendAdder.pm
+        'Scalar::Util'          => 0, # FriendAdder.pm
+        'Class::DBI'            => 0, # Data.pm
+        'Class::DBI::Loader'    => 0, # Data.pm
         'WWW::Mechanize'        => 0,
     },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },

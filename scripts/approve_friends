@@ -15,11 +15,11 @@ approve_friends - Approve new friends and post a comment to them
 
 =head1 VERSION
 
-Version 0.07
+Version 0.08
 
 =cut
 
-our $VERSION='0.07';
+our $VERSION='0.08';
 
 =head1 SYNOPSIS
 
@@ -96,14 +96,15 @@ our $DEFAULT_MESSAGE = 'Thanks for adding me!';
 use WWW::Myspace 0.21;
 use WWW::Myspace::Comment;
 
-use YAML;
-use IO::All;
+use YAML 'LoadFile';
+#use IO::All;
 
 ######################################################################
 # Main Program
 
 # Get passed arguments
 my $args = &parse_args(@ARGV);
+my $result;
 
 # Log in
 my $date = `date`; chop $date;
@@ -147,7 +148,8 @@ if ( @friends ) {
 		# If we're posting less than $max_count friends, comment them all.
 		$comment->ignore_duplicates(1) if ( ( ! $args->{'general_comment'} ) &&
 			( @friends < $max_count ) );
-		( ! $DEBUG ) && $comment->post_comments( $args->{'message'}, @friends );
+		$result = $comment->post_comments( $args->{'message'}, @friends );
+		print "New add comments finished with status: $result\n";
 	}
 	
 }
@@ -161,8 +163,9 @@ if ( $args->{'general_comment'} && ( @friends < $max_count ) ) {
 	( $DEBUG ) && print "I'd be sending this to ". $comment->max_count .
 		" friends if I weren't in debug mode:\n" . $args->{'general_comment'} .
 		"\n";
-	( ! $DEBUG ) && $comment->post_comments( $args->{'general_comment'},
+	$result = $comment->post_comments( $args->{'general_comment'},
 		$myspace->get_friends );
+	print "General comments finished with status: $result\n";
 }
 
 print "Done.\n";
@@ -223,8 +226,9 @@ sub parse_args {
 		# New YAML support
 		if ( $args->{'filename'} =~ /\.ya?ml$/i ) {
 			( $DEBUG ) && print "Reading YAML config file " . $args->{'filename'} . "\n";
-			$data < io( $args->{'filename'} );
-			$args = Load( $data );
+#			$data < io( $args->{'filename'} );
+#			$args = LoadFile( $data );
+			$args = LoadFile( $args->{'filename'} );
 		} else {
 			( $DEBUG ) && print "Reading standard config file ". $args->{'filename'} . "\n";
 			$args->{'username'} = <FILE>;

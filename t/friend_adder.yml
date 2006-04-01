@@ -1,0 +1,7 @@
+---
+message_on_captcha: 1
+interactive: 4
+max_attempts: 9988
+exclude_my_friends: 1
+sleep: 9
+random_sleep: 1

@@ -12,11 +12,11 @@ message_group - Send a message to a myspace group
 
 =head1 VERSION
 
-Version 0.5
+Version 0.6
 
 =cut
 
-our $VERSION = '0.5';
+our $VERSION = '0.6';
 
 =head1 SYNOPSIS
 
@@ -63,7 +63,7 @@ file. This will make it exit instead of pausing when it hits max_count
 or CAPTCHA.  This is good because it'll re-read the friends list on the
 next run, so it'll pick up any changes.
 
- delay: 0
+ delay_time: 0
 
 Be careful when specifying multiple groups. The script will read all the
 friends from all the groups each time it's run.  Since you're only going to
@@ -83,8 +83,8 @@ our $DEBUG=0;
 
 use WWW::Myspace 0.21;
 use WWW::Myspace::Message 0.08;
-use YAML;
-use IO::All;
+use YAML qw'LoadFile Dump';
+#use IO::All;
 use Carp;
 
 ######################################################################
@@ -94,8 +94,8 @@ use Carp;
 my $filename = "$ENV{HOME}/.myspace/group_message.yml";
 if ( @ARGV ) { $filename = $ARGV[0] }
 
-my $data < io "$filename";
-my $hashref = Load( $data ) or croak "Error loading config file";
+#my $data < io "$filename";
+my $hashref = LoadFile( $filename ) or croak "Error loading config file";
 my %attr = %$hashref;
 
 ( $DEBUG ) && print "Logging in...\n";
@@ -109,6 +109,10 @@ $message->cache_file( $attr{'cache_file'} ) if $attr{'cache_file'};
 $message->subject( $attr{'subject'} );
 $message->message( $attr{'message'} );
 $message->add_to_friends( 1 );
+# This is what was documented, but wasn't in the code until version 0.6.
+# Added to "fix" the expected behavior for some people running the script.
+$message->delay_time( $attr{'delay'} ) if ( defined $attr{'delay'} );
+# This was in the code, which agrees with the option in the module.
 $message->delay_time( $attr{'delay_time'} ) if ( defined $attr{'delay_time'} );
 my @group_friends = &read_groups( $attr{'group'} );
 my @message_friends = &exclude_my_friends( $myspace, @group_friends );
