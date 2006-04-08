@@ -24,5 +24,7 @@ use WWW::Myspace;
 # Main Program
 
 my $myspace = new WWW::Myspace;
+die "Myspace login failed\n" unless $myspace->logged_in;
 
-print $myspace->send_message( @ARGV );
+print $myspace->send_message( @ARGV ) . "\n";
+if ( $myspace->error ) { warn $myspace->error . "\n"; }

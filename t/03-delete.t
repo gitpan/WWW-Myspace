@@ -1,6 +1,6 @@
 #!perl -T
 
-use Test::More tests => 1;
+use Test::More tests => 2;
 #use Test::More 'no_plan';
 
 use lib 't';
@@ -11,9 +11,12 @@ login_myspace or die "Login Failed - can't run tests";
 my $myspace1 = $CONFIG->{'acct1'}->{'myspace'};
 my $myspace2 = $CONFIG->{'acct2'}->{'myspace'};
 
-if ( is_friend( $myspace1, $CONFIG->{'acct2'}->{'friend_id'} ) ) {
+SKIP: {
+	skip "Test friend not in friend list.", 2
+		unless is_friend( $myspace1, $CONFIG->{'acct2'}->{'friend_id'} );
 
-	$myspace1->delete_friend( $CONFIG->{'acct2'}->{'friend_id'} );
+	ok( $myspace1->delete_friend( $CONFIG->{'acct2'}->{'friend_id'} ),
+		'delete_friend returned true' );
 
 	if ( is_friend( $myspace1, $CONFIG->{'acct2'}->{'friend_id'} ) ) {
 		fail( 'Friend deleted' );
@@ -21,9 +24,6 @@ if ( is_friend( $myspace1, $CONFIG->{'acct2'}->{'friend_id'} ) ) {
 		pass( 'Friend deleted' );
 	}
 
-} else {
-	warn "Test friend not in friend list. Skipping delete_friend test.\n";
-	pass( 'Friend deleted' );
 }
 
 sub is_friend {

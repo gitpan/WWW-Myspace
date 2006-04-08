@@ -98,6 +98,7 @@ $response = $myspace->post_comment( $CONFIG->{'acct2'}->{'friend_id'},
 if ( ( $response =~ /^P/ ) || ( $response eq 'FC' ) ||
 	 ( $response eq "FF") ) { $response = 'P' }
 
+warn $myspace->error . "\n" if $myspace->error;
 is( $response, 'P', 'Post Comment' );
 
 # Test is_band

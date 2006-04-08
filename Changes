@@ -1,106 +1,172 @@
 Revision history for WWW::Myspace
 
-0.38	2006-03-28
-		- Removed extra "&"s from end of URLs in get_friends routines.
-		- get_friends methods (friends_from_profile, etc) will display
-		  a warning if it encounters a page with no friendIDs.
-		- get_friends methods will display a warning if the friend count
-		  is off of myspace's friend count by more than 5% when getting
-		  friends from another user's profile (already did this when
-		  getting our friends).
-		- get_friends methods will display a warning and return if they
-		  fail to get a page.
-		- Enhanced get_friends sample script
-		- Fixed bug that was making get_page fail too easily.
-		- Added version 0.02 of FriendAdder.pm to the distribution
-		- FriendAdder.pm is now (mostly) documented
-		- FriendAdder->friend_request() renamed to
-		  FriendAdder->send_friend_requests()
-		- Added convenience method FriendAdder->add_to_friends() for
-		  FriendAdder->send_friend_requests()
-		- Added version 0.01 of Myspace::Data.pm to the distribution
-		- Added test 09-data.t for Myspace::Data
-		- Added test 10-mybase.t for MyBase.pm
-		- FriendAdder.pm now uses MyBase.pm as a base class
-		- Added MyBase.pm to dist (for internal modules to use).
-		- Fixed bug in message_group - docs said to add "delay: 0"
-		  to the config file to stop it from sleeping. Correct setting
-		  is "delay_time: 0".  Fixed docs, and made "delay: 0" work
-		  also so it'll work as expected for people with old config files.
-		- Removed dependency on IO::All in approve_friends, message_group,
-		  and Message.pm (no longer required in the distribution, removed
-		  from Makefile.PL also).
-		- Updated output in approve_friends to display result of commenting
-		  (DONE, CAPTCHA, COUNTER). DONE means you've commented all your
-		  friends.
-		- send_friend_request now checks to make sure there's a button
-		  before posting to avoid:
-		  "Can't call method "click" on an undefined value at
-		  /usr/local/ActivePerl-5.8/lib/site_perl/5.8.7/WWW/Mechanize.pm
-		  line 1345."
-		- send_friend_request now returns FN if a known error page is returned
-		  even after the multiple attempts get_page makes at retreiving the
-		  page. Before it could cause the error above also.
-		- Fixed a bug in which get_friends would produce a "use of
-		  unitialized value" error if called with no arguments.
-		- Updated VERIFY_COMMENT_POST due to change in myspace.com profile
-		  page display.
-		- Added eval around the "click" in submit_form to prevent the error
-		  above from all methods.  Failed form load will now just fail,
-		  not "die".
-		- Added RE checks to post_comment to strengthen initial load.
-		  Helps overcome FN post errors due to network problems.
-		  
-		  EARLIER VERSIONS WILL REPORT FALSE COMMENT POST FAILURES.
+0.39    2006-04-08
+        - Fixed bug in MyBase.pm that could cause an error in some
+          cases when the new method was invoked.
+        - Added fatal error in WWW:Myspace::FriendAdder if
+          send_friend_requests is called and a myspace object hasn't
+          been passed to the FriendAdder object.
+        - Rewrote add_friends to use FriendAdder module. Still works the
+          same except for different output format.
+        - Updated FriendAdder to count passed attempts instead of all
+          attempts.
+        - Added save and load methods to MyBase.
+        - Added previously_posted method to Poster.pm, fixed bugs,
+          updated docs.
+        - Poster.pm's friend_ids method can now take a list or arrayref
+          to set its value.
+        - Updated get_friends to start at page 1 when serarching friend
+          lists, 0 for group and inbox due to myspace chage. (Note that this
+          change doesn't seem to affect the results, it was just loading
+          page 1 twice).
+        - Added get_friend_page to sample_scripts
+        - Added delete_friend to sample_scripts
+        - Fixed a bug in submit_form which could cause failures if an error
+          page was encountered on the first submit.
+        - Commented out "An Error Has Occurred" from the errors array in
+          Myspace.pm because it conflicts with the "Exceeded Useage"
+          (their typo, not mine) error message. It should fail, not try
+          again.
+        - Updated TODO with note about proper handling of Mech.
+        - Updated send_message to semi-properly handle Mech. and to use
+          the error method to check for failure from get_page.
+        - Updated sample_scripts/send_message to display any errors
+          encountered.
+        - Added mention of YAML indent to message_group synopsis
+          documentation.
+        - Added usage comments to get_friends sample script.
+        - Changed nomenclature of incrementing internals in FriendAdder.pm
+        - Changed max_attempts param to max_adds in FriendAdder.pm
+        - Fixed wrapping in FriendAdder.pm
+        - Added documentation for _report() and return_params to FriendAdder.pm
+        - Expanded documentation for new() on FriendAdder.pm
+        - Added beta dB schema "mysql.txt"
+        - Changed method update_friends to update_all_friends in Data.pm
+        - Added method update_friend to Data.pm
+        - Added table to schema to distinguish between friends from different accounts
+        - Modified update_friend to add info for is_band, user_name, and url
+        - Data.pm now a subclass of MyBase.pm
+        - Added column my_friend_id to accounts table
+        - Added internal method _die_pretty to Data.pm and FriendAdder.pm
+        - Updated docs for FriendAdder.pm and Data.pm
+        Made several enhancements to Myspace.pm:
+        - Myspace.pm is now a subclass of WWW::Myspace::MyBase.pm, so the
+          new method inherits options processing.
+        - Added logout method.
+        - Made "site_login" method public.
+        - Started changes to not require login for functions that don't need it.
+        - Added account_name and password accessor methods.
+        - Updated docs and reviewed code for proper Mech usage (needs more).
+        - Fixed delete_friends method broken by Myspace security enhancement.
+        - delete_friends is now much more efficient if deleting multiple
+          friends.
+        - delete_friends now croaks if called when not logged in.
 
-0.37	2006-03-22
-		- Added "We\'re doing some maintenance on the mail for certain users"
-		  error message to errors array.
-		- Fixed and added example to friends_from_profile method's docs.
-		- if get_friends is called in a HASHREF context, it returns
-		  a hash of info about each friend (currently just the page they're
-		  on in the friends list).
-		- Added version 0.01 of FriendAdder.pm to the distribution
-		- Added 07-friend_adder test script
-		- Added cool_new_people method to Myspace.pm
-		- Added 08-cool_new_people test script 
-		comment_myspace:
-		- Added -i flag to comment_myspace.  Causes comment_myspace to ignore
-		  duplicates when posting comments.
-		- Added -r flag to comment_myspace.  Reset the exclusions file before
-		  running.
+        - Added additional diagnostic output for failing "Post Comment" test
+          in 01-login.t
+        - Added test to 03-delete to check return status of delete_friends.
 
-0.36	2006-03-22 - maintenance release, replaces 0.35.
-		- Removed signature code - was breaking install.
+0.38    2006-03-28
+        - Removed extra "&"s from end of URLs in get_friends routines.
+        - get_friends methods (friends_from_profile, etc) will display
+          a warning if it encounters a page with no friendIDs.
+        - get_friends methods will display a warning if the friend count
+          is off of myspace's friend count by more than 5% when getting
+          friends from another user's profile (already did this when
+          getting our friends).
+        - get_friends methods will display a warning and return if they
+          fail to get a page.
+        - Enhanced get_friends sample script
+        - Fixed bug that was making get_page fail too easily.
+        - Added version 0.02 of FriendAdder.pm to the distribution
+        - FriendAdder.pm is now (mostly) documented
+        - FriendAdder->friend_request() renamed to
+          FriendAdder->send_friend_requests()
+        - Added convenience method FriendAdder->add_to_friends() for
+          FriendAdder->send_friend_requests()
+        - Added version 0.01 of Myspace::Data.pm to the distribution
+        - Added test 09-data.t for Myspace::Data
+        - Added test 10-mybase.t for MyBase.pm
+        - FriendAdder.pm now uses MyBase.pm as a base class
+        - Added MyBase.pm to dist (for internal modules to use).
+        - Fixed bug in message_group - docs said to add "delay: 0"
+          to the config file to stop it from sleeping. Correct setting
+          is "delay_time: 0".  Fixed docs, and made "delay: 0" work
+          also so it'll work as expected for people with old config files.
+        - Removed dependency on IO::All in approve_friends, message_group,
+          and Message.pm (no longer required in the distribution, removed
+          from Makefile.PL also).
+        - Updated output in approve_friends to display result of commenting
+          (DONE, CAPTCHA, COUNTER). DONE means you've commented all your
+          friends.
+        - send_friend_request now checks to make sure there's a button
+          before posting to avoid:
+          "Can't call method "click" on an undefined value at
+          /usr/local/ActivePerl-5.8/lib/site_perl/5.8.7/WWW/Mechanize.pm
+          line 1345."
+        - send_friend_request now returns FN if a known error page is returned
+          even after the multiple attempts get_page makes at retreiving the
+          page. Before it could cause the error above also.
+        - Fixed a bug in which get_friends would produce a "use of
+          unitialized value" error if called with no arguments.
+        - Updated VERIFY_COMMENT_POST due to change in myspace.com profile
+          page display.
+        - Added eval around the "click" in submit_form to prevent the error
+          above from all methods.  Failed form load will now just fail,
+          not "die".
+        - Added RE checks to post_comment to strengthen initial load.
+          Helps overcome FN post errors due to network problems.
+          
+          EARLIER VERSIONS WILL REPORT FALSE COMMENT POST FAILURES.
 
-0.35	2006-03-15
-		- Added inbox method. Returns the contents of your inbox complete
-		  with sender, messageID, subject, and status (read, unread, sent,
-		  replied).
-		- Removed commented-out libraries deprecated in version 0.34.
-		- Added get_inbox sample script.
-		- submit_form now properly returns a failure code if it can't
-		  load the form, instead of letting WWW::Mechanize choke on it.
-		  This hopefully fixes bug#18232, where post_comments can fail
-		  with no such field 'f_comments' at /.../WWW/Mechanize.pm line 1178.
-		  
+0.37    2006-03-22
+        - Added "We\'re doing some maintenance on the mail for certain users"
+          error message to errors array.
+        - Fixed and added example to friends_from_profile method's docs.
+        - if get_friends is called in a HASHREF context, it returns
+          a hash of info about each friend (currently just the page they're
+          on in the friends list).
+        - Added version 0.01 of FriendAdder.pm to the distribution
+        - Added 07-friend_adder test script
+        - Added cool_new_people method to Myspace.pm
+        - Added 08-cool_new_people test script 
+        comment_myspace:
+        - Added -i flag to comment_myspace.  Causes comment_myspace to ignore
+          duplicates when posting comments.
+        - Added -r flag to comment_myspace.  Reset the exclusions file before
+          running.
 
-0.34	2006-03-14
-		- Switched to use WWW::Mechanize
-		  - Removed dependency on HTTP::Request::Form
-		  - Fixes "Use of initialized value" errors when sending
-		    friend requests.
-		- Removed cookie_jar method. Cookies stored in memory only.
-		- Moved login functions to more logical location in the code.
-		- Fixed some docs typos.
-		- logged_in will return false if my_friend_id couldn't be set for
-		  some reason.
-		- If already_commented can't load the page, or if my_friend_id
-		  isn't set, it will return a false "true" value and set
-		  $myspace->error to a message describing the problem.
-		- Added mortality to all "scripts" - if login fails, the script
-		  will die with "Login Failed".  This prevents continuing with
-		  unpredictable results.
+0.36    2006-03-22 - maintenance release, replaces 0.35.
+        - Removed signature code - was breaking install.
+
+0.35    2006-03-15
+        - Added inbox method. Returns the contents of your inbox complete
+          with sender, messageID, subject, and status (read, unread, sent,
+          replied).
+        - Removed commented-out libraries deprecated in version 0.34.
+        - Added get_inbox sample script.
+        - submit_form now properly returns a failure code if it can't
+          load the form, instead of letting WWW::Mechanize choke on it.
+          This hopefully fixes bug#18232, where post_comments can fail
+          with no such field 'f_comments' at /.../WWW/Mechanize.pm line 1178.
+          
+
+0.34    2006-03-14
+        - Switched to use WWW::Mechanize
+          - Removed dependency on HTTP::Request::Form
+          - Fixes "Use of initialized value" errors when sending
+            friend requests.
+        - Removed cookie_jar method. Cookies stored in memory only.
+        - Moved login functions to more logical location in the code.
+        - Fixed some docs typos.
+        - logged_in will return false if my_friend_id couldn't be set for
+          some reason.
+        - If already_commented can't load the page, or if my_friend_id
+          isn't set, it will return a false "true" value and set
+          $myspace->error to a message describing the problem.
+        - Added mortality to all "scripts" - if login fails, the script
+          will die with "Login Failed".  This prevents continuing with
+          unpredictable results.
 
 0.33    2006-03-10
         - Added signature code to Makefile.PL
@@ -129,10 +195,10 @@ Revision history for WWW::Myspace
         add_friends:
           - Added add_friends to Makefile.PL so it'll actually install.
           - add_friends will now die if it can't log in.
-		  - Converted tabs into spaces in code.
-		  - Fixed redundant status_codes code.
-		  - Debugged CAPTCHA prompt
-		  - Updated text.
+          - Converted tabs into spaces in code.
+          - Fixed redundant status_codes code.
+          - Debugged CAPTCHA prompt
+          - Updated text.
 
 0.32    2006-03-08
         - Added add_friends script to the distribution.  Simple script to

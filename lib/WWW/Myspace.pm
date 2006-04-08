@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 58 2006-04-01 09:36:34Z grantg $
+# $Id: Myspace.pm 83 2006-04-08 18:07:55Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -13,7 +13,8 @@
 
 # Declare our package.
 package WWW::Myspace;
-use Spiffy -Base;
+#use Spiffy -Base;
+use WWW::Myspace::MyBase -Base;
 
 # *** If you're not familiar with Spiffy, read its docs. To save you
 # confusion, one of its features is to add "my $self = shift;" to
@@ -34,11 +35,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.38
+Version 0.39
 
 =cut
 
-our $VERSION = '0.38';
+our $VERSION = '0.39';
 
 =head1 SYNOPSIS
 
@@ -141,6 +142,7 @@ our $MAIL_INBOX_URL="http://mail.myspace.com/index.cfm?fuseaction=mail.inbox" .
 
 # What's the URL to read a message if we know the messageID?
 our $READ_MESSAGE_URL='http://mail.myspace.com/index.cfm?fuseaction=mail.readmessage&messageID=';
+
 # What's the URL to send mail to a user? We'll append the friendID to the
 # end if this string too.
 our $SEND_MESSAGE_FORM="http://mail.myspace.com/index.cfm?fuseaction=mail.message&friendID=";
@@ -174,8 +176,8 @@ our @ERROR_REGEXPS = (
 	'This profile is undergoing routine maintenance. '.
 	'We apologize for the inconvenience!',
 	
-	'An Error has occurred!!.*'.
-	'An error has occurred (while )?trying to send this message.',
+#	'An Error has occurred!!.*'.
+#	'An error has occurred (while )?trying to send this message.',
 	
 	'We\'re doing some maintenance on the mail for certain users\.  '.
 	'You can take this opportunity to leave your friend a swell comment '.
@@ -185,7 +187,8 @@ our @ERROR_REGEXPS = (
 
 # If we exceed our daily mail usage, what regexp would we see?
 # (Note: they've misspelled usage, so the ? is in case they fix it.)
-our $EXCEED_USAGE = "User has exceeded their daily use?age";
+#our $EXCEED_USAGE = "User has exceeded their daily use?age";
+our $EXCEED_USAGE = "User has exceeded their daily useage\.";
 
 # What regexp should we use to find the "requestGUID" for a friend request?
 our $FRIEND_REQUEST = "requestGUID.value='([^\']+)'";
@@ -207,13 +210,25 @@ our $DEBUG=0;
 ######################################################################
 # Methods
 
+# Options they can pass via hash or hashref.
+const default_options => {
+	account_name => 0,
+	password => 0,
+	cache_dir => 0,  # Default set by field method
+	cache_file => 0, # Default set by field method
+};
+
+# Options they can pass by position.
+# Just "new( 'joe@myspace.com', 'mypass' )".
+const positional_parameters => [ 'account_name', 'password' ];
+
 #---------------------------------------------------------------------
 # new method
 # If we're passed an account and possibly a password, we store them.
 # Otherwise, we check the login cache file, and if we still
 # don't have them, we ask the user.
 
-=head1 Methods
+=head1 METHODS
 
 =head2 new( $account, $password )
 
@@ -232,10 +247,33 @@ content of the user's "home" page, the user's friend ID, and
 a UserAgent object used internally as the "browser" that is used
 by all methods in the WWW::Myspace class.
 
+Myspace.pm is now a subclass of WWW::Myspace::MyBase (I couldn't resist,
+sorry), which basically just means you can call new in many ways:
+
     EXAMPLES
         use WWW::Myspace;
+        
+        # Prompt for username and password
         my $myspace = new WWW::Myspace;
         
+        # Pass just username and password
+        my $myspace = new WWW::Myspace( 'my@email.com', 'mypass' );
+        
+        # Pass options as a hashref
+        my $myspace = new WWW::Myspace( {
+        	username => 'my@email.com',
+        	password => 'mypass',
+        	cache_file => 'passcache',
+        } );
+        
+        # Hash
+        my $myspace = new WWW::Myspace(
+        	username => 'my@email.com',
+        	password => 'mypass',
+        	cache_file => 'passcache',
+		);
+		
+		# 
         # Print my friend ID
         print $myspace->my_friend_id;
         
@@ -257,7 +295,7 @@ by all methods in the WWW::Myspace class.
 
 =cut
 
-sub new() {
+sub _old_new() {
 	my $proto = shift;
 	my $class = ref($proto) || $proto;
  	my $self  = {};
@@ -271,6 +309,18 @@ sub new() {
 	
 	# And for convenience, log in
 	$self->_site_login();
+
+	return $self;
+}
+
+sub new() {
+	# Call the MyBase new method (it's ok to feel special about it).
+	my $self = super;
+
+	# For backwards compatibility, if there are no args, call _get_acct
+	# to prompt for them.
+	$self->_get_acct unless $self->account_name;
+	$self->site_login;
 
 	return $self;
 }
@@ -329,21 +379,31 @@ sub _get_acct {
 }
 
 #---------------------------------------------------------------------
-# _site_login()
+# site_login()
 # Log into myspace with the stored account login name, password, and
 # URL (probably "http://www.myspace.com/")
 
-sub _site_login {
+=head2 site_login
 
-	# Set up our web browser (User Agent)
-	my $mech = new WWW::Mechanize( onerror => undef );
+Logs into the myspace account identified by the "account_name" and
+"password" options.  You don't need to call this right now,
+because "new" does it for you.  BUT I PLAN TO CHANGE THAT.  You don't
+need to be logged in to access certain functions, so it's semi-silly
+to make you log in the second you call "new".  Plus, it's not good
+practice to have "new" require stuff. Bad me.
 
-	# We need to follow redirects for POST too.
-	push @{ $mech->requests_redirectable }, 'POST';
-	
-	# Set the official parameter
-	$self->{mech} = $mech;
-	
+So for now this is only useful to you if you find yourself logged out for
+some reason and want to log back in without making a new WWW::Myspace
+object.  It's more useful for me though.
+
+=cut
+
+sub site_login {
+
+	# Reset everything (oddly, this also happens to create a new browser
+	# object).
+	$self->logout;
+
 	# Now log in
 	my $submitted = $self->submit_form( "$BASE_URL", 1, "",
 						{ 'email' => $self->{account_name},
@@ -355,13 +415,13 @@ sub _site_login {
 	if ( $submitted ) {
 		( $DEBUG ) && print $self->current_page->content;
 	} else {
-		croak $self->current_page->status_line;
+		croak $self->error;
 	}
-	
+
 	# We probably have an ad or somesuch (started 1/7/2006)
 	# so explicitly request our Home.
 	$self->get_page( $HOME_PAGE );
-	
+
 	# Verify we're logged in
 	if ( $self->current_page->content =~ /$VERIFY_HOME_PAGE/si ) {
 		$self->logged_in( 1 );
@@ -383,6 +443,42 @@ sub _site_login {
 	
 	# Cache whether or not we're a band.
 	$self->is_band;
+
+}
+
+sub _new_mech {
+
+	# Set up our web browser (WWW::Mechanize object)
+	$self->{mech} = new WWW::Mechanize( onerror => undef );
+
+	# We need to follow redirects for POST too.
+	push @{ $self->{mech}->requests_redirectable }, 'POST';
+
+}
+
+=head2 logout
+
+Clears the current web browsing object and resets any login-specific
+internal values.  Currently this drops and creates a new WWW::Mechanize
+object.  This may change in the future to actually clicking "logout"
+or something.
+
+=cut
+
+sub logout {
+
+	# If you change this to just log out instead of making a new Mech
+	# object, be sure you change site_login too.
+	$self->_new_mech;
+	
+	# Clear stuff
+	$self->{user_name} = undef;
+#	$self->{account_name} = undef;
+#	$self->{password} = undef;
+	$self->{is_band} = undef;
+	$self->{my_friend_id} = undef;
+	$self->logged_in(0);
+	$self->error(0);
 
 }
 
@@ -413,9 +509,54 @@ sub _get_friend_id {
 
 }
 
+=head1 ACCESSORS
+
+=head2 cache_dir
+
+WWW::Myspace stores the last account/password used in a cache file
+for convenience if the user's entering it. Other modules store other
+cache data as well.
+
+cache_dir sets or returns the directory in which we should store cache
+data. Defaults to $ENV{'HOME'}/.www-myspace.
+
+If using this from a CGI script, you will need to provide the
+account and password in the "new" method call, so cache_dir will
+not be used.
+
+=cut
+
+field cache_dir => catfile( "$HOME_DIR", '.www-myspace' );
+
+=head2 cache_file
+
+Sets or returns the name of the file into which the login
+cache data is stored. Defaults to login_cache.
+
+If using this from a CGI script, you will need to provide the
+account and password in the "new" method call, so cache_file will
+not be used.
+
+=cut
+
+field cache_file => 'login_cache';
+
+=head2 mech
+
+The internal WWW::Mechanize object.  Use at your own risk: I don't
+promose this method will stay here or work the same in the future.
+The internal methods used to access Myspace are subject to change at
+any time, including using something different than WWW::Mechanize.
+
+=cut
+
+field 'mech';
+
 #---------------------------------------------------------------------
 # Value return methods
 # These methods return internal data that is of use to outsiders
+
+=head1 CHECKING STATUS
 
 =head2 logged_in
 
@@ -485,9 +626,10 @@ sub my_friend_id {
 
 =head2 account_name
 
-Returns the account name (email address) under which you're logged in.
+Sets or returns the account name (email address) under which you're logged in.
 Note that the account name is retreived from the user or from your program
-depending on how you called the "new" method.
+depending on how you called the "new" method. You'll probably only use this
+to get account_name.
 
 EXAMPLE
 
@@ -499,13 +641,53 @@ out the account name:
 	
 	print $myspace->account_name;
 
+	$myspace->account_name( 'other_account@myspace.com' );
+	$myspace->password( 'other_accounts_password' );
+	$myspace->site_login;
+
+WARNING: If you do change account_name, make sure you change password and
+call site_login.  Changing account_name doesn't (currently) log you
+out, nor does it clear "password".  If you change this and don't log in
+under the new account, it'll just have the wrong value, which will probably
+be ignored, but who knows.
+
 =cut
 
-sub account_name {
+field 'account_name';
 
-	return $self->{account_name};
+=head2 password
+
+Sets or returns the password you used, or will use, to log in. See the
+warning under "account_name" above - same applies here.
+
+=cut
+
+field 'password';
+
+=head2 current_page
+
+Returns a reference to an HTTP::Response object that contains the last page
+retreived by the WWW::Myspace object. All methods (i.e. get_page, post_comment,
+get_profile, etc) set this value.
+
+EXAMPLE
+
+The following will print the content of the user's profile page:
+
+	use WWW::Myspace;
+	my $myspace = new WWW::Myspace;
+	
+	print $myspace->current_page->content;
+
+=cut
+
+sub current_page {
+
+	return $self->{current_page};
 
 }
+
+=head1 ACCESSING MYSPACE
 
 =head2 is_band( [friend_id] )
 
@@ -553,7 +735,7 @@ sub is_band {
 		# like counting on this, but I can't really think of anything
 		# better to look for right now.
 		# Note that this requires is_band to be called for the first time
-		# just after loading the login profile page. _site_login calls
+		# just after loading the login profile page. site_login calls
 		# this method to take care of that problem.
 		unless ( defined $self->{is_band} ) {
 			if ( $self->current_page->content =~ />My Bulletin Space</i ) {
@@ -586,6 +768,7 @@ may not be supported in the future, so it's not recommended.
 
 sub user_name {
 
+	# Otherwise if they gave us a home page, get user's name.
 	if ( @_ ) {
 		my ( $homepage ) = @_;
 		my $page_source = $homepage->content;
@@ -690,59 +873,6 @@ sub friend_count {
 
 }
 
-=head2 current_page
-
-Returns a reference to an HTTP::Response object that contains the last page
-retreived by the WWW::Myspace object. All methods (i.e. get_page, post_comment,
-get_profile, etc) set this value.
-
-EXAMPLE
-
-The following will print the content of the user's profile page:
-
-	use WWW::Myspace;
-	my $myspace = new WWW::Myspace;
-	
-	print $myspace->current_page->content;
-
-=cut
-
-sub current_page {
-
-	return $self->{current_page};
-
-}
-
-
-=head2 cache_dir
-
-WWW::Myspace stores the last account/password used in a cache file
-for convenience if the user's entering it. Other modules store other
-cache data as well.
-
-cache_dir sets or returns the directory in which we should store cache
-data. Defaults to $ENV{'HOME'}/.www-myspace.
-
-If using this from a CGI script, you will need to provide the
-account and password in the "new" method call, so cache_dir will
-not be used.
-
-=cut
-
-field cache_dir => catfile( "$HOME_DIR", '.www-myspace' );
-
-=head2 cache_file
-
-Sets or returns the name of the file into which the login
-cache data is stored. Defaults to login_cache.
-
-If using this from a CGI script, you will need to provide the
-account and password in the "new" method call, so cache_file will
-not be used.
-
-=cut
-
-field cache_file => 'login_cache';
 
 =head2 remove_cache
 
@@ -799,6 +929,9 @@ maintain state between pages.  This is not a high-priority
 function for me, so if you'd like to help debug/implement it
 please do.  Send me a patch and I'll credit you. :)
 
+( Update 4/3/2006: Re-wrote the method, but it now dies due to
+bug#18521 in WWW::Mechanize ).
+
 And now back to your normal docs:
 
 Call browse with a hashref of your search criteria and it
@@ -830,26 +963,40 @@ form indeed.
 sub browse {
 
 	my ( $criteria ) = @_;
+	my @friends = ();
 
 	# Safety check
 	croak 'Criteria must be a hash reference\n' unless ref $criteria;
 
-	# We need to set a couple things: Advanced view so we have all
-	# the options, and Show Name and Photo Only to list more people
-	# per page (for speed).
-	$criteria->{'showNamePhotoOnly'} = 'checked';
-#	$criteria->{'__EVENTTARGET'} = 'advancedView';
-	$criteria->{'__EVENTTARGET'} = 'update';
+	$DEBUG = 1;
+	# Switch to advanced view
+	$self->submit_form( $BROWSE_PAGE, 1, '',
+		{
+			'__EVENTTARGET' => 'ctl00$Main$advancedView',
+		}
+	) or die;
 
-	# This is a bit of a wacked page, but get_friends
-	# handles it with some special case code.
-	$self->get_friends( 'browse', $criteria );
-	
-	# XXX - Try setting __EVENTTARGET to advancedView
-	#     - get_friends will stop after 5 pages if $DEBUG
-	#     - Sort must preserve state somehow, cookies not working?
-	
+	# Enter the search criteria and click Update
+	$self->submit_form( $self->current_page, 1, 'ctl00$Main$update',
+		{ %{$criteria}, '__EVENTTARGET' => 'ctl00$Main$update' } ) or die;
 
+	# Loop through the resulting pages getting friendIDs.
+	my $page = 1;
+	do {
+		push @friends, $self->get_friends_on_page( $self->current_page->content );
+		$page++;
+		$self->submit_form( $self->current_page, 1, '',
+			{ page => $page }
+		);
+	} until ( ( $self->error ) || ( $self->current_page->content =~ /Next<\/a>&nbsp;&gt;/i ) );
+
+	# Sort and remove duplicates
+	my %friends = ();
+	foreach my $id ( @friends ) {
+		$friends{ $id } = 1;
+	}
+
+	return ( sort( keys( %friends ) ) );
 }
 
 #---------------------------------------------------------------------
@@ -888,8 +1035,9 @@ sub get_friends {
 	my ( $source, $source_id ) = @_;
 	$source = "" unless defined $source;
 
-	# Browse starts at page 1, the rest start at 0.	
-	my $page=0; $page++ if ( ( defined $source ) && ($source eq 'browse' ) );
+	# Browse and view friends start at page 1, the rest start at 0.	
+	my $page=0; $page++ if ( ( $source eq "" ) || ( $source eq "profile" ) ||
+							 ($source eq 'browse' ) );
 
 	# Initialize
 	my $friends_page="";
@@ -917,8 +1065,11 @@ sub get_friends {
 		# (This prevents duplicates for inbox, comments, etc)
 		foreach $id ( @friends_on_page ) {
 			$friend_ids{"$id"}={
-				'page_no' => $page + 1
-			}
+				'page_no' => $page
+			};
+			$friend_ids{"$id"}->{page_no}++ unless ( ( $source eq "" ) ||
+								( $source eq "profile" ) ||
+								( $source eq 'browse' ) );
 		}
 
 		last unless ( $friends_page->content =~ /">Next<\/a>( |&nbsp;)\&gt;/i );
@@ -972,10 +1123,10 @@ sub get_friends {
 	}
 	
 	# Return our findings
-    return (
+    return 
 		LIST { sort( keys( %friend_ids ) ) }
 		HASHREF { \%friend_ids }
-	);
+	;
 
 }
 
@@ -1161,7 +1312,7 @@ sub _get_friend_page {
 			$id = $self->my_friend_id;
 		}
 
-		if ( $page == 0 ) {
+		if ( $page == 1 ) {
 			# First page
 			$url = "http://home.myspace.com/index.cfm?".
 				"fuseaction=user.viewfriends&".
@@ -1196,7 +1347,7 @@ sub _get_friend_page {
 		# Save info if we need to
 		$self->$save_friend_info if  (
 			( ( $source eq '' ) || ( $source eq 'profile' ) ) &&
-			( $page == 0 ) );
+			( $page == 1 ) );
 	}
 
 	return $res;
@@ -1258,16 +1409,13 @@ sub get_page {
 	# Reset error
 	$self->error( 0 );
 
-	# Get our web browser object
-	my $mech = $self->{mech}; # For readability...
-
 	# Try to get the page 20 times.
 	my $attempts = 20;
 	my $res;
 	do {
 
 		# Try to get the page
-		$res = $mech->get("$url");
+		$res = $self->mech->get("$url");
 		$attempts--;
 
 	} until ( ( $self->_page_ok( $res, $regexp ) ) || ( $attempts <= 0 ) );
@@ -1330,8 +1478,8 @@ sub _page_ok {
 			"  " . $res->status_line);
 		$page_ok = 0;
 
-#		warn "Error getting page: \n" .
-#			"  " . $res->status_line . "\n";
+		warn "Error getting page: \n" .
+			"  " . $res->status_line . "\n";
 
 	}
 
@@ -1424,6 +1572,8 @@ sub get_friends_on_page {
 
 =head2 get_profile( $friend_id )
 
+Gets the profile identified by $friend_id.
+
 Returns a reference to a HTTP::Response object that contains the
 profile page for $friend_id.
 
@@ -1484,6 +1634,8 @@ sub post_comment {
 	my ( $friend_id, $message, $captcha_response ) = @_;
 	my $status = ""; # Our return status
 	my ($submitted, $attempts);
+
+	croak "post_comment called when not logged in" unless $self->logged_in;
 
 #	my ( $dbh, $ua, $login, $message, $friend_id ) = @_;
 
@@ -1991,11 +2143,12 @@ sub send_message {
 	}
 
 	# Try to get the message form
-	$res = $self->get_page( "${SEND_MESSAGE_FORM}${friend_id}" );
-	
+	$res = $self->get_page( "${SEND_MESSAGE_FORM}${friend_id}",
+		'Mail Center<br>Send a Message' );
+
 	# See if we can mail or if there's an error.
-	if ( $res->is_success ) {
-		$page = $res->content;
+	unless ( $self->error ) {
+		$page = $self->{mech}->content;
 		$page =~ s/[ \t\n\r]+/ /g;
 		if ( $page =~ /${MAIL_PRIVATE_ERROR}/i ) {
 			return "FF";
@@ -2012,7 +2165,7 @@ sub send_message {
 	# (Note that \n does seem to work, but this "should" be safer, especially
 	# against myspace changes and platform differences).
 	$message =~ s/(\n|\\n)/\015\012/gs;
-
+	
 	# Submit the message
 	$submitted = $self->submit_form( $res,
 						1, "",
@@ -2029,7 +2182,7 @@ sub send_message {
 		return "FN";
 	} elsif ( $page =~ /$VERIFY_MESSAGE_SENT/ ) {
 		return "P";
-	} elsif ( $page =~ /${EXCEED_USAGE}/i ) {
+	} elsif ( $page =~ /$EXCEED_USAGE/i ) {
 		return "FE";
 	} elsif ( $page =~ /$CAPTCHA/ ) {
 		return "FC";
@@ -2513,10 +2666,6 @@ Deletes the list of friend_ids passed from your list of friends.
 
 Returns true if it posted ok, false if it didn't.
 
-(This method is a bit inefficient if deleting more than one friend
-due to a documented bug in HTTP::Request::Form. It should probably
-be moved to WWW::Mechanize.)
-
 =cut
 
 sub delete_friend {
@@ -2524,37 +2673,56 @@ sub delete_friend {
 	my ( $form, $tree, $f, $res, $id );
 	my $pass=1;
 
+	croak "Must log in before calling delete_friend" unless $self->logged_in;
+
+	# Get the edit friends page
+	$self->get_page( 'http://collect.myspace.com/index.cfm?fuseaction=user.editfriends&friendID=' . $self->my_friend_id );
+	return 0 if $self->error;
+	
+	# Select the edit form and get the hash field
+	$self->mech->form_name( 'friendsDelete' );
+	my $hash_value = $self->mech->value( 'hash' );
+	my $mytoken = $self->mech->value( 'Mytoken' );
+
+	# Create our delete form
+	$form =
+		'<FORM ACTION="index.cfm?fuseaction=user.deleteFriend&page=0" '.
+		'METHOD="POST">';
+
+	$form .= '<input type="hidden" name="hash" value="'.
+		$hash_value . '">';
+
+	$form .= '<input type="hidden" name="Mytoken" value="'.
+		$mytoken . '">';
+
 	foreach $id ( @_ ) {
-		# Create the form
-		$form =
-			'<FORM ACTION="index.cfm?fuseaction=user.deleteFriend&page=0" '.
-			'METHOD="POST">';
 
 		$form .= '<input type="checkbox" name="delFriendID" value="'
 			. $id . '">';
 
-		$form .= '<input type="image" border="0" name="deleteAll" '.
-			'src="images/btn_deleteselected.gif" width="129" height="20">'.
-			'</form>';
-
-		# Turn it into an HTML::Form object
-		$f = HTML::Form->parse( $form, 'http://collect.myspace.com/' );
-
-		# Check the checkboxes
-		$f->find_input( 'delFriendID' )->check;
-
-		# Submit the form
-		my $attempts = 25;
-		do {
-			$res = $self->{mech}->request( $f->click( 'deleteAll' ) );	
-			$attempts--;
-		} until ( ( $self->_page_ok( $res ) ) || ( $attempts <= 0 ) );
-
-		unless ( $attempts ) {
-			$pass=0;
-		}
-
 	}
+
+	$form .= '<input type="image" border="0" name="deleteAll" '.
+		'src="images/btn_deleteselected.gif" width="129" height="20">'.
+		'</form>';
+
+	# Turn it into an HTML::Form object
+	$f = HTML::Form->parse( $form, 'http://collect.myspace.com/' );
+
+	# Check the checkboxes
+	$f->find_input( 'delFriendID' )->check;
+
+	# Submit the form
+	my $attempts = 25;
+	do {
+		$res = $self->mech->request( $f->click( 'deleteAll' ) );
+		$attempts--;
+	} until ( ( $self->_page_ok( $res ) ) || ( $attempts <= 0 ) );
+
+	unless ( $attempts ) {
+		$pass=0;
+	}
+
 
 	return $pass;
 
@@ -2652,7 +2820,7 @@ page returned by the first post.
 
 =cut
 
- 
+
 sub submit_form {
 
 	my ( $url, $form_no, $button, $fields_ref, $regexp1, $regexp2, $base_url ) = @_;
@@ -2662,12 +2830,18 @@ sub submit_form {
 	my $res = "";
 	my ( $field );
 	$base_url = $BASE_URL unless $base_url;
-	
+	$form_no++; # For backwards compatibility.
+
 	# Get the page
 	( $DEBUG ) && print "Getting $url...\n";
 	if ( ref( $url ) ) {
 		# They gave us a page already
+		# Note, this might not work if $res doesn't happen to be
+		# the current URL. It will be in most cases, but i don't know
+		# what happens if it isn't.  This is leftover from pre WWW::Mechanize
+		# code and needs to be updated.
 		$res = $url;
+		$mech->update_html( $res->content );
 	} else {
 		$res = $self->get_page( $url, $regexp1 );
 		# If we couldn't get the page, return failure.
@@ -2678,36 +2852,53 @@ sub submit_form {
 	# +1 is for backwards-compatibility since WWW::Mechanize starts
 	# counting at 1.
 	my $forms = $mech->forms;
-	return 0 unless ( @{$forms} >= $form_no+1 );
+	unless ( @{$forms} >= $form_no ) {
+		$self->error( "No forms on page in submit_form!" );
+		return 0;
+	}
 
-	$mech->form_number( $form_no + 1 );
+	$mech->form_number( $form_no );
 
 	# Fill in the fields
-	( $DEBUG ) && print "Filling in form.\n";
+	( $DEBUG ) && print "Filling in form number " . $form_no . ".\n";
+	( $DEBUG ) && print $mech->current_form->dump;
 
 	$mech->set_fields( %{$fields_ref} );
+	
+	# Grab the form 'cause we have to force it through ourselves.
+	my $f = $mech->current_form;
 
-	# Press the submit button.
-	my $attempts = 5;
+	my $attempts = 5; # (Change statement below if you change this)
+	my $trying_again = 0;
 	do
 	{
+		# If we're trying again, back up.
+#		$mech->back if $trying_again;
+		warn $self->error . "\n" if $trying_again;
+
 		eval {
 			if ( $button ) {
-				$res = $mech->click_button( "$button" );
+				$res = $self->mech->request( $f->click( "$button" ) );
+#				$res = $mech->click( "$button" );
 			} else {
-				$res = $mech->click();
+				$res = $self->mech->request( $f->click );
+#				$res = $mech->click;
 			}
 		};
-		# If it died (it will if thre's no button), just return failure.
-		return 0 if ( $@ );
+		# If it died (it will if there's no button), just return failure.
+		if ( $@ ) {
+			$self->error( $@ );
+			return 0;
+		}
 
 		$attempts--;
+		$trying_again = 1;
 
 	} until ( ( $self->_page_ok( $res, $regexp2 ) ) || ( $attempts <= 0 ) );
-	
+
 	# Return the result
-	$self->{current_page} = $res;
-	return $mech->success;
+	$self->{current_page} = $self->mech->res;
+	return ( ! $self->error );
 
 }
 
@@ -2968,8 +3159,6 @@ if myspace changes in a way that breaks the method.
 Add checks to all methods to self-diagnose to detect changes in myspace
 site that break this module.
 
-Move add_friends to FriendAdder.pm
-
 Add methods to FriendAdder.pm to: 1-exlude friends, 2-exclude pending
 friends, 3-cache like Comment.pm, 4-exclude friends in the "messaged"
 cache file.
@@ -2981,6 +3170,9 @@ get_friends needs to throw an error, or at least set error, if it can't
 return the full list of friends (i.e. if either of the "warn" statements
 are triggered)
 
+Review and possibly rework code to properly use (or abuse) WWW::Mechanize.
+See: - submit_form - handling of passed $res is flakey.
+	 - delete_friends - "proper" forced handling of a passed form.
 
 =head1 CONTRIBUTING
 

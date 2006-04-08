@@ -3,6 +3,7 @@ MANIFEST
 #META.yml # Will be created by "make dist"
 Makefile.PL
 README
+mysql.txt
 lib/WWW/Myspace.pm
 lib/WWW/Myspace/Comment.pm
 lib/WWW/Myspace/Message.pm
@@ -34,11 +35,14 @@ scripts/message_group
 scripts/add_friends
 sample_scripts/already_commented
 sample_scripts/approve_friends
+sample_scripts/browse
+sample_scripts/delete_friend
 sample_scripts/friend_changes
+sample_scripts/get_friend_page
 sample_scripts/get_friends
+sample_scripts/get_inbox
 sample_scripts/send_all
 sample_scripts/send_message
 sample_scripts/test_message
 sample_scripts/todo
-sample_scripts/get_inbox
 META.yml                                 Module meta-data (added by MakeMaker)

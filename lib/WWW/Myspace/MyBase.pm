@@ -6,7 +6,7 @@ use Spiffy -Base;
 use Carp;
 use Params::Validate;
 use Config::General;
-use YAML 'LoadFile';
+use YAML qw'LoadFile DumpFile';
 
 =head1 NAME
 
@@ -14,11 +14,11 @@ WWW::Myspace::MyBase - Base class for WWW::Myspace modules
 
 =head1 VERSION
 
-Version 0.1
+Version 0.2
 
 =cut
 
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 
 =head1 SYNOPSIS
 
@@ -102,10 +102,11 @@ stub 'positional_parameters';
 
 =head2 new
 
-Initialze and return a new object.
+Initialize and return a new object.
 $myspace is a WWW::Myspace object.
 
-We accept the following formats:
+ We accept the following formats:
+
  new - Just creates and returns the new object.
  new( $myspace ) - Where $myspace is a WWW::Myspace object.
  new( $myspace, $options_hashref ) - Myspace object followed by a hashref 
@@ -186,7 +187,7 @@ sub parse_options {
 	# - new( %options )
 	#   If more than 1 argument, and an even number of arguments, and
 	#   the first argument is one of our known options.
-	} elsif ( ( @_ > 1 ) && ( mod( @_, 2 ) == 0 ) &&
+	} elsif ( ( @_ > 1 ) && ( @_ % 2 == 0 ) &&
 		( defined( $self->default_options->{$_[0]} ) ) ) {
 		%options = ( @_ );
 	# - new( @options )
@@ -257,6 +258,60 @@ instead.
 
 field 'myspace';
 
+=head2 save( filename )
+
+Saves the object to the file specified by "filename".
+Saved every field specified in the default_options method except
+the myspace object.
+
+=cut
+
+sub save {
+
+	my $data = {};
+
+	# For each field listed as persistent, store it in the
+	# hash of data that's going to be saved.
+	foreach my $key ( ( keys( %{ $self->default_options } ),
+			@{ $self->positional_parameters } ) ) {
+		unless ( $key eq 'myspace' ) {
+			# IMPORTANT: Only save what's defined or we'll
+			# break defaults.
+			if ( exists $self->{$key} ) {
+				${$data}{$key} = $self->{$key}
+			}
+		}
+	}
+
+	DumpFile( $data );
+
+}
+
+=head2 load( filename )
+
+Loads a message in YAML format (i.e. as saved by the save method)
+from the file specified by filename.
+
+=cut
+
+sub load {
+
+	my ( $file ) = @_;
+	my $data = {};
+	
+	( $data ) = LoadFile( $file );
+
+	# For security we only loop through fields we know are
+	# persistent. If there's a stored value for that field, we
+	# load it in.
+	foreach my $key ( ( keys( %{ $self->default_options } ),
+			@{ $self->positional_parameters } ) ) {
+		if ( exists ${$data}{$key} ) {
+			$self->{$key} = ${$data}{$key}
+		}
+	}
+	
+}
 
 =pod
 

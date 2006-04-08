@@ -1,0 +1,103 @@
+-- phpMyAdmin SQL Dump
+-- version 2.7.0-pl1
+-- http://www.phpmyadmin.net
+-- 
+-- Host: localhost
+-- Generation Time: Apr 07, 2006 at 01:56 PM
+-- Server version: 5.0.15
+-- PHP Version: 5.0.4
+-- 
+-- Database: `Friends`
+-- 
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `accounts`
+-- 
+
+CREATE TABLE `accounts` (
+  `account_id` int(11) NOT NULL auto_increment,
+  `account_name` varchar(100) NOT NULL,
+  `myspace_password` varchar(20) NOT NULL,
+  `my_friend_id` int(11) NOT NULL,
+  PRIMARY KEY  (`account_id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `add_log`
+-- 
+
+CREATE TABLE `add_log` (
+  `add_id` int(11) NOT NULL auto_increment,
+  `friend_id` int(11) NOT NULL,
+  `result_code` char(2) NOT NULL,
+  `time` int(11) NOT NULL,
+  PRIMARY KEY  (`add_id`),
+  UNIQUE KEY `friend_id` (`friend_id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `comment_log`
+-- 
+
+CREATE TABLE `comment_log` (
+  `comment_id` int(11) NOT NULL auto_increment,
+  `account_id` int(11) NOT NULL,
+  `friend_id` int(11) NOT NULL,
+  `result_code` char(2) default NULL,
+  `last_comment` datetime NOT NULL COMMENT 'Last time this account left this friend a comment',
+  PRIMARY KEY  (`comment_id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `friend_to_account`
+-- 
+
+CREATE TABLE `friend_to_account` (
+  `friend_to_account_id` int(11) NOT NULL auto_increment,
+  `friend_id` int(11) NOT NULL,
+  `account_id` int(11) NOT NULL,
+  `time` int(11) NOT NULL,
+  PRIMARY KEY  (`friend_to_account_id`),
+  UNIQUE KEY `friend_id` (`friend_id`,`account_id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `friends`
+-- 
+
+CREATE TABLE `friends` (
+  `friend_id` int(11) NOT NULL,
+  `first_name` varchar(30) default NULL,
+  `last_name` varchar(30) default NULL,
+  `birthdate` date default NULL,
+  `approve_comments` char(1) default 'N' COMMENT 'Does user require comments to be approved? (Y or N)',
+  `is_band` char(1) default NULL,
+  `user_name` varchar(50) default NULL,
+  `url` varchar(50) default NULL,
+  PRIMARY KEY  (`friend_id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `message_log`
+-- 
+
+CREATE TABLE `message_log` (
+  `message_id` int(11) NOT NULL auto_increment,
+  `account_id` int(11) NOT NULL,
+  `friend_id` int(11) NOT NULL,
+  `result_code` char(2) default NULL,
+  `last_message` datetime NOT NULL COMMENT 'Last time this account sent a message to this friend',
+  PRIMARY KEY  (`message_id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;

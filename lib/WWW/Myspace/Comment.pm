@@ -1,4 +1,4 @@
-# $Id: Comment.pm 24 2006-03-28 21:22:04Z grantg $
+# $Id: Comment.pm 65 2006-04-03 09:53:04Z grantg $
 
 package WWW::Myspace::Comment;
 
@@ -291,6 +291,15 @@ sub set_noisy {
 
 }
 
+=head2 interactive
+
+If set to 1, and running on MacOS X, will pop up a CAPTCHA image in
+Preview and prompt the user to enter it. (not yet implemented).
+
+=cut
+
+field interactive => 0;
+
 =head2 myspace
 
 Sets/retreives the myspace object with which we're logged in. You
@@ -571,6 +580,12 @@ sub post_all {
 sub _send_message {
 	print "Sending message...\n";
 	$self->myspace->send_message( 48449904, 'Hello', 'Just saying hi!', 0 );
+}
+
+sub _is_macos {
+
+	eval { my $os = `/usr/bin/uname`; return ( $os eq "Darwin" ); }
+
 }
 
 =head2 ignore_duplicates( [ 1 | 0 ] )

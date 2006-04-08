@@ -12,11 +12,11 @@ message_group - Send a message to a myspace group
 
 =head1 VERSION
 
-Version 0.6
+Version 0.7
 
 =cut
 
-our $VERSION = '0.6';
+our $VERSION = '0.7';
 
 =head1 SYNOPSIS
 
@@ -41,11 +41,12 @@ might like your music because they like that band.
  cache_file: mycache
  message: |
    This is a message.
+   It is, and must be, indented by two spaces.
    
    - Me
  group: 1255555
 
- # You can also do this to specify multiple groups:
+ # You can also do this to specify multiple groups (notice the indent again):
  group:
    - 1255555
    - 1244444

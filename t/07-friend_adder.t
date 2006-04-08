@@ -32,7 +32,7 @@ my $config_file = 't/friend_adder.cfg';
 ok (-e $config_file, 'found adder config file');
 
 my $params = $adder->return_params();
-ok ($params->{'max_attempts'} == 9999, 'max_attempts param set');
+ok ($params->{'max_count'} == 9999, 'max_count param set');
 ok ($params->{'interactive'}  == 3,    'interactive param set');
 
 # create object without arguments
@@ -66,6 +66,6 @@ $config_file = 't/friend_adder.yml';
 ok (-e $config_file, 'found adder YAML config file');
 
 $params = $adder->return_params();
-ok ($params->{'max_attempts'} == 9988, 'max_attempts param set');
+ok ($params->{'max_count'} == 9988, 'max_count param set');
 ok ($params->{'interactive'}  == 4,    'interactive param set');
 ok ($adder->{'config_file_format'} eq "YAML", 'Config file format correct' );

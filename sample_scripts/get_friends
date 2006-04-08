@@ -1,4 +1,12 @@
 #!/usr/bin/perl -w -I../lib
+# get_friends [ friendID ]
+# Returns your friends or the friends from the profile identified by
+# friendID
+#
+# Example:
+# get_friends
+# 
+# get_friends 12345
 
 use WWW::Myspace;
 
