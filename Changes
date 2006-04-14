@@ -1,5 +1,45 @@
 Revision history for WWW::Myspace
 
+0.40    2006-04-14
+        - Fixed a bug in FriendAdder.pm that caused an invalid captcha 
+          message to appear
+        - Updated Myspace.pm docs, putting options at top.
+        - Added auto_login option, which turns off auto-login if called
+          with a false value like so: "new WWW::Myspace( auto_login => 0 )".
+        - Added routines to croak if a function that requires login is
+          called when not logged in.
+        - Moved methods and their docs around in an attempt to
+          better organize things.
+        - Added search_music method. Still in testing.
+        - Removed test account logins.  Only tests that don't require login
+          will be run by default.  You can add a config file with personal
+          test accounts if you want to run full tests (see README for more
+          info and sample config file).
+        - Updated TestConfig.pm to use user-specific config file for full test
+          with generic fallback file.
+        - Fixed bug in Data.pm where friend_id was not passed to is_band
+        - add_account and update_friend in Data.pm now croak if database 
+          connection cannot be created 
+        - Fixed bug in send_message that would cause it to delay and return
+          "FN" if it encountered a user whose status was set to "away" or
+          who only accepts messages from friends.  It should now return the
+          appropriate status code.
+        - submit_form now accepts a null URL, meaning it should search the
+          contents of $self->current_page for the form.
+        - Added delete_message method.
+        - Added bug in delete_friends to TODO.
+        - Added cleanup_inbox script to sample_scripts (deletes messages
+          from inbox, leaving most recent 40 messages).
+        - Added mail suite test in 05-message that tests send,
+          read, and delete (not reply yet).
+        - get_friends now displays a warning and sets "error" if it
+          encounters a private profile.
+        - get_friends correctly allows friend viewing when not logged in,
+          but croaks if attempting to view a mailbox or group when not
+          logged in.
+        - Added 99-enduser test script that runs "end-user" test suite
+          after full test suite to make sure everything works in both modes.
+
 0.39    2006-04-08
         - Fixed bug in MyBase.pm that could cause an error in some
           cases when the new method was invoked.

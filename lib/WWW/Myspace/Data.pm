@@ -185,6 +185,8 @@ sub add_account {
     my $account_name = shift;
     my $password = shift;
     
+    croak "no db connection" unless ( $self->loader );
+    
     my $myspace = WWW::Myspace->new( $account_name, $password );
     
     unless ( $myspace->logged_in ) {
@@ -228,10 +230,8 @@ in the local "friends" table.
 
 sub update_friend {
     
-    unless ( $self->{'loader'} ) {
-        $self->_loader;
-    }
-    
+    croak "no db connection" unless ( $self->loader );
+
     my $friend_id = shift;
     my $myspace   = $self->{'myspace'};
     
@@ -258,7 +258,7 @@ sub update_friend {
     $friend->user_name( $myspace->friend_user_name( $friend_id ) );
     $friend->url( $myspace->friend_url( $friend_id ) );
     
-    if ( $myspace->is_band ) {
+    if ( $myspace->is_band( $friend_id  ) ) {
         $friend->is_band( 'Y');
     }
     

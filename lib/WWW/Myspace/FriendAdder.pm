@@ -18,11 +18,11 @@ account
 
 =head1 VERSION
 
-Version 0.03
+Version 0.04
 
 =cut
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 =head1 SYNOPSIS
 
@@ -455,9 +455,9 @@ sub send_friend_requests {
             else {
 
                 print 'CAPTCHA response.  Please fill in the form at ';
-                print 'the following url before continuing:\n\n\n';
+                print "the following url before continuing:\n\n";
                 print 'http://collect.myspace.com/index.cfm?fuseaction';
-                print '=invite.addfriend_verify&friendID=$id\n\n';
+                print "=invite.addfriend_verify&friendID=$id\n\n";
                 
                 $continue = prompt "Continue? (y/n) ", -onechar, -yn;
 

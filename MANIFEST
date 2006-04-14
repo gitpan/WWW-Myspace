@@ -22,6 +22,7 @@ t/07-friend_adder.t
 t/08-cool_new_people.t
 t/09-data.t
 t/10-mybase.t
+t/99-enduser.t
 t/boilerplate.t
 t/pod-coverage.t
 t/pod.t
@@ -36,11 +37,13 @@ scripts/add_friends
 sample_scripts/already_commented
 sample_scripts/approve_friends
 sample_scripts/browse
+sample_scripts/cleanup_inbox
 sample_scripts/delete_friend
 sample_scripts/friend_changes
 sample_scripts/get_friend_page
 sample_scripts/get_friends
 sample_scripts/get_inbox
+sample_scripts/search_music
 sample_scripts/send_all
 sample_scripts/send_message
 sample_scripts/test_message

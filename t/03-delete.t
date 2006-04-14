@@ -12,6 +12,9 @@ my $myspace1 = $CONFIG->{'acct1'}->{'myspace'};
 my $myspace2 = $CONFIG->{'acct2'}->{'myspace'};
 
 SKIP: {
+
+	skip "Not logged in", 2 unless $CONFIG->{login};
+	
 	skip "Test friend not in friend list.", 2
 		unless is_friend( $myspace1, $CONFIG->{'acct2'}->{'friend_id'} );
 

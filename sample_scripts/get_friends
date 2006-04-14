@@ -20,6 +20,7 @@ if ( @ARGV ) {
 } else {
   @friends = $myspace->get_friends;
 }
+warn $myspace->error if ( $myspace->error );
 
 print "Got " . @friends . " friends:\n";
 

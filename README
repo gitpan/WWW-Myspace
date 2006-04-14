@@ -17,19 +17,35 @@ Example:
 
 PREREQUESITES
 
-HTTP::Request::Form
-Spiffy
+        'Spiffy' => 0.24,
+        'YAML' => 0.39,
+        'File::Spec::Functions' => 0, # Note: Forces File::Spec 0.7 or later.
+        'Contextual::Return'    => 0, # For send_friend_request method
+        'Config::General'       => 0, # FriendAdder.pm
+        'IO::Prompt'            => 0, # For FriendAdder.pm 
+        'List::Compare'         => 0, # FriendAdder.pm
+        'Locale::SubCountry'    => 0, # FriendAdder.pm, cool_new_people
+        'Math::Round'           => 0, # FriendAdder.pm
+        'Params::Validate'      => 0, # FriendAdder.pm
+        'Scalar::Util'          => 0, # FriendAdder.pm
+        'Class::DBI'            => 0, # Data.pm
+        'Class::DBI::Loader'    => 0, # Data.pm
+        'WWW::Mechanize'        => 0,
+
 
 Each of them has a list of dependencies also.
 
 If you don't have XML::Parser installed,
-you'll probably need to manually install expat:
+you may need to manually install expat:
 http://sourceforge.net/projects/expat/
+Just try installing and if the install fails look through the messages
+and see if it says you need expat.
 
 On MacOS X you'll need to install the developer tools from your
 Tiger install DVD or download them from http://developer.apple.com
 or nothing will install and you'll get errors about missing CORE files).
-(I haven't tested this on pre-Tiger MacOS, but it should work).
+(I haven't tested this on pre-Tiger MacOS, but it should work with
+those developer tools also).
 
 INSTALLATION
 
@@ -69,11 +85,13 @@ The distribution also installs the following convenience modules:
 WWW::Myspace::Comment
 WWW::Myspace::FriendChanges
 WWW::Myspace::Message
+WWW::Myspace::FriendAdder
 
 The distribution also installs the following handy scripts:
+add_friends
+approve_friends
 comment_myspace
 message_group
-approve_friends
 
 These are scripts I use, and decided to include in the
 distribution in case they're handy, since they're the most common
@@ -108,6 +126,39 @@ stops working and you're wondering if something changed that broke
 WWW::Myspace. If the tests pass, it's probably your script. If not,
 there'll probably be an update coming soon (make sure you have
 the latest version, of course - just re-run the cpan command).
+
+IMPORTANT NOTE ABOUT TESTS: As of version 0.40, you can run the full
+test suite against your own accounts.  To do so, place a config
+file (copy/paste this and change the values) in
+~/.www-myspace/test_config.yaml:
+
+---
+acct1:
+  friend_id: 12345
+  username: myspace_login_email_address
+  password: myspace_login_password
+  user_name: Username # (as it appears in "Hello, username" when you log in.)
+acct2:
+  friend_id: 
+  username: 
+  password: 
+  user_name: 
+test_group: 100009984
+
+
+See t/config.yaml for an example file (but lacking "username" and "password").
+
+This establishes test data for 2 accounts, "acct1", and "acct2".  You provide
+the login info, friendID, and display name for each account. The test
+scripts then log into each account and test the module's methods using them.
+They'll post comments back and forth, send a message or two, and delete and
+add each other as friends.  It should be safe to run on an active account,
+but if you feel nervous, set up a couple dummy accounts.
+
+NOTE THAT acct2 MUST BE A PERSONAL (not a band) ACCOUNT, or the is_band
+test will fail, causing your tests to fail.
+
+
 
 
 SUPPORT AND DOCUMENTATION
