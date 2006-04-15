@@ -337,7 +337,8 @@ sub send_friend_requests {
             foreach my $unique_id (@unique_ids) {
                 
                 my $logged = WWW::Myspace::Data::AddLog->retrieve(
-                    friend_id => $unique_id, 
+                    friend_id => $unique_id,
+                    result_code => 'P'
                 );
                 
                 unless ( $logged ) {

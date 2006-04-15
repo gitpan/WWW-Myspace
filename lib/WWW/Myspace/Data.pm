@@ -145,7 +145,7 @@ const default_options => \%default_params;
 =head2 loader( )
 
 Returns the Class::DBI::Loader object.  Handy if you want to access the
-database directly.  If a loader object does not already exists, loader()
+database directly.  If a loader object does not already exist, loader()
 will try to create one.
 
     my $loader = $data->loader();

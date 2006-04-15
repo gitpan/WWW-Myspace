@@ -101,3 +101,19 @@ CREATE TABLE `message_log` (
   `last_message` datetime NOT NULL COMMENT 'Last time this account sent a message to this friend',
   PRIMARY KEY  (`message_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `post_log`
+-- 
+
+CREATE TABLE `post_log` (
+  `post_id` int(11) NOT NULL auto_increment,
+  'post_type' char(2) NOT NULL COMMENT '(C)omment, (A)dd Friend request, (M)essage',
+  `account_id` int(11) NOT NULL,
+  `friend_id` int(11) NOT NULL,
+  `result_code` char(2) default NULL,
+  `last_post` datetime NOT NULL COMMENT 'Last time this account sent this type of post to this friend',
+  PRIMARY KEY  (`message_id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;

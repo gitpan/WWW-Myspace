@@ -1,5 +1,11 @@
 Revision history for WWW::Myspace
 
+0.41    2006-04-15
+        - Fixed tiny typo in Data.pm docs.
+        - Fixed possible bug in FriendAdder.pm that would cause failed add
+          attempts to never be retried.
+        - Added Poster.pm to MANIFEST.
+
 0.40    2006-04-14
         - Fixed a bug in FriendAdder.pm that caused an invalid captcha 
           message to appear

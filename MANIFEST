@@ -11,6 +11,7 @@ lib/WWW/Myspace/FriendChanges.pm
 lib/WWW/Myspace/FriendAdder.pm
 lib/WWW/Myspace/Data.pm
 lib/WWW/Myspace/MyBase.pm
+lib/WWW/Myspace/Poster.pm
 t/00-load.t
 t/01-login.t
 t/02-dual.t
