@@ -1,4 +1,4 @@
-# $Id: Message.pm 50 2006-03-31 10:04:01Z grantg $
+# $Id: Message.pm 128 2006-04-19 02:21:12Z grantg $
 
 package WWW::Myspace::Message;
 
@@ -411,7 +411,7 @@ sub send_message {
 		unless ( $self->messaged->{"$id"} ) {
 
 				if ( $self->html ) { print "<P>" }
-				if ( $self->noisy ) { print "Sending to $id: " };
+				if ( $self->noisy ) { print $counter+1 . ": Sending to $id: " };
 				$result = $myspace->send_message( $id, $subject, $message,
 					$self->add_to_friends );
 				$counter++ if ( $result =~ /^P/ );
@@ -615,9 +615,9 @@ sub _read_exclusions {
 		chomp $id;
 		( $id, $status ) = split( ":", $id );
 		
-		# If they're logged as successfully posted, (not failed),
-		# Add them to the exclusions list.
-		if ( $status =~ /^P/i ) {
+		# If they're logged as successfully posted, private, or away,
+		# add them to the exclusions list.
+		if ( $status =~ /^P|^FF|^FA/i ) {
 			$messaged{"$id"} = $status
 		}
 	}

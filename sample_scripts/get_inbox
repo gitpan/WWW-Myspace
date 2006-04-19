@@ -2,14 +2,18 @@
 
 use WWW::Myspace;
 
+my ( $friend_id ) = @ARGV;
+
 $myspace = new WWW::Myspace;
 
 print "Getting inbox...\n";
 my $messages = $myspace->inbox;
 
 foreach $message ( @{$messages} ) {
-  print "Sender: " . $message->{sender} . "\n";
-  print "Status: " . $message->{status} . "\n";
-  print "messageID: " . $message->{message_id} . "\n";
-  print "Subject: " . $message->{subject} . "\n\n";
+  if ( ( ! $friend_id ) || ( $friend_id == $message->{sender} ) ) {
+    print "Sender: " . $message->{sender} . "\n";
+    print "Status: " . $message->{status} . "\n";
+    print "messageID: " . $message->{message_id} . "\n";
+    print "Subject: " . $message->{subject} . "\n\n";
+  }
 }

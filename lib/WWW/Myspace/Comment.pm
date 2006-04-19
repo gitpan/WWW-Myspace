@@ -1,4 +1,4 @@
-# $Id: Comment.pm 65 2006-04-03 09:53:04Z grantg $
+# $Id: Comment.pm 112 2006-04-17 19:46:40Z grantg $
 
 package WWW::Myspace::Comment;
 
@@ -507,7 +507,7 @@ sub post_comments {
 					return "CAPTCHA";
 				}
 		} else {
-			print "Excluding $id\n" if ( $self->noisy );
+#			print "Excluding $id\n" if ( $self->noisy );
 		}
 
 		# If we've got a max set, stop when we reach it.		

@@ -27,21 +27,6 @@ CREATE TABLE `accounts` (
 -- --------------------------------------------------------
 
 -- 
--- Table structure for table `add_log`
--- 
-
-CREATE TABLE `add_log` (
-  `add_id` int(11) NOT NULL auto_increment,
-  `friend_id` int(11) NOT NULL,
-  `result_code` char(2) NOT NULL,
-  `time` int(11) NOT NULL,
-  PRIMARY KEY  (`add_id`),
-  UNIQUE KEY `friend_id` (`friend_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
-
--- --------------------------------------------------------
-
--- 
 -- Table structure for table `comment_log`
 -- 
 
@@ -110,10 +95,10 @@ CREATE TABLE `message_log` (
 
 CREATE TABLE `post_log` (
   `post_id` int(11) NOT NULL auto_increment,
-  'post_type' char(2) NOT NULL COMMENT '(C)omment, (A)dd Friend request, (M)essage',
+  `post_type` char(2) NOT NULL COMMENT '(C)omment, (A)dd Friend request, (M)essage',
   `account_id` int(11) NOT NULL,
   `friend_id` int(11) NOT NULL,
   `result_code` char(2) default NULL,
   `last_post` datetime NOT NULL COMMENT 'Last time this account sent this type of post to this friend',
-  PRIMARY KEY  (`message_id`)
+  PRIMARY KEY  (`post_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;

@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 110 2006-04-15 22:46:52Z grantg $
+# $Id: Myspace.pm 132 2006-04-19 18:21:11Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -34,11 +34,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.41
+Version 0.42
 
 =cut
 
-our $VERSION = '0.41';
+our $VERSION = '0.42';
 
 =head1 SYNOPSIS
 
@@ -83,13 +83,13 @@ our $BASE_URL="http://www.myspace.com/";
 # the user's home dir for the default.
 our $HOME_DIR= "";
 if ( defined $ENV{'HOME'} ) {
-	$HOME_DIR = "$ENV{'HOME'}";
-	
-	if ( $HOME_DIR =~ /^([\-A-Za-z0-9_ \/\.@\+\\:]*)$/ ) {
-		$HOME_DIR = $1;
-	} else {
-		croak "Invalid characters in $ENV{HOME}.";
-	}
+    $HOME_DIR = "$ENV{'HOME'}";
+    
+    if ( $HOME_DIR =~ /^([\-A-Za-z0-9_ \/\.@\+\\:]*)$/ ) {
+        $HOME_DIR = $1;
+    } else {
+        croak "Invalid characters in $ENV{HOME}.";
+    }
 }
 
 # What's the URL for the user's Home page?
@@ -137,7 +137,7 @@ our $VIEW_PROFILE_URL="http://profile.myspace.com/index.cfm?fuseaction=user.view
 # Mail Inbox URL
 # What's the URL to read a page from our inbox?
 our $MAIL_INBOX_URL="http://mail.myspace.com/index.cfm?fuseaction=mail.inbox" .
-			"&page=";
+            "&page=";
 
 # What's the URL to read a message if we know the messageID?
 our $READ_MESSAGE_URL='http://mail.myspace.com/index.cfm?fuseaction=mail.readmessage&messageID=';
@@ -159,29 +159,32 @@ our $MAIL_PRIVATE_ERROR = "You can't send a message to [^<]+ because you must be
 our $MAIL_AWAY_ERROR = "You can't send a message to [^<]+ because [^<]+ has set [^<]+ status to away";
 
 # What regexp should we look for for Myspace's frequent "technical error"
-# message?
-# This lists regexps to look for on pages that indicate we've got an error
-# instead of a successful load or post. Note: Page content is stripped
+# messages?
+# This lists regexps to look for on pages that indicate we've got a temporary
+# error instead of a successful load or post. If the page matches one of these,
+# it will be retried up to the maximum number of attempts set in this module
+# (currently 5 for POSTs, 20 for GETs).
+# Note: Page content is stripped
 # of extra whitespace before checking, so make sure any spaces you have here
 # are single spaces, not multiple, nor tabs, nor returns.
 our @ERROR_REGEXPS = (
 
-	"Sorry! an unexpected error has occurred\. <br><br> ".
-		"This error has been forwarded to MySpace's technical group\.",
+    "Sorry! an unexpected error has occurred\. <br> <br> ".
+        "This error has been forwarded to MySpace's technical group\.",
 
-	'<b>This user\'s profile has been temporarily '.
-	'disabled for special maintenance.<br>'.
-	
-	'This profile is undergoing routine maintenance. '.
-	'We apologize for the inconvenience!',
+    '<b>This user\'s profile has been temporarily '.
+    'disabled for special maintenance.<br>'.
+    
+    'This profile is undergoing routine maintenance. '.
+    'We apologize for the inconvenience!',
 
 # Removed: Conflicts with "exceeded usage" message
-#	'An Error has occurred!!.*'.
-#	'An error has occurred (while )?trying to send this message.',
-	
-	'We\'re doing some maintenance on the mail for certain users\.  '.
-	'You can take this opportunity to leave your friend a swell comment '.
-	'while we work on it\. :\)',
+#   'An Error has occurred!!.*'.
+#   'An error has occurred (while )?trying to send this message.',
+    
+    'We\'re doing some maintenance on the mail for certain users\. '.
+    'You can take this opportunity to leave your friend a swell comment '.
+    'while we work on it\. :\)',
 
 );
 
@@ -189,6 +192,10 @@ our @ERROR_REGEXPS = (
 # (Note: they've misspelled usage, so the ? is in case they fix it.)
 #our $EXCEED_USAGE = "User has exceeded their daily use?age";
 our $EXCEED_USAGE = "User has exceeded their daily useage\.";
+
+# What RE should we look for to tell if we're on the "You must be logged
+# in to do that!" page? XXX - CONFIRM THIS!
+our $NOT_LOGGED_IN = 'You Must Be Logged-In to do That!.*?<input.*?name="email"';
 
 # What regexp should we use to find the "requestGUID" for a friend request?
 our $FRIEND_REQUEST = "requestGUID.value='([^\']+)'";
@@ -201,8 +208,8 @@ our $FRIEND_REQUEST_POST = "http://mail.myspace.com/index.cfm?fuseaction=mail.pr
 
 # What's the URL for a friend request button (to send a friend request)?
 our $ADD_FRIEND_URL = 'http://collect.myspace.com/index.cfm?'.
-			'fuseaction=invite.addfriend_verify&'.
-			'friendID=';
+            'fuseaction=invite.addfriend_verify&'.
+            'friendID=';
 
 # Debugging? (Yes=1, No=0)
 our $DEBUG=0;
@@ -232,11 +239,11 @@ appropriate accessor method below.
 
 # Options they can pass via hash or hashref.
 const default_options => {
-	account_name => 0,
-	password => 0,
-	cache_dir => 0,  # Default set by field method
-	cache_file => 0, # Default set by field method
-	auto_login => 0, # Default set by field method
+    account_name => 0,
+    password => 0,
+    cache_dir => 0,  # Default set by field method
+    cache_file => 0, # Default set by field method
+    auto_login => 0, # Default set by field method
 };
 
 # Options they can pass by position.
@@ -261,14 +268,14 @@ EXAMPLE
 The following would prompt the user for their login information, then print
 out the account name:
 
-	use WWW::Myspace;
-	my $myspace = new WWW::Myspace;
-	
-	print $myspace->account_name;
+    use WWW::Myspace;
+    my $myspace = new WWW::Myspace;
+    
+    print $myspace->account_name;
 
-	$myspace->account_name( 'other_account@myspace.com' );
-	$myspace->password( 'other_accounts_password' );
-	$myspace->site_login;
+    $myspace->account_name( 'other_account@myspace.com' );
+    $myspace->password( 'other_accounts_password' );
+    $myspace->site_login;
 
 WARNING: If you do change account_name, make sure you change password and
 call site_login.  Changing account_name doesn't (currently) log you
@@ -370,18 +377,18 @@ sorry), which basically just means you can call new in many ways:
         
         # Pass options as a hashref
         my $myspace = new WWW::Myspace( {
-        	username => 'my@email.com',
-        	password => 'mypass',
-        	cache_file => 'passcache',
+            username => 'my@email.com',
+            password => 'mypass',
+            cache_file => 'passcache',
         } );
         
         # Hash
         my $myspace = new WWW::Myspace(
-        	username => 'my@email.com',
-        	password => 'mypass',
-        	cache_file => 'passcache',
-        	auto_login => 0,
-		);
+            username => 'my@email.com',
+            password => 'mypass',
+            cache_file => 'passcache',
+            auto_login => 0,
+        );
 
         # Print my friend ID
         print $myspace->my_friend_id;
@@ -405,43 +412,43 @@ sorry), which basically just means you can call new in many ways:
 =cut
 
 sub _old_new() {
-	my $proto = shift;
-	my $class = ref($proto) || $proto;
- 	my $self  = {};
-	bless ($self, $class);
-	if ( @_ ) {	$self->{account_name} = shift }
-	if ( @_ ) {	$self->{password} = shift }
-	unless ( $self->{account_name} ) {
-		# Get account/password from the user
-		$self->_get_acct();
-	}
-	
-	# And for convenience, log in
-	$self->_site_login();
+    my $proto = shift;
+    my $class = ref($proto) || $proto;
+    my $self  = {};
+    bless ($self, $class);
+    if ( @_ ) { $self->{account_name} = shift }
+    if ( @_ ) { $self->{password} = shift }
+    unless ( $self->{account_name} ) {
+        # Get account/password from the user
+        $self->_get_acct();
+    }
+    
+    # And for convenience, log in
+    $self->_site_login();
 
-	return $self;
+    return $self;
 }
 
 sub new() {
-	# Call the MyBase new method (it's ok to feel special about it).
-	my $self = super;
+    # Call the MyBase new method (it's ok to feel special about it).
+    my $self = super;
 
-	# Log in if requested
-	if ( $self->auto_login ) {
-	
-		# Prompt for username/password if we don't have them yet.
-		# (should this be moved to site_login?)
-		$self->_get_acct unless $self->account_name;
+    # Log in if requested
+    if ( $self->auto_login ) {
+    
+        # Prompt for username/password if we don't have them yet.
+        # (should this be moved to site_login?)
+        $self->_get_acct unless $self->account_name;
 
-		$self->site_login;
-	
-	} else {
+        $self->site_login;
+    
+    } else {
 
-		$self->logout; # Why?  Resets variables and gets Mech object.
-	
-	}
+        $self->logout; # Why?  Resets variables and gets Mech object.
+    
+    }
 
-	return $self;
+    return $self;
 }
 
 #---------------------------------------------------------------------
@@ -466,66 +473,66 @@ object.  It's more useful for me though.
 
 sub site_login {
 
-	# Reset everything (oddly, this also happens to create a new browser
-	# object).
-	$self->logout;
+    # Reset everything (oddly, this also happens to create a new browser
+    # object).
+    $self->logout;
 
-	croak "site_login called but account_name isn't set" unless
-		( $self->account_name );
-	croak "site_login called but password isn't set" unless ( $self->password );
+    croak "site_login called but account_name isn't set" unless
+        ( $self->account_name );
+    croak "site_login called but password isn't set" unless ( $self->password );
 
-	# Now log in
-	my $submitted = $self->submit_form( "$BASE_URL", 1, "",
-						{ 'email' => $self->account_name,
-						  'password' => $self->password
-						}
-					  );
+    # Now log in
+    my $submitted = $self->submit_form( "$BASE_URL", 1, "",
+                        { 'email' => $self->account_name,
+                          'password' => $self->password
+                        }
+                      );
 
-	# Check for success
-	if ( $submitted ) {
-		( $DEBUG ) && print $self->current_page->content;
-	} else {
-		croak $self->error;
-	}
+    # Check for success
+    if ( $submitted ) {
+        ( $DEBUG ) && print $self->current_page->content;
+    } else {
+        croak $self->error;
+    }
 
-	# We probably have an ad or somesuch (started 1/7/2006)
-	# so explicitly request our Home.
-	$self->get_page( $HOME_PAGE );
+    # We probably have an ad or somesuch (started 1/7/2006)
+    # so explicitly request our Home.
+    $self->get_page( $HOME_PAGE );
 
-	# Verify we're logged in
-	if ( $self->current_page->content =~ /$VERIFY_HOME_PAGE/si ) {
-		$self->logged_in( 1 );
-	} else {
-		$self->logged_in( 0 );
-		unless ( $self->error ) {
-			$self->error( "Couldn't verify load of home page." )
-		}
-		return;
-	}
+    # Verify we're logged in
+    if ( $self->current_page->content =~ /$VERIFY_HOME_PAGE/si ) {
+        $self->logged_in( 1 );
+    } else {
+        $self->logged_in( 0 );
+        unless ( $self->error ) {
+            $self->error( "Login Failed. Couldn't verify load of home page." )
+        }
+        return;
+    }
 
-	# Get our friend ID from our profile page (which happens to
-	# be the page we go to after logging in).
-	$self->_get_friend_id( $self->current_page );
+    # Get our friend ID from our profile page (which happens to
+    # be the page we go to after logging in).
+    $self->_get_friend_id( $self->current_page );
 
-	# If for some reason we couldn't set this, fail login.
-	unless ( $self->my_friend_id ) { $self->logged_in(0) ; return }
-	
-	# Set the user_name and friend_count fields.
-	$self->user_name( $self->current_page );
-	$self->friend_count( $self->current_page );
-	
-	# Cache whether or not we're a band.
-	$self->is_band;
+    # If for some reason we couldn't set this, fail login.
+    unless ( $self->my_friend_id ) { $self->logged_in(0) ; return }
+    
+    # Set the user_name and friend_count fields.
+    $self->user_name( $self->current_page );
+    $self->friend_count( $self->current_page );
+    
+    # Cache whether or not we're a band.
+    $self->is_band;
 
 }
 
 sub _new_mech {
 
-	# Set up our web browser (WWW::Mechanize object)
-	$self->mech( new WWW::Mechanize( onerror => undef ) );
+    # Set up our web browser (WWW::Mechanize object)
+    $self->mech( new WWW::Mechanize( onerror => undef ) );
 
-	# We need to follow redirects for POST too.
-	push @{ $self->mech->requests_redirectable }, 'POST';
+    # We need to follow redirects for POST too.
+    push @{ $self->mech->requests_redirectable }, 'POST';
 
 }
 
@@ -540,20 +547,21 @@ or something.
 
 sub logout {
 
-	# If you change this to just log out instead of making a new Mech
-	# object, be sure you change site_login too.
-	$self->_new_mech;
-	
-	# Clear anything login-specific
-	$self->{user_name} = undef;
-	$self->{is_band} = undef;
-	$self->{my_friend_id} = undef;
-	$self->logged_in(0);
-	$self->error(0);
+    # If you change this to just log out instead of making a new Mech
+    # object, be sure you change site_login too.
+    $self->_new_mech;
+    
+    # Clear anything login-specific
+    $self->{user_name} = undef;
+    $self->{is_band} = undef;
+    $self->{my_friend_id} = undef;
+    $self->logged_in(0);
+    $self->error(0);
+    $self->{page_cache} = undef;
 
-	# Do NOT clear options that are set by the user!
-#	$self->{account_name} = undef;
-#	$self->{password} = undef;
+    # Do NOT clear options that are set by the user!
+#   $self->{account_name} = undef;
+#   $self->{password} = undef;
 
 }
 
@@ -586,7 +594,7 @@ set to a true value. Otherwise it's set to a false value.
 
  my $myspace = new WWW::Myspace;
  unless ( $myspace->logged_in ) {
- 	die "Login failed\n";
+    die "Login failed\n";
  }
  
  # This will try forever to log in
@@ -607,9 +615,9 @@ If there's no error, it returns a false value, so you can do this:
 
  $myspace->get_profile( 12345 );
  if ( $myspace->error ) {
- 	 warn $myspace->error . "\n";
+     warn $myspace->error . "\n";
  } else {
- 	 # Do stuff
+     # Do stuff
  }
 
 =cut
@@ -626,16 +634,16 @@ EXAMPLE
 
 The following will print the content of the user's profile page:
 
-	use WWW::Myspace;
-	my $myspace = new WWW::Myspace;
-	
-	print $myspace->current_page->content;
+    use WWW::Myspace;
+    my $myspace = new WWW::Myspace;
+    
+    print $myspace->current_page->content;
 
 =cut
 
 sub current_page {
 
-	return $self->{current_page};
+    return $self->{current_page};
 
 }
 
@@ -661,15 +669,15 @@ Croaks if you're not logged in.
 
 EXAMPLE
 
-	print $myspace->my_friend_id;
+    print $myspace->my_friend_id;
 
 =cut
 
 sub my_friend_id {
 
-	$self->_die_unless_logged_in( 'my_friend_id' );
-	
-	return $self->{my_friend_id};
+    $self->_die_unless_logged_in( 'my_friend_id' );
+    
+    return $self->{my_friend_id};
 }
 
 =head2 is_band( [friend_id] )
@@ -688,49 +696,49 @@ request.
  $myspace->is_band( $friend_id );
 
  if ( $myspace->error ) {
- 	 die $myspace->error . "\n";
+     die $myspace->error . "\n";
  } else {
- 	 print "They're a band, go listen to them!\n";
+     print "They're a band, go listen to them!\n";
  }
 
 =cut
 
 sub is_band {
-	my ( $friend_id ) = @_;
-	
-	# If they gave a friend_id, we load the profile and look at it.
-	# If not, we return, or set, our internal is_band variable.
-	if ( defined $friend_id ) {
-		# Get the profile page
-		my $res = $self->get_profile( $friend_id );
-		unless ( $self->error ) {
-			# Scan the page for band-specific RE (the music player plug-in).
-			if ( $res->content =~ /<PARAM NAME="Movie" VALUE="http:\/\/lads.myspace.com\/music\/musicplayer.swf/i ) {
-				return 1;
-			} else {
-				return 0;
-			}
-		} else {
-			return -1;
-		}
-	} else {
-		# Band profiles don't have bulletin spaces (yet). I don't
-		# like counting on this, but I can't really think of anything
-		# better to look for right now.
-		# Note that this requires is_band to be called for the first time
-		# just after loading the login profile page. site_login calls
-		# this method to take care of that problem.
-		unless ( defined $self->{is_band} ) {
-			if ( $self->current_page->content =~ />My Bulletin Space</i ) {
-				$self->{is_band} = 0;
-			} else {
-				$self->{is_band} = 1;
-			}
-		}
+    my ( $friend_id ) = @_;
+    
+    # If they gave a friend_id, we load the profile and look at it.
+    # If not, we return, or set, our internal is_band variable.
+    if ( defined $friend_id ) {
+        # Get the profile page
+        my $res = $self->get_profile( $friend_id );
+        unless ( $self->error ) {
+            # Scan the page for band-specific RE (the music player plug-in).
+            if ( $res->content =~ /<PARAM NAME="Movie" VALUE="http:\/\/lads.myspace.com\/music\/musicplayer.swf/i ) {
+                return 1;
+            } else {
+                return 0;
+            }
+        } else {
+            return -1;
+        }
+    } else {
+        # Band profiles don't have bulletin spaces (yet). I don't
+        # like counting on this, but I can't really think of anything
+        # better to look for right now.
+        # Note that this requires is_band to be called for the first time
+        # just after loading the login profile page. site_login calls
+        # this method to take care of that problem.
+        unless ( defined $self->{is_band} ) {
+            if ( $self->current_page->content =~ />My Bulletin Space</i ) {
+                $self->{is_band} = 0;
+            } else {
+                $self->{is_band} = 1;
+            }
+        }
 
-		return $self->{is_band};
-		
-	}
+        return $self->{is_band};
+        
+    }
 
 }
 
@@ -751,19 +759,19 @@ may not be supported in the future, so it's not recommended.
 
 sub user_name {
 
-	# Otherwise if they gave us a home page, get user's name.
-	if ( @_ ) {
-		my ( $homepage ) = @_;
-		my $page_source = $homepage->content;
-		if ( $page_source =~ /<h4 +class="heading">Hello, (.*)\!<\/h4>/ ) {
-#			my $line = $1;
-#			$line =~ s/\+/ /g;
-#			$line =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
-			$self->{user_name} = $1;
-		}
-	}
-	
-	return $self->{user_name};
+    # Otherwise if they gave us a home page, get user's name.
+    if ( @_ ) {
+        my ( $homepage ) = @_;
+        my $page_source = $homepage->content;
+        if ( $page_source =~ /<h4 +class="heading">Hello, (.*)\!<\/h4>/ ) {
+#           my $line = $1;
+#           $line =~ s/\+/ /g;
+#           $line =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
+            $self->{user_name} = $1;
+        }
+    }
+    
+    return $self->{user_name};
 
 }
 
@@ -780,16 +788,16 @@ friend IDs to first names - you'll have to enter them yourself).
 
 sub friend_user_name {
 
-	my $page = $self->get_profile( @_ );
+    my $page = $self->get_profile( @_ );
 
-	if ( $page->content =~ /index\.cfm\?fuseaction=user\&circuitaction\=viewProfile_commentForm\&friendID\=[0-9]+\&name\=([^\&]+)\&/ ) {
-		my $line = $1;
-		$line =~ s/\+/ /g;
-		$line =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
-		return $line;
-	} else {
-		return "";
-	}
+    if ( $page->content =~ /index\.cfm\?fuseaction=user\&circuitaction\=viewProfile_commentForm\&friendID\=[0-9]+\&name\=([^\&]+)\&/ ) {
+        my $line = $1;
+        $line =~ s/\+/ /g;
+        $line =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
+        return $line;
+    } else {
+        return "";
+    }
 }
 
 =head2 friend_url( friend_id )
@@ -802,8 +810,8 @@ specified one, it returns an empty string.
  foreach my $friend_id ( $myspace->get_friends ) {
      my $url = $myspace->friend_url( $friend_id );
      if ( $url ) {
-	     print 'Friend's custom URL: http://www.myspace.com/' .
-	     $myspace->friend_url( $friend_id );
+         print 'Friend's custom URL: http://www.myspace.com/' .
+         $myspace->friend_url( $friend_id );
      } else {
          print 'Friend doesn't have a custom URL. Use: '.
          'http://www.myspace.com/' . $friend_id;
@@ -814,13 +822,13 @@ specified one, it returns an empty string.
 
 sub friend_url {
 
-	my $page = $self->get_profile( @_ );
+    my $page = $self->get_profile( @_ );
 
-	if ( $page->content =~ /\<title\>[\s]*www.myspace\.com\/([\S]*)[\s]*\<\/title\>/ ) {
-		return $1;
-	} else {
-		return "";
-	}
+    if ( $page->content =~ /\<title\>[\s]*www.myspace\.com\/([\S]*)[\s]*\<\/title\>/ ) {
+        return $1;
+    } else {
+        return "";
+    }
 }
 
 =head2 friend_count
@@ -842,17 +850,17 @@ at your own risk.
 
 sub friend_count {
 
-	# If they gave us a page, set friend_count.
-	if ( @_ ) {
-		my ( $homepage ) = @_;
-		my $page_source = $homepage->content;
+    # If they gave us a page, set friend_count.
+    if ( @_ ) {
+        my ( $homepage ) = @_;
+        my $page_source = $homepage->content;
 
-		if ( $page_source =~ /You have (<span>)?<a [^>]+>([0-9]+)<\/a>(<\/span>)? friends/ ) {
-			$self->{friend_count} = $2;
-		}
-	}
-	
-	return $self->{friend_count};
+        if ( $page_source =~ /You have (<span>)?<a [^>]+>([0-9]+)<\/a>(<\/span>)? friends/ ) {
+            $self->{friend_count} = $2;
+        }
+    }
+    
+    return $self->{friend_count};
 
 }
 
@@ -878,10 +886,10 @@ profile page for $friend_id.
 
 sub get_profile {
 
-	my ( $friend_id ) = @_;
+    my ( $friend_id ) = @_;
 
-	return $self->get_page( "${VIEW_PROFILE_URL}${friend_id}",
-		$VERIFY_GET_PROFILE );
+    return $self->get_page( "${VIEW_PROFILE_URL}${friend_id}",
+        $VERIFY_GET_PROFILE );
 
 }
 
@@ -1072,106 +1080,106 @@ logged in.
 
 sub get_friends {
 
-	my ( $source, $source_id ) = @_;
-	$source = "" unless defined $source;
+    my ( $source, $source_id ) = @_;
+    $source = "" unless defined $source;
 
-	# Can't get "our" friends if we're not logged in.
-	unless ( ( $source eq 'profile' ) || ( $source eq 'browse' ) ) {
-		$self->_die_unless_logged_in( 'get_friends' );
-	}
+    # Can't get "our" friends if we're not logged in.
+    unless ( ( $source eq 'profile' ) || ( $source eq 'browse' ) ) {
+        $self->_die_unless_logged_in( 'get_friends' );
+    }
 
-	# Browse and view friends start at page 1, the rest start at 0.	
-	my $page=0; $page++ if ( ( $source eq "" ) || ( $source eq "profile" ) ||
-							 ($source eq 'browse' ) );
+    # Browse and view friends start at page 1, the rest start at 0. 
+    my $page=0; $page++ if ( ( $source eq "" ) || ( $source eq "profile" ) ||
+                             ($source eq 'browse' ) );
 
-	# Initialize
-	my $friends_page="";
-	my %friend_ids = ();
-	my @friends_on_page = ();
-	my ( $id );
+    # Initialize
+    my $friends_page="";
+    my %friend_ids = ();
+    my @friends_on_page = ();
+    my ( $id );
 
-	# Loop until we get an empty page or there isn't a "next" link.
-	while ( 1 ) {
+    # Loop until we get an empty page or there isn't a "next" link.
+    while ( 1 ) {
 
-		# Get the page
-		$friends_page = $self->_get_friend_page( $page, $source, $source_id );
-		if ( $self->error ) {
-			warn "get_friends failed on page $page: " . $self->error . "\n";
-			last;
-		}
+        # Get the page
+        $friends_page = $self->_get_friend_page( $page, $source, $source_id );
+        if ( $self->error ) {
+            warn "get_friends failed on page $page: " . $self->error . "\n";
+            last;
+        }
 
-		# Grep the friend IDs out
-		@friends_on_page = $self->get_friends_on_page( $friends_page->content );
-		( $DEBUG ) && print "Done with page $page\n";
-		
-#		warn "Got ". @friends_on_page . " friends\n";
+        # Grep the friend IDs out
+        @friends_on_page = $self->get_friends_on_page( $friends_page->content );
+        ( $DEBUG ) && print "Done with page $page\n";
+        
+#       warn "Got ". @friends_on_page . " friends\n";
 
-		# Add them to the list
-		# (This prevents duplicates for inbox, comments, etc)
-		foreach $id ( @friends_on_page ) {
-			$friend_ids{"$id"}={
-				'page_no' => $page
-			};
-			$friend_ids{"$id"}->{page_no}++ unless ( ( $source eq "" ) ||
-								( $source eq "profile" ) ||
-								( $source eq 'browse' ) );
-		}
+        # Add them to the list
+        # (This prevents duplicates for inbox, comments, etc)
+        foreach $id ( @friends_on_page ) {
+            $friend_ids{"$id"}={
+                'page_no' => $page
+            };
+            $friend_ids{"$id"}->{page_no}++ unless ( ( $source eq "" ) ||
+                                ( $source eq "profile" ) ||
+                                ( $source eq 'browse' ) );
+        }
 
-		last unless ( $self->_next_button( $friends_page->content ) );
+        last unless ( $self->_next_button( $friends_page->content ) );
 
-		# Warn if we got a page with no friendIDs on it.
-		# (XXX This should probably throw an error)
-		unless ( @friends_on_page ) { warn "Page $page had no friends\n" }
+        # Warn if we got a page with no friendIDs on it.
+        # (XXX This should probably throw an error)
+        unless ( @friends_on_page ) { warn "Page $page had no friends\n" }
 
-		# Next!
-		$self->{_last_friend_page} = $page;
-		$page++;
-		
-		last if ( ( $page > 5 ) && ( $DEBUG ) );
-	}
+        # Next!
+        $self->{_last_friend_page} = $page;
+        $page++;
+        
+        last if ( ( $page > 5 ) && ( $DEBUG ) );
+    }
 
-	# Returning an incomplete list of our friends can be dangerous
-	# since it's used to do exclusions. Do a
-	# safety check. We see if the friend count is within 5% of the
-	# number of friends returned (no, myspace's friend counter is never
-	# actually right.....)
-	
-	if ( ( ( $source eq "" ) || ( $source eq "profile" ) ) && ( $self->{_friend_count} ) ) {
-		my $myspace_friend_count;
-		if ( $source ) {
-			$myspace_friend_count = $self->{_friend_count};
-		} else {
-			$myspace_friend_count = $self->friend_count;
-		}
-		my @friends = keys( %friend_ids );
-		my $friend_count = @friends;
-		my $error_allowed = $myspace_friend_count * .05;
-		my $error_offset = abs ( $myspace_friend_count - $friend_count );
-		if ( $error_allowed < 10 ) { $error_allowed = 10 };
-		
-		if ( $error_offset > $error_allowed ) {
-			warn "WARNING: get_friends returned $friend_count friends, ".
-			"but should have returned around " . $myspace_friend_count . ".";
-		}
-	}
+    # Returning an incomplete list of our friends can be dangerous
+    # since it's used to do exclusions. Do a
+    # safety check. We see if the friend count is within 5% of the
+    # number of friends returned (no, myspace's friend counter is never
+    # actually right.....)
+    
+    if ( ( ( $source eq "" ) || ( $source eq "profile" ) ) && ( $self->{_friend_count} ) ) {
+        my $myspace_friend_count;
+        if ( $source ) {
+            $myspace_friend_count = $self->{_friend_count};
+        } else {
+            $myspace_friend_count = $self->friend_count;
+        }
+        my @friends = keys( %friend_ids );
+        my $friend_count = @friends;
+        my $error_allowed = $myspace_friend_count * .05;
+        my $error_offset = abs ( $myspace_friend_count - $friend_count );
+        if ( $error_allowed < 10 ) { $error_allowed = 10 };
+        
+        if ( $error_offset > $error_allowed ) {
+            warn "WARNING: get_friends returned $friend_count friends, ".
+            "but should have returned around " . $myspace_friend_count . ".";
+        }
+    }
 
-	# If the source is a user's profile, delete the user's friendID from
-	# the returned list.
-	if ( ( defined $source ) && ( $source eq 'profile' ) ) {
-		delete $friend_ids{$source_id};
-	}
+    # If the source is a user's profile, delete the user's friendID from
+    # the returned list.
+    if ( ( defined $source ) && ( $source eq 'profile' ) ) {
+        delete $friend_ids{$source_id};
+    }
 
-	# Return the list
-	if ( $DEBUG ) {
-		my @friends = keys( %friend_ids );
-		print "get_friends got " . @friends . " friends\n";
-	}
-	
-	# Return our findings
+    # Return the list
+    if ( $DEBUG ) {
+        my @friends = keys( %friend_ids );
+        print "get_friends got " . @friends . " friends\n";
+    }
+    
+    # Return our findings
     return 
-		LIST { sort( keys( %friend_ids ) ) }
-		HASHREF { \%friend_ids }
-	;
+        LIST { sort( keys( %friend_ids ) ) }
+        HASHREF { \%friend_ids }
+    ;
 
 }
 
@@ -1208,21 +1216,21 @@ You're welcome.
 =cut
 
 sub friends_from_profile {
-	my ( @profiles ) = @_;
-	my @friends = ();
-	my $id;
-	my %friend_ids = ();
+    my ( @profiles ) = @_;
+    my @friends = ();
+    my $id;
+    my %friend_ids = ();
 
-	foreach $id ( @profiles ) {
-		push ( @friends, $self->get_friends( 'profile', $id ) )
-	}
-	
-	# Sort and return
-	foreach $id ( @friends ) {
-		$friend_ids{"$id"}=1;
-	}
-	
-	return ( sort( keys( %friend_ids ) ) );
+    foreach $id ( @profiles ) {
+        push ( @friends, $self->get_friends( 'profile', $id ) )
+    }
+    
+    # Sort and return
+    foreach $id ( @friends ) {
+        $friend_ids{"$id"}=1;
+    }
+    
+    return ( sort( keys( %friend_ids ) ) );
 }
 
 #---------------------------------------------------------------------
@@ -1246,12 +1254,12 @@ as "get_friends". Croaks if you're not logged in.
 
 sub friends_who_emailed {
 
-	$self->_die_unless_logged_in( 'friends_who_emailed' );
+    $self->_die_unless_logged_in( 'friends_who_emailed' );
 
-	# We just call get_friends with the code "inbox" to tell it to look
-	# through those pages instead of the friends page.
-	return $self->get_friends( "inbox" );
-	
+    # We just call get_friends with the code "inbox" to tell it to look
+    # through those pages instead of the friends page.
+    return $self->get_friends( "inbox" );
+    
 }
 
 #---------------------------------------------------------------------
@@ -1279,12 +1287,12 @@ The group ID is the number after "GroupID=".
 
 sub friends_in_group {
 
-	# If they didn't give us a group, return nothing. Could
-	# be argued that we should croak here.
-	return () unless ( @_ );
+    # If they didn't give us a group, return nothing. Could
+    # be argued that we should croak here.
+    return () unless ( @_ );
 
-	# Return the friends.
-	return $self->get_friends( 'group', @_ );
+    # Return the friends.
+    return $self->get_friends( 'group', @_ );
 
 }
 
@@ -1305,13 +1313,13 @@ The routine confirms success or failure by reading the resulting
 page. It returns a status string as follows:
 
  P: Posted. This means the post went through and we read the
- 			phrase we needed from the resulting page.
+            phrase we needed from the resulting page.
  PA: Posted, requires approval
  FN: Failed Network. The POST returned a bad status.
  FC: Failed. A CAPTCHA response was requested.
  FF: Failed. Got "You must be someone's friend to post a comment" error.
  F: Failed. The post went through, but we didn't get the phrase
- 			we needed to verify that it was ok.
+            we needed to verify that it was ok.
 
 Warning: It is possible for the status code to return a false
 "Failed" if the form post is successful but the resulting page fails
@@ -1335,82 +1343,82 @@ distribution.
 
 sub post_comment {
 
-	my ( $friend_id, $message, $captcha_response ) = @_;
-	my $status = ""; # Our return status
-	my ($submitted, $attempts);
+    my ( $friend_id, $message, $captcha_response ) = @_;
+    my $status = ""; # Our return status
+    my ($submitted, $attempts);
 
-	$self->_die_unless_logged_in( 'post_comment' );
+    $self->_die_unless_logged_in( 'post_comment' );
 
-#	my ( $dbh, $ua, $login, $message, $friend_id ) = @_;
+#   my ( $dbh, $ua, $login, $message, $friend_id ) = @_;
 
-#	my $approval_req = 0;
-#	
-#	# Get their name if we know it
-#	my $friend_name = $self->get_friend_name( $friend_id );
+#   my $approval_req = 0;
+#   
+#   # Get their name if we know it
+#   my $friend_name = $self->get_friend_name( $friend_id );
 #
-#	# Add a greeting if we know their name
-#	# (NOTE: This should be a search&replace in a seperate $message)
-#	if ( $friend_name ) {
-#		$message = "Hi $friend_name!\n\n" . $message;
-#	}
+#   # Add a greeting if we know their name
+#   # (NOTE: This should be a search&replace in a seperate $message)
+#   if ( $friend_name ) {
+#       $message = "Hi $friend_name!\n\n" . $message;
+#   }
 
-	unless ( $captcha_response ) {
-		# Convert newlines (\n) into socket-ready CRLF ASCII characters.
-		# This also takes care of possible literal "\n"s that come
-		# from command-line arguments.
-		$message =~ s/(\n|\\n)/\015\012/gs;
-	
-		# Submit the comment to $friend_id's page
-		( $DEBUG ) && print "Getting comment form..\n";
-		$submitted = 
-			$self->submit_form( "${VIEW_COMMENT_FORM}${friend_id}", 1,
-							"", { 'f_comments' => "$message" },
-							"f_comments|($CAPTCHA)|($NOT_FRIEND_ERROR)",
-							'f_comments'
-						);
-		
-		# If we posted ok, confirm the comment
-		if ( $submitted ) {
-		
-			# See if there's a CAPTCHA response required, if so,
-			# fail appropriately.
-			if ( $self->current_page->content =~ /$CAPTCHA/i ) {
-				$self->captcha( "$1" );
-				return "FC";
-			}
-			
-			# Check for the "not your friend" error
-			if ( $self->current_page->content =~ /$NOT_FRIEND_ERROR/ ) {
-				return "FF";
-			}
-	
-			# Otherwise, confirm it.
-			( $DEBUG ) && print "Confirming comment...\n";
-			$submitted = $self->submit_form( $self->current_page, 1, "",
-					{} );
-		}
-	} else {
-		# Post the confirmation
-		$submitted = $self->submit_form( $self->current_page, 1, '',
-			{ 'CAPTCHAResponse' => $captcha_response } );
-	}
+    unless ( $captcha_response ) {
+        # Convert newlines (\n) into socket-ready CRLF ASCII characters.
+        # This also takes care of possible literal "\n"s that come
+        # from command-line arguments.
+        $message =~ s/(\n|\\n)/\015\012/gs;
+    
+        # Submit the comment to $friend_id's page
+        ( $DEBUG ) && print "Getting comment form..\n";
+        $submitted = 
+            $self->submit_form( "${VIEW_COMMENT_FORM}${friend_id}", 1,
+                            "", { 'f_comments' => "$message" },
+                            "f_comments|($CAPTCHA)|($NOT_FRIEND_ERROR)",
+                            'f_comments'
+                        );
+        
+        # If we posted ok, confirm the comment
+        if ( $submitted ) {
+        
+            # See if there's a CAPTCHA response required, if so,
+            # fail appropriately.
+            if ( $self->current_page->content =~ /$CAPTCHA/i ) {
+                $self->captcha( "$1" );
+                return "FC";
+            }
+            
+            # Check for the "not your friend" error
+            if ( $self->current_page->content =~ /$NOT_FRIEND_ERROR/ ) {
+                return "FF";
+            }
+    
+            # Otherwise, confirm it.
+            ( $DEBUG ) && print "Confirming comment...\n";
+            $submitted = $self->submit_form( $self->current_page, 1, "",
+                    {} );
+        }
+    } else {
+        # Post the confirmation
+        $submitted = $self->submit_form( $self->current_page, 1, '',
+            { 'CAPTCHAResponse' => $captcha_response } );
+    }
 
-	# Get the resulting page and clean it up (strip whitespace)
-	my $page = $self->current_page->content;
-	$page =~ s/[ \t\n\r]+/ /g;
+    # Get the resulting page and clean it up (strip whitespace)
+    my $page = $self->current_page->content;
+    $page =~ s/[ \t\n\r]+/ /g;
 
-	# Set the status code to return.
-	if (! $submitted ) {
-		$status="FN";
-	} elsif ( $page =~ /$VERIFY_COMMENT_POST/ ) {
-		$status="P";
-	} elsif ( $page =~ /$COMMENT_APPROVAL_MSG/ ) {
-		$status = "PA";
-	} else {
-		$status="F";
-	}
+    # Set the status code to return.
+    if (! $submitted ) {
+        $status="FN";
+    } elsif ( $page =~ /$VERIFY_COMMENT_POST/ ) {
+        $status="P";
+    } elsif ( $page =~ /$COMMENT_APPROVAL_MSG/ ) {
+        $status = "PA";
+    } else {
+        $status="F";
+    }
 
-	return "$status";
+    return "$status";
 }
 
 =head2 captcha
@@ -1423,9 +1431,9 @@ user must enter to post the comment.
 
  my $response = $myspace->post_comment( 12345, 'This is a message' );
  if ( $response eq 'FC' ) {
- 	# Get and display the image
- 	print '<form>\n'.
- 	  "<img src='" . $myspace->captcha . "'>\n".
+    # Get and display the image
+    print '<form>\n'.
+      "<img src='" . $myspace->captcha . "'>\n".
       '<input type=text name=\'CAPTCHAResponse\'>' .
       '<input type=submit>' .
       '</form>';
@@ -1488,24 +1496,24 @@ EXAMPLE:
 
 sub comment_friends {
 
-	my ( $message, $attr ) = @_;
+    my ( $message, $attr ) = @_;
 
-	my $status = "";
-	my $friend_id;
-	
-	# Get friends
-	my @friends=$self->get_friends;
-	
-	# Loop and post
-	foreach $friend_id ( @friends ) {
-		# If we can ignore duplicates or we haven't commented them already,
-		# post the comment.
-		if ( ( $attr->{'ignore_dup'} ) ||
-			(! $self->already_commented( $friend_id ) ) )  {
-			
-			$status = $self->post_comment( $friend_id, $message );
-		}
-	}
+    my $status = "";
+    my $friend_id;
+    
+    # Get friends
+    my @friends=$self->get_friends;
+    
+    # Loop and post
+    foreach $friend_id ( @friends ) {
+        # If we can ignore duplicates or we haven't commented them already,
+        # post the comment.
+        if ( ( $attr->{'ignore_dup'} ) ||
+            (! $self->already_commented( $friend_id ) ) )  {
+            
+            $status = $self->post_comment( $friend_id, $message );
+        }
+    }
 
 }
 
@@ -1528,12 +1536,12 @@ EXAMPLE
   my $myspace = new WWW::Myspace;
   
   foreach $friend_id ( $myspace->get_friends ) {
-	  unless ( $myspace->already_commented( $friend_id ) ) {
-	  	$myspace->post_comment(
-	  		$friend_id,
-	  		"Hi, I haven't commented you before!"
-	  	)
-	  }
+      unless ( $myspace->already_commented( $friend_id ) ) {
+        $myspace->post_comment(
+            $friend_id,
+            "Hi, I haven't commented you before!"
+        )
+      }
   }
 
 already_commented croaks if called when you're not logged in.
@@ -1542,33 +1550,33 @@ already_commented croaks if called when you're not logged in.
 
 sub already_commented {
 
-	my ( $friend_id ) = @_;
+    my ( $friend_id ) = @_;
 
-	$self->_die_unless_logged_in( 'already_commented' );
+    $self->_die_unless_logged_in( 'already_commented' );
 
-	# Get the page
-	my $page = $self->get_profile( $friend_id )->content;
+    # Get the page
+    my $page = $self->get_profile( $friend_id )->content;
 
-	# If we got an error, return a false true (but error is set)
-	return 1 if $self->error;
+    # If we got an error, return a false true (but error is set)
+    return 1 if $self->error;
 
-	# If $self->my_friend_id isn't set for some reason, this'll return
-	# a false "true", so set error.
-	if ( $self->my_friend_id ) {
-		$self->error(0)
-	} else {
-		$self->error( "my_friend_id is not set!" )
-	}
+    # If $self->my_friend_id isn't set for some reason, this'll return
+    # a false "true", so set error.
+    if ( $self->my_friend_id ) {
+        $self->error(0)
+    } else {
+        $self->error( "my_friend_id is not set!" )
+    }
 
-	# Set up our regular expression. We're looking for the link code
-	my $regexp = $FRIEND_REGEXP . $self->my_friend_id;
+    # Set up our regular expression. We're looking for the link code
+    my $regexp = $FRIEND_REGEXP . $self->my_friend_id;
 
-	# If the link's on their page, return true, otherwise return false.	
-	if ( $page =~ /${regexp}/i ) {
-		return 1
-	} else {
-		return 0;
-	}
+    # If the link's on their page, return true, otherwise return false. 
+    if ( $page =~ /${regexp}/i ) {
+        return 1
+    } else {
+        return 0;
+    }
 
 }
 
@@ -1615,45 +1623,45 @@ I think this says it all much more clearly:
 
 sub inbox {
 
-	my $page="";
-	my $page_no = 0;
-	my @messages = ();
+    my $page="";
+    my $page_no = 0;
+    my @messages = ();
 
-	$self->_die_unless_logged_in( 'inbox' );
+    $self->_die_unless_logged_in( 'inbox' );
 
-	# Loop until we get an empty page or there isn't a "next" link.
-	while ( 1 ) {
+    # Loop until we get an empty page or there isn't a "next" link.
+    while ( 1 ) {
 
-		# Get the page
-		$page = $self->get_page( $MAIL_INBOX_URL . $page_no );
+        # Get the page
+        $page = $self->get_page( $MAIL_INBOX_URL . $page_no );
 
-		# Get the message data.
+        # Get the message data.
 
-		push @messages, $self->_get_messages_from_page( $page->content );
+        push @messages, $self->_get_messages_from_page( $page->content );
 
-		last unless ( $self->_next_button );
-#		last unless ( $page->content =~ /">Next<\/a>( |&nbsp;)\&gt;/i );
-		
-		# Next!
-		$page_no++;
-		
-	}
+        last unless ( $self->_next_button );
+#       last unless ( $page->content =~ /">Next<\/a>( |&nbsp;)\&gt;/i );
+        
+        # Next!
+        $page_no++;
+        
+    }
 
-	return \@messages;
+    return \@messages;
 
 }
 
 # Take a page, return a list of message data
 sub _get_messages_from_page {
 
-	my ( $page ) = @_;
-	my @messages = ();
-	while ( $page =~
-			s/.*?UserID=([^;]+);.*?(Unread|Read|Sent|Replied).*?messageID=([^&]+)&.*?>([^<]+)<//sm ) {
-		push @messages, { sender => $1, status => $2, message_id => $3, subject => $4 }
-	}
-	
-	return @messages;
+    my ( $page ) = @_;
+    my @messages = ();
+    while ( $page =~
+            s/.*?UserID=([^;]+);.*?(Unread|Read|Sent|Replied).*?messageID=([^&]+)&.*?>([^<]+)<//sm ) {
+        push @messages, { sender => $1, status => $2, message_id => $3, subject => $4 }
+    }
+    
+    return @messages;
 }
 
 =head2 read_message( message_id )
@@ -1673,60 +1681,60 @@ Croaks if you're not logged in.
 
 sub read_message {
 
-	my ( $message_id ) = @_;
+    my ( $message_id ) = @_;
 
-	$self->_die_unless_logged_in( 'read_message' );
+    $self->_die_unless_logged_in( 'read_message' );
 
-	my %message = ();
-	my $res = $self->get_page( $READ_MESSAGE_URL . $message_id );
-	return \%message unless $res->is_success;
+    my %message = ();
+    my $res = $self->get_page( $READ_MESSAGE_URL . $message_id );
+    return \%message unless $res->is_success;
 
-	# If we were passed a bad message ID, we'll have the inbox again
-	if ( $res->content =~ /<td><font size="2"><b>Mail Center<br>Inbox<\/b><\/font>/ ) {
-		warn "Invalid Message ID\n";
-		return \%message;
-	}
+    # If we were passed a bad message ID, we'll have the inbox again
+    if ( $res->content =~ /<td><font size="2"><b>Mail Center<br>Inbox<\/b><\/font>/ ) {
+        warn "Invalid Message ID\n";
+        return \%message;
+    }
 
-	# Include the messageID in the hash
-	$message{'message_id'} = $message_id;
+    # Include the messageID in the hash
+    $message{'message_id'} = $message_id;
 
-	# Now we have to yank data out of a messy page.
-	my $page = $res->content;
-	$page =~ s/[ \t\n\r]+/ /g; # Strip whitespace
+    # Now we have to yank data out of a messy page.
+    my $page = $res->content;
+    $page =~ s/[ \t\n\r]+/ /g; # Strip whitespace
 
-	# From:
-	$page =~ /From:.*?friendID=([0-9]+)[^0-9]/;
-	$message{'from'} = $1;
+    # From:
+    $page =~ /From:.*?friendID=([0-9]+)[^0-9]/;
+    $message{'from'} = $1;
 
-	# Date:
-#	$page =~ /Date:.*?> ?([^<]+) ?</;
-#	$page =~ /(Date:.*?> [^<]+ <)/;
-	$page =~ /Date:.*?> ([^<]+) </;
-	$message{'date'} = $1;
-	
-	# Subject:
-	$page =~ /Subject:.*?>([^ <][^<]+)</;
-	$message{'subject'} = $1;
+    # Date:
+#   $page =~ /Date:.*?> ?([^<]+) ?</;
+#   $page =~ /(Date:.*?> [^<]+ <)/;
+    $page =~ /Date:.*?> ([^<]+) </;
+    $message{'date'} = $1;
+    
+    # Subject:
+    $page =~ /Subject:.*?>([^ <][^<]+)</;
+    $message{'subject'} = $1;
 
-	# Body:
-	# (This takes the lines between the span with the special CSS class that
-	# starts the message, and the three <br> tags in a row that end the
-	# message)
-#	$res->content =~ /<span class="blacktextnb10">.*^(.*)^							<br><br><br>/sm;
-	$res->content =~ /<span class="blacktextnb10">.*?^(.*)^[ \t]+<br><br><br>/sm;
-	$message{'body'} = $1;
-	
-	# Clean up newlines
-	$message{'body'} =~ s/[\n\r]/\n/g;
+    # Body:
+    # (This takes the lines between the span with the special CSS class that
+    # starts the message, and the three <br> tags in a row that end the
+    # message)
+#   $res->content =~ /<span class="blacktextnb10">.*^(.*)^                          <br><br><br>/sm;
+    $res->content =~ /<span class="blacktextnb10">.*?^(.*)^[ \t]+<br><br><br>/sm;
+    $message{'body'} = $1;
+    
+    # Clean up newlines
+    $message{'body'} =~ s/[\n\r]/\n/g;
 
-	# Gotta clean white space before and after the body
-	$message{'body'} =~ s/^[ \t\n]*//s;  # Before
-	$message{'body'} =~ s/[ \t\n]*$//s;  # After
+    # Gotta clean white space before and after the body
+    $message{'body'} =~ s/^[ \t\n]*//s;  # Before
+    $message{'body'} =~ s/[ \t\n]*$//s;  # After
 
-	# And they have these big BR tags at the beginning of each line...
-	$message{'body'} =~ s/^[ \t]*<BR>[ \t]//mg;
+    # And they have these big BR tags at the beginning of each line...
+    $message{'body'} =~ s/^[ \t]*<BR>[ \t]//mg;
 
-	return \%message;
+    return \%message;
 }
 
 
@@ -1745,7 +1753,7 @@ $reply_message.
 Returns a status code:
  
   P: Posted. Verified by HTTP response code and reading a regexp
- 	from the resulting page saying the message was sent.
+    from the resulting page saying the message was sent.
  FC: Failed. A CAPTCHA response was requested.
  FF: Failed. The person's profile is set to private. You must
      be their friend to message them.
@@ -1753,7 +1761,7 @@ Returns a status code:
  FE: Failed. The account has exceeded its daily usage.
  FN: Failed. The POST returned an unsuccessful HTTP response code.
  F:  Failed. Post went through, but we didn't see the regexp on the
- 	resulting page (message may or may not have been sent).
+    resulting page (message may or may not have been sent).
 
 
  Example:
@@ -1765,62 +1773,62 @@ If you're not logged in? Croaks.
 
 sub reply_message {
 
-	my ( $id, $reply ) = @_;
-	my ( $submitted, $message, $reply_message, $page );
+    my ( $id, $reply ) = @_;
+    my ( $submitted, $message, $reply_message, $page );
 
-	$self->_die_unless_logged_in( 'reply_message' );
+    $self->_die_unless_logged_in( 'reply_message' );
 
-	# Fill in the message (this is lazy...)
-	$message = $self->read_message( $id );
-	$reply_message = $reply . $message;
+    # Fill in the message (this is lazy...)
+    $message = $self->read_message( $id );
+    $reply_message = $reply . $message;
 
-	# Convert newlines (\n) into socket-ready CRLF ASCII characters.
-	# This also takes care of possible literal "\n"s that come
-	# from command-line arguments.
-	# (Note that \n does seem to work, but this "should" be safer, especially
-	# against myspace changes and platform differences).
-	$reply_message =~ s/(\n|\\n)/\015\012/gs;
-	
-	# First load the message and click "Reply" (first button - it has no
-	# name so this'll break if they change the button order).
-	$submitted = $self->submit_form( "$READ_MESSAGE_URL", 1, '', {},
-		"Read Mail", '' );
+    # Convert newlines (\n) into socket-ready CRLF ASCII characters.
+    # This also takes care of possible literal "\n"s that come
+    # from command-line arguments.
+    # (Note that \n does seem to work, but this "should" be safer, especially
+    # against myspace changes and platform differences).
+    $reply_message =~ s/(\n|\\n)/\015\012/gs;
+    
+    # First load the message and click "Reply" (first button - it has no
+    # name so this'll break if they change the button order).
+    $submitted = $self->submit_form( "$READ_MESSAGE_URL", 1, '', {},
+        "Read Mail", '' );
 
-	# See if we can mail or if there's an error.
-	if ( $submitted ) {
-		$page = $self->current_page->content;
-		$page =~ s/[ \t\n\r]+/ /g;
-		if ( $page =~ /${MAIL_PRIVATE_ERROR}/i ) {
-			return "FF";
-		} elsif ( $page =~ /${MAIL_AWAY_ERROR}/i ) {
-			return "FA";
-		}
-	} else {
-		return "FN";
-	}
-	
-	# Post the reply
-	$submitted = $self->submit_form( '', 1, '',
-		{ 'mailbody' => $reply_message } );
+    # See if we can mail or if there's an error.
+    if ( $submitted ) {
+        $page = $self->current_page->content;
+        $page =~ s/[ \t\n\r]+/ /g;
+        if ( $page =~ /${MAIL_PRIVATE_ERROR}/i ) {
+            return "FF";
+        } elsif ( $page =~ /${MAIL_AWAY_ERROR}/i ) {
+            return "FA";
+        }
+    } else {
+        return "FN";
+    }
+    
+    # Post the reply
+    $submitted = $self->submit_form( '', 1, '',
+        { 'mailbody' => $reply_message } );
 
-	# Verify and return the appropriate code.
-	$page = $self->current_page->content;
-	$page =~ s/[ \t\n\r]+/ /g;
+    # Verify and return the appropriate code.
+    $page = $self->current_page->content;
+    $page =~ s/[ \t\n\r]+/ /g;
 
-	# Return the result
-	if (! $submitted ) {
-		return "FN";
-	} elsif ( $page =~ /$VERIFY_MESSAGE_SENT/ ) {
-		return "P";
-	} elsif ( $page =~ /$EXCEED_USAGE/i ) {
-		return "FE";
-	} elsif ( $page =~ /$CAPTCHA/ ) {
-		return "FC";
-	} else {
-		return "F";
-	}
+    # Return the result
+    if (! $submitted ) {
+        return "FN";
+    } elsif ( $page =~ /$VERIFY_MESSAGE_SENT/ ) {
+        return "P";
+    } elsif ( $page =~ /$EXCEED_USAGE/i ) {
+        return "FE";
+    } elsif ( $page =~ /$CAPTCHA/ ) {
+        return "FC";
+    } else {
+        return "F";
+    }
 
-#	my ( $url, $form_no, $button, $fields_ref, $regexp1, $regexp2, $base_url ) = @_;
+#   my ( $url, $form_no, $button, $fields_ref, $regexp1, $regexp2, $base_url ) = @_;
 
 }
 
@@ -1838,7 +1846,7 @@ the end of the message.
  Returns a status code:
 
  P: Posted. Verified by HTTP response code and reading a regexp
- 	from the resulting page saying the message was sent.
+    from the resulting page saying the message was sent.
  FC: Failed. A CAPTCHA response was requested.
  FF: Failed. The person's profile is set to private. You must
      be their friend to message them.
@@ -1846,7 +1854,7 @@ the end of the message.
  FE: Failed. The account has exceeded its daily usage.
  FN: Failed. The POST returned an unsuccessful HTTP response code.
  F:  Failed. Post went through, but we didn't see the regexp on the
- 	resulting page (message may or may not have been sent).
+    resulting page (message may or may not have been sent).
 
 See also WWW::Myspace::Message, which installs along with the
 distribution.
@@ -1857,66 +1865,66 @@ distribution.
 
 sub send_message {
 
-	my ( $friend_id, $subject, $message, $atf ) = @_;
-	my ( $submitted, $res, $page );
+    my ( $friend_id, $subject, $message, $atf ) = @_;
+    my ( $submitted, $res, $page );
 
-	$self->_die_unless_logged_in( 'send_message' );
+    $self->_die_unless_logged_in( 'send_message' );
 
-	# Add the button if they wanted it.
-	if ( ( defined $atf ) && ( $atf ) ) {
-		$message .= '<p><a href="' . $ADD_FRIEND_URL .
-			$self->my_friend_id . '"><img src="http://i.myspace.com'.
-			'/site/images/addFriendIcon.gif" alt="Add as friend"></a>\n';
-	}
+    # Add the button if they wanted it.
+    if ( ( defined $atf ) && ( $atf ) ) {
+        $message .= '<p><a href="' . $ADD_FRIEND_URL .
+            $self->my_friend_id . '"><img src="http://i.myspace.com'.
+            '/site/images/addFriendIcon.gif" alt="Add as friend"></a>\n';
+    }
 
-	# Try to get the message form
-	$res = $self->get_page( "${SEND_MESSAGE_FORM}${friend_id}",
-		"Mail Center<br>Send a Message|$MAIL_PRIVATE_ERROR|$MAIL_AWAY_ERROR" );
+    # Try to get the message form
+    $res = $self->get_page( "${SEND_MESSAGE_FORM}${friend_id}",
+        "Mail Center<br>Send a Message|$MAIL_PRIVATE_ERROR|$MAIL_AWAY_ERROR" );
 
-	# Check for network error
-	if ( $self->error ) {
-		return "FN";
-	}
+    # Check for network error
+    if ( $self->error ) {
+        return "FN";
+    }
 
-	# Check for known messages that say we can't send it.
-	$page = $res->content;
-	$page =~ s/[ \t\n\r]+/ /g;
-	if ( $page =~ /${MAIL_PRIVATE_ERROR}/i ) {
-		return "FF";
-	} elsif ( $page =~ /${MAIL_AWAY_ERROR}/i ) {
-		return "FA";
-	}
+    # Check for known messages that say we can't send it.
+    $page = $res->content;
+    $page =~ s/[ \t\n\r]+/ /g;
+    if ( $page =~ /${MAIL_PRIVATE_ERROR}/i ) {
+        return "FF";
+    } elsif ( $page =~ /${MAIL_AWAY_ERROR}/i ) {
+        return "FA";
+    }
 
-	# Convert newlines (\n) into socket-ready CRLF ASCII characters.
-	# This also takes care of possible literal "\n"s that come
-	# from command-line arguments.
-	# (Note that \n does seem to work, but this "should" be safer, especially
-	# against myspace changes and platform differences).
-	$message =~ s/(\n|\\n)/\015\012/gs;
-	
-	# Submit the message
-	$submitted = $self->submit_form( $res,
-						1, "",
-						{ 'subject' => "$subject",
-						  'mailbody' => "$message"
-						}
-					  );
-	
-	$page = $self->current_page->content;
-	$page =~ s/[ \t\n\r]+/ /g;
+    # Convert newlines (\n) into socket-ready CRLF ASCII characters.
+    # This also takes care of possible literal "\n"s that come
+    # from command-line arguments.
+    # (Note that \n does seem to work, but this "should" be safer, especially
+    # against myspace changes and platform differences).
+    $message =~ s/(\n|\\n)/\015\012/gs;
+    
+    # Submit the message
+    $submitted = $self->submit_form( $res,
+                        1, "",
+                        { 'subject' => "$subject",
+                          'mailbody' => "$message"
+                        }
+                      );
+    
+    $page = $self->current_page->content;
+    $page =~ s/[ \t\n\r]+/ /g;
 
-	# Return the result
-	if (! $submitted ) {
-		return "FN";
-	} elsif ( $page =~ /$VERIFY_MESSAGE_SENT/ ) {
-		return "P";
-	} elsif ( $page =~ /$EXCEED_USAGE/i ) {
-		return "FE";
-	} elsif ( $page =~ /$CAPTCHA/ ) {
-		return "FC";
-	} else {
-		return "F";
-	}
+    # Return the result
+    if (! $submitted ) {
+        return "FN";
+    } elsif ( $page =~ /$VERIFY_MESSAGE_SENT/ ) {
+        return "P";
+    } elsif ( $page =~ /$EXCEED_USAGE/i ) {
+        return "FE";
+    } elsif ( $page =~ /$CAPTCHA/ ) {
+        return "FC";
+    } else {
+        return "F";
+    }
 }
 
 =head2 delete_message( @message_ids )
@@ -1943,78 +1951,78 @@ Example:
 
 sub delete_message {
 
-	my ( @message_ids ) = @_;
+    my ( @message_ids ) = @_;
 
-	my ( $form, $tree, $f, $res, $id );
-	my $pass=1;
+    my ( $form, $tree, $f, $res, $id );
+    my $pass=1;
 
-	$self->_die_unless_logged_in( 'delete_message' );
+    $self->_die_unless_logged_in( 'delete_message' );
 
-	# Get the edit friends page
-	$self->get_page( 'http://mail.myspace.com/index.cfm?fuseaction=mail.inbox' );
-	return 0 if $self->error;
-	
-	# Select the edit form and get the hash field
-	my @include_fields = ( qw "returnUrl type messageID" );
+    # Get the edit friends page
+    $self->get_page( 'http://mail.myspace.com/index.cfm?fuseaction=mail.inbox' );
+    return 0 if $self->error;
+    
+    # Select the edit form and get the hash field
+    my @include_fields = ( qw "returnUrl type messageID" );
 
-	$self->mech->form_name( 'inbox' );		
-		
-#	my $hash_value = $self->mech->value( 'hash' );
-#	my $mytoken = $self->mech->value( 'Mytoken' );
-	my $return_url = $self->mech->value( 'returnUrl' );
+    $self->mech->form_name( 'inbox' );      
+        
+#   my $hash_value = $self->mech->value( 'hash' );
+#   my $mytoken = $self->mech->value( 'Mytoken' );
+    my $return_url = $self->mech->value( 'returnUrl' );
 
-	# Create our delete form
-	$form =
-		'<FORM ACTION="http://mail.myspace.com/index.cfm?fuseaction=mail.trashmail" '.
-		'METHOD="POST" name="inbox">';
+    # Create our delete form
+    $form =
+        '<FORM ACTION="http://mail.myspace.com/index.cfm?fuseaction=mail.trashmail" '.
+        'METHOD="POST" name="inbox">';
 
-	# Include the hidden fields we want to keep
-	foreach my $field ( @include_fields ) {
-		$form .= '<input type="hidden" name="' . $field .
-			'" value="' . $self->mech->value( "$field" ) . '">';
-	}
+    # Include the hidden fields we want to keep
+    foreach my $field ( @include_fields ) {
+        $form .= '<input type="hidden" name="' . $field .
+            '" value="' . $self->mech->value( "$field" ) . '">';
+    }
 
-	# Add checkboxes for items we're deleting
-	foreach $id ( @message_ids ) {
+    # Add checkboxes for items we're deleting
+    foreach $id ( @message_ids ) {
 
-		if ( ref $id ) { $id = $id->{'message_id'} }
-		$form .= '<input type="hidden" name="status'.$id . '" value="new">';
-		$form .= '<input type="checkbox" name="checker'.${id}.'" value="'
-			. $id . '">';
+        if ( ref $id ) { $id = $id->{'message_id'} }
+        $form .= '<input type="hidden" name="status'.$id . '" value="new">';
+        $form .= '<input type="checkbox" name="checker'.${id}.'" value="'
+            . $id . '">';
 
-	}
+    }
 
-	# Add the delete button.
-	$form .= '<input type="image" border="0" name="deleteAll" '.
-		'src="http://x.myspace.com/images/mail/trashSelected.gif"
-		width="129" height="20">'.
-		'</form>';
+    # Add the delete button.
+    $form .= '<input type="image" border="0" name="deleteAll" '.
+        'src="http://x.myspace.com/images/mail/trashSelected.gif"
+        width="129" height="20">'.
+        '</form>';
 
-	# Turn it into an HTML::Form object
-	$f = HTML::Form->parse( $form, "http://mail.myspace.com/" );
+    # Turn it into an HTML::Form object
+    $f = HTML::Form->parse( $form, "http://mail.myspace.com/" );
 
-	# Check the checkboxes
-	my $input;
-	foreach $id ( @message_ids ) {
-	
-		if ( ref $id ) { $id = $id->{'message_id'} }
-		$f->find_input( "checker${id}" )->check;
-	
-	}
+    # Check the checkboxes
+    my $input;
+    foreach $id ( @message_ids ) {
+    
+        if ( ref $id ) { $id = $id->{'message_id'} }
+        $f->find_input( "checker${id}" )->check;
+    
+    }
 
-	# Submit the form
-	my $attempts = 25;
-	do {
-		$res = $self->mech->request( $f->click( 'deleteAll' ) );
-		$attempts--;
-	} until ( ( $self->_page_ok( $res ) ) || ( $attempts <= 0 ) );
+    # Submit the form
+    my $attempts = 25;
+    do {
+        $res = $self->mech->request( $f->click( 'deleteAll' ) );
+        $attempts--;
+    } until ( ( $self->_page_ok( $res ) ) || ( $attempts <= 0 ) );
 
-	unless ( $attempts ) {
-		$pass=0;
-	}
+    unless ( $attempts ) {
+        $pass=0;
+    }
 
 
-	return $pass;
+    return $pass;
 
 }
 
@@ -2077,51 +2085,51 @@ you your script.
 sub approve_friend_requests
 {
 
-	my @guids = ();
-	my @friends = ();
-	my %friends = ();  # Not a typo. See below.
-	my ( $page, $id );
-	my ( $message ) = @_;
+    my @guids = ();
+    my @friends = ();
+    my %friends = ();  # Not a typo. See below.
+    my ( $page, $id );
+    my ( $message ) = @_;
 
-	$self->_die_unless_logged_in( 'approve_friend_requests' );
+    $self->_die_unless_logged_in( 'approve_friend_requests' );
 
-	# Get the first page of friend requests
-	while ( 1 ) {
-		
-		# Get the page
-		$page = $self->get_page( $FRIEND_REQUEST_URL,
-			'Friend Request Manager' )->content;
+    # Get the first page of friend requests
+    while ( 1 ) {
+        
+        # Get the page
+        $page = $self->get_page( $FRIEND_REQUEST_URL,
+            'Friend Request Manager' )->content;
 
-		# Get the GUID codes from the page
-		@guids = $self->_get_friend_requests( $page );
-		
-		# Quit if there aren't any.
-		last unless ( @guids );
+        # Get the GUID codes from the page
+        @guids = $self->_get_friend_requests( $page );
+        
+        # Quit if there aren't any.
+        last unless ( @guids );
 
-		# Get the friendIDs from the page
-		@friends = ( @friends, $self->get_friends_on_page( $page ) );
+        # Get the friendIDs from the page
+        @friends = ( @friends, $self->get_friends_on_page( $page ) );
 
-		# Post approval for any we found
-		$self->_post_friend_requests( @guids );
+        # Post approval for any we found
+        $self->_post_friend_requests( @guids );
 
-	}
+    }
 
-	# Clean up friends (there -could- be duplicates in some circumstances)
-	my $captcha=0;
-	$self->captcha( 0 ); # Reset captcha so they can check it.
-	foreach $id ( @friends ) {
-		$friends{"$id"}++;
-		# If we're to post a message, and this isn't a duplicate,
-		# post a comment to this new friend.
-		if ( ( $message ) && ( $friends{"$id"} == 1 ) && ( ! $captcha )) {
-			if ( $self->post_comment( $id, $message ) eq "FC" ) {
-				$captcha=1;
-			}
-		}
-	}
-	
-	# Return the list of friends
-	return keys( %friends );
+    # Clean up friends (there -could- be duplicates in some circumstances)
+    my $captcha=0;
+    $self->captcha( 0 ); # Reset captcha so they can check it.
+    foreach $id ( @friends ) {
+        $friends{"$id"}++;
+        # If we're to post a message, and this isn't a duplicate,
+        # post a comment to this new friend.
+        if ( ( $message ) && ( $friends{"$id"} == 1 ) && ( ! $captcha )) {
+            if ( $self->post_comment( $id, $message ) eq "FC" ) {
+                $captcha=1;
+            }
+        }
+    }
+    
+    # Return the list of friends
+    return keys( %friends );
 
 }
 
@@ -2131,17 +2139,17 @@ sub approve_friend_requests
 
 sub _get_friend_requests
 {
-	my ( $page ) = @_;
+    my ( $page ) = @_;
 
-	my %guids = ();
-	my $line = "";
+    my %guids = ();
+    my $line = "";
 
-	# Get the GUID codes from it.	
-	while ( $page =~ s/$FRIEND_REQUEST//im ) {
-		$guids{"$1"}++;
-	}
-	
-	return keys( %guids );
+    # Get the GUID codes from it.   
+    while ( $page =~ s/$FRIEND_REQUEST//im ) {
+        $guids{"$1"}++;
+    }
+    
+    return keys( %guids );
 }
 
 #---------------------------------------------------------------------
@@ -2150,30 +2158,30 @@ sub _get_friend_requests
 
 sub _post_friend_requests
 {
-	my ( @guids ) = @_;
-	my ( $submitted, $guid, $res, $pass );
+    my ( @guids ) = @_;
+    my ( $submitted, $guid, $res, $pass );
 
-	# For each request post the approval form.
-	$pass=1;
-	foreach $guid ( @guids ) {
+    # For each request post the approval form.
+    $pass=1;
+    foreach $guid ( @guids ) {
 
-#		print "Approving guid: " . $guid . "\n";
-		
-		# Post it.
-		$res=$self->{mech}->post( $FRIEND_REQUEST_POST,
-					{ requestType => 'SINGLE',
-					  requestGUID => $guid,
-					  actionType  => 0,
-					  approve => ' Approve '
-					} );
+#       print "Approving guid: " . $guid . "\n";
+        
+        # Post it.
+        $res=$self->{mech}->post( $FRIEND_REQUEST_POST,
+                    { requestType => 'SINGLE',
+                      requestGUID => $guid,
+                      actionType  => 0,
+                      approve => ' Approve '
+                    } );
 
-		unless ( $res->is_success ) {
-			$pass=0;
-#			print $res->status_line . "\n";
-		}
-	}
+        unless ( $res->is_success ) {
+            $pass=0;
+#           print $res->status_line . "\n";
+        }
+    }
 
-	return $pass;
+    return $pass;
 
 }
 
@@ -2228,13 +2236,13 @@ but probably not.  Of course, worst case here is you try again.
  # Send a friend request and check for some status responses.
  my $status = $myspace->send_friend_request( 12345 );
  if ( $status =~ /^P/ ) {
- 	print "Friend request sent\n";
+    print "Friend request sent\n";
  } else {
- 	if ( $status eq 'FF' ) {
- 		print "This person is already your friend\n";
- 	} elsif ( $status eq 'FC' ) {
- 		print "Received CAPTCHA image request\n";
- 	}
+    if ( $status eq 'FF' ) {
+        print "This person is already your friend\n";
+    } elsif ( $status eq 'FC' ) {
+        print "Received CAPTCHA image request\n";
+    }
  }
 
  # Send a bunch of friend requests
@@ -2264,125 +2272,125 @@ friends and lets you enter CAPTCHA codes.
 
 sub send_friend_request {
 
-	# We had to break backwards compatibilty, so enforce it.
-	if ( @_ > 1 ) {
-		die 'send_friend_request has been changed. Must use '.
-			'send_friend_requests to send to multiple friends.\n'.
-			'Also now returns status code instead of true/false.\n'.
-			'perldoc WWW::Myspace for info.';
-	}
+    # We had to break backwards compatibilty, so enforce it.
+    if ( @_ > 1 ) {
+        die 'send_friend_request has been changed. Must use '.
+            'send_friend_requests to send to multiple friends.\n'.
+            'Also now returns status code instead of true/false.\n'.
+            'perldoc WWW::Myspace for info.';
+    }
 
-	my ( $friend_id ) = @_;
+    my ( $friend_id ) = @_;
 
-	$self->_die_unless_logged_in( 'send_friend_request' );
+    $self->_die_unless_logged_in( 'send_friend_request' );
 
-	my %status_codes = (
+    my %status_codes = (
 
-		FF	=>	'Failed, this person is already your friend.',
-		FN	=>	'Failed, network error (couldn\'t get the page, etc).',
-		FP	=>	'Failed, you already have a pending friend request for this person',
-		FB  =>  'Failed, this person does not accept friend requests from bands.',
-		FA  =>  'Failed, this person requires an email address or last name to add them',
-		FC	=>	'Failed, CAPTCHA response requested.',
-		P	=>	'Passed! Verification string received.',
-		F	=>	'Failed, verification string not found on page after posting.',
+        FF  =>  'Failed, this person is already your friend.',
+        FN  =>  'Failed, network error (couldn\'t get the page, etc).',
+        FP  =>  'Failed, you already have a pending friend request for this person',
+        FB  =>  'Failed, this person does not accept friend requests from bands.',
+        FA  =>  'Failed, this person requires an email address or last name to add them',
+        FC  =>  'Failed, CAPTCHA response requested.',
+        P   =>  'Passed! Verification string received.',
+        F   =>  'Failed, verification string not found on page after posting.',
 
-	);
+    );
 
-	my $return_code = undef;
-	my $page;
+    my $return_code = undef;
+    my $page;
 
-	# Get the form
-	my $res = $self->get_page( $ADD_FRIEND_URL . $friend_id );
+    # Get the form
+    my $res = $self->get_page( $ADD_FRIEND_URL . $friend_id );
 
-	# Check for network failure
-	if ( $self->error ) {
-		$return_code='FN';
-	}
+    # Check for network failure
+    if ( $self->error ) {
+        $return_code='FN';
+    }
 
-	# Strip the page for comparisons
-	$page = $self->current_page->content;
-	$page =~ s/[ \t\n\r]+/ /g;
+    # Strip the page for comparisons
+    $page = $self->current_page->content;
+    $page =~ s/[ \t\n\r]+/ /g;
 
-	# Check for "doesn't accept band"
-	if ( ( $self->is_band ) && ( $page =~
-			/does not accept add requests from bands/i ) ) {
-		$return_code = 'FB';
-	}
+    # Check for "doesn't accept band"
+    if ( ( $self->is_band ) && ( $page =~
+            /does not accept add requests from bands/i ) ) {
+        $return_code = 'FB';
+    }
 
-	# Check for "last name or email" required
-	elsif ( $page =~ /only accepts add requests from people he\/she knows/ ) {
-		$return_code = 'FA';
-	}
-	
-	# Check for CAPTCHA
-	elsif ( $page =~ /CAPTCHA/ ) {
-		$return_code = 'FC';
-	}
+    # Check for "last name or email" required
+    elsif ( $page =~ /only accepts add requests from people he\/she knows/ ) {
+        $return_code = 'FA';
+    }
+    
+    # Check for CAPTCHA
+    elsif ( $page =~ /CAPTCHA/ ) {
+        $return_code = 'FC';
+    }
 
-	# Check for "already your friend"
-	elsif ( $page =~ /already your friend/i ) {
-		$return_code = 'FF';
-	}
+    # Check for "already your friend"
+    elsif ( $page =~ /already your friend/i ) {
+        $return_code = 'FF';
+    }
 
-	# Check for pending friend request
-	elsif ( $page =~ /pending friend request/i ) {
-		$return_code = 'FP';
-	}
+    # Check for pending friend request
+    elsif ( $page =~ /pending friend request/i ) {
+        $return_code = 'FP';
+    }
 
-	# Now see if we have a button to click.
-	# MUST BE LAST.
-	# (This probably could return a different code, but it means we don't
-	# have a button and we don't know why).
-	# XXX You may want to loop this entire statement, because currently:
-	# - get_page gets a page, checking for any known error messages.
-	# - this if statement checks for known errors we might receive
-	# - This final statement makes sure we have a button to click so
-	#   we don't bomb in "submit_form".
-	# - BUT, if we get an error page get_page doesn't know (i.e. they
-	#   change an error message or something), we probbaly
-	#   want to retry this page.
-	# You might want to change this whole section to:
-	# do { $res = $self->get_page ... ;
-	# $attempts++; } until ( ( $attempts > 20 ) || ( $page =~ /<input type="submit" ...) );
-	elsif ( $page !~ /<input[^>]+type="submit"[^>]+value="Add to Friends"[^>]*>/i ) {
-		$return_code ='F';
-	}
-	
-	unless ( $return_code ) {
-		# Post the add request form
-		$res = $self->submit_form(
-			$self->current_page, 1, '', {} );
-	
-		# Check response
-		unless ( $res ) {
-			$return_code = 'FN';
-		}
-		
-		# Unless we already have a return code, check for REs on the page
-		# to see what we got.
-		unless ( $return_code ) {
-	
-			$page = $self->current_page->content;
-			$page =~ s/[ \t\n\r]+/ /g;
-	
-			# Check for success
-			if ( $page =~ /An email has been sent to the user/i ) {
-				$return_code = 'P';
-			}
-	
-		}	
-	}
+    # Now see if we have a button to click.
+    # MUST BE LAST.
+    # (This probably could return a different code, but it means we don't
+    # have a button and we don't know why).
+    # XXX You may want to loop this entire statement, because currently:
+    # - get_page gets a page, checking for any known error messages.
+    # - this if statement checks for known errors we might receive
+    # - This final statement makes sure we have a button to click so
+    #   we don't bomb in "submit_form".
+    # - BUT, if we get an error page get_page doesn't know (i.e. they
+    #   change an error message or something), we probbaly
+    #   want to retry this page.
+    # You might want to change this whole section to:
+    # do { $res = $self->get_page ... ;
+    # $attempts++; } until ( ( $attempts > 20 ) || ( $page =~ /<input type="submit" ...) );
+    elsif ( $page !~ /<input[^>]+type="submit"[^>]+value="Add to Friends"[^>]*>/i ) {
+        $return_code ='F';
+    }
+    
+    unless ( $return_code ) {
+        # Post the add request form
+        $res = $self->submit_form(
+            $self->current_page, 1, '', {} );
+    
+        # Check response
+        unless ( $res ) {
+            $return_code = 'FN';
+        }
+        
+        # Unless we already have a return code, check for REs on the page
+        # to see what we got.
+        unless ( $return_code ) {
+    
+            $page = $self->current_page->content;
+            $page =~ s/[ \t\n\r]+/ /g;
+    
+            # Check for success
+            if ( $page =~ /An email has been sent to the user/i ) {
+                $return_code = 'P';
+            }
+    
+        }   
+    }
 
-	# If we still don't have a return code, something went wrong
-	unless ($return_code) {
-		$return_code = 'F';
-	}
+    # If we still don't have a return code, something went wrong
+    unless ($return_code) {
+        $return_code = 'F';
+    }
  
     return (
-		LIST { $return_code, $status_codes{$return_code} }
-		STR  { $return_code }
-	);
+        LIST { $return_code, $status_codes{$return_code} }
+        STR  { $return_code }
+    );
 }
 
 =head2 send_friend_requests( @friend_ids )
@@ -2396,11 +2404,11 @@ above for that. Croaks if you're not logged in.
 
 sub send_friend_requests {
 
-	$self->_die_unless_logged_in( 'send_friend_requests' );
+    $self->_die_unless_logged_in( 'send_friend_requests' );
 
-	foreach my $id ( @_ ) {
-		last if $self->send_friend_request( $id ) eq 'FC';		
-	}
+    foreach my $id ( @_ ) {
+        last if $self->send_friend_request( $id ) eq 'FC';      
+    }
 
 }
 
@@ -2413,7 +2421,7 @@ is usually labeled "Add to Friends".
 =cut
 
 sub add_to_friends {
-	$self->send_friend_request( @_ );
+    $self->send_friend_request( @_ );
 }
 
 =head2 add_as_friend
@@ -2425,7 +2433,7 @@ send_friend_request in new code.
 =cut
 
 sub add_as_friend {
-	$self->send_friend_request( @_ );
+    $self->send_friend_request( @_ );
 }
 
 #---------------------------------------------------------------------
@@ -2444,62 +2452,66 @@ not logged in.
 
 sub delete_friend {
 
-	my ( $form, $tree, $f, $res, $id );
-	my $pass=1;
+    my ( @del_friends ) = @_;
 
-	$self->_die_unless_logged_in( 'delete_friend' );
+    my ( $form, $tree, $f, $res, $id );
+    my $pass=1;
 
-
-	# Get the edit friends page
-	$self->get_page( 'http://collect.myspace.com/index.cfm?fuseaction=user.editfriends&friendID=' . $self->my_friend_id );
-	return 0 if $self->error;
-	
-	# Select the edit form and get the hash field
-	$self->mech->form_name( 'friendsDelete' );
-	my $hash_value = $self->mech->value( 'hash' );
-	my $mytoken = $self->mech->value( 'Mytoken' );
-
-	# Create our delete form
-	$form =
-		'<FORM ACTION="index.cfm?fuseaction=user.deleteFriend&page=0" '.
-		'METHOD="POST">';
-
-	$form .= '<input type="hidden" name="hash" value="'.
-		$hash_value . '">';
-
-	$form .= '<input type="hidden" name="Mytoken" value="'.
-		$mytoken . '">';
-
-	foreach $id ( @_ ) {
-
-		$form .= '<input type="checkbox" name="delFriendID" value="'
-			. $id . '">';
-
-	}
-
-	$form .= '<input type="image" border="0" name="deleteAll" '.
-		'src="images/btn_deleteselected.gif" width="129" height="20">'.
-		'</form>';
-
-	# Turn it into an HTML::Form object
-	$f = HTML::Form->parse( $form, 'http://collect.myspace.com/' );
-
-	# Check the checkboxes
-	$f->find_input( 'delFriendID' )->check;
-
-	# Submit the form
-	my $attempts = 25;
-	do {
-		$res = $self->mech->request( $f->click( 'deleteAll' ) );
-		$attempts--;
-	} until ( ( $self->_page_ok( $res ) ) || ( $attempts <= 0 ) );
-
-	unless ( $attempts ) {
-		$pass=0;
-	}
+    $self->_die_unless_logged_in( 'delete_friend' );
 
 
-	return $pass;
+    # Get the edit friends page
+    $self->get_page( 'http://collect.myspace.com/index.cfm?fuseaction=user.editfriends&friendID=' . $self->my_friend_id );
+    return 0 if $self->error;
+    
+    # Select the edit form and get the hash field
+    $self->mech->form_name( 'friendsDelete' );
+    my $hash_value = $self->mech->value( 'hash' );
+    my $mytoken = $self->mech->value( 'Mytoken' );
+
+    # Create our delete form
+    $form =
+        '<FORM ACTION="index.cfm?fuseaction=user.deleteFriend&page=0" '.
+        'METHOD="POST">';
+
+    $form .= '<input type="hidden" name="hash" value="'.
+        $hash_value . '">';
+
+    $form .= '<input type="hidden" name="Mytoken" value="'.
+        $mytoken . '">';
+
+    foreach $id ( @del_friends ) {
+
+        $form .= '<input type="checkbox" name="delFriendID" value="'
+            . $id . '">';
+
+    }
+
+    $form .= '<input type="image" border="0" name="deleteAll" '.
+        'src="images/btn_deleteselected.gif" width="129" height="20">'.
+        '</form>';
+
+    # Turn it into an HTML::Form object
+    $f = HTML::Form->parse( $form, 'http://collect.myspace.com/' );
+
+    # Check the checkboxes
+    foreach my $input ( $f->find_input( 'delFriendID' ) ) {
+        $input->check;
+    }
+
+    # Submit the form
+    my $attempts = 25;
+    do {
+        $res = $self->mech->request( $f->click( 'deleteAll' ) );
+        $attempts--;
+    } until ( ( $self->_page_ok( $res ) ) || ( $attempts <= 0 ) );
+
+    unless ( $attempts ) {
+        $pass=0;
+    }
+
+
+    return $pass;
 
 }
 
@@ -2509,14 +2521,14 @@ sub delete_friend {
 
 #sub get_friend_name {
 #
-#	my $self = shift;
-#	
-#	my ( $friend_id ) = @_;
+#   my $self = shift;
+#   
+#   my ( $friend_id ) = @_;
 #
-#	# Just select and return :)
-#	my $first_mame = $self->{dbh}->selectrow_arrayref("select first_name from friends where friendid=${friend_id}");
-#	
-#	return $first_name;
+#   # Just select and return :)
+#   my $first_mame = $self->{dbh}->selectrow_arrayref("select first_name from friends where friendid=${friend_id}");
+#   
+#   return $first_name;
 #
 #}
 
@@ -2559,25 +2571,79 @@ EXAMPLE
 
 sub get_page {
 
-	my ( $url, $regexp ) = @_;
+    my ( $url, $regexp ) = @_;
 
-	# Reset error
-	$self->error( 0 );
+    # Reset error
+    $self->error( 0 );
 
-	# Try to get the page 20 times.
-	my $attempts = 20;
-	my $res;
-	do {
+    # Try to get the page 20 times.
+    my $attempts = 20;
+    my $res;
+    do {
 
-		# Try to get the page
-		$res = $self->mech->get("$url");
-		$attempts--;
+        # Try to get the page
+#        unless ( $res = $self->_read_cache( $url ) )
+            $res = $self->mech->get("$url");
+#        }
+        $attempts--;
 
-	} until ( ( $self->_page_ok( $res, $regexp ) ) || ( $attempts <= 0 ) );
+    } until ( ( $self->_page_ok( $res, $regexp ) ) || ( $attempts <= 0 ) );
 
-	# We both set "current_page" and return the value.
-	$self->{current_page} = $res;
-	return ( $res );
+    # We both set "current_page" and return the value.
+#    $self->_cache_page( $url, $res ) unless $self->error;
+    $self->{current_page} = $res;
+    return ( $res );
+
+}
+
+=head2 _cache_page( $url, $res )
+
+Stores $res in a cache.
+
+=cut
+
+sub _cache_page {
+
+    my ( $url, $res ) = @_;
+
+    $self->{page_cache}->{$url} = $res;
+    
+    $self->{clean_cache};
+
+}
+
+=head2 _read_cache( $url )
+
+Check the cache for this page.
+
+=cut
+
+sub _read_cache {
+
+    my ( $url ) = @_;
+    
+    if ( ( $self->{page_cache}->{$url} ) &&
+         ( $self->{page_cache}->{$url}->is_fresh ) ) {
+        return $self->{page_cache}->{$url};
+    } else {
+        return "";
+    }
+
+}
+
+=head2 _clean_cache
+
+Cleans any non-"fresh" page from the cache.
+
+=cut
+
+sub _clean_cache {
+
+    foreach my $url ( keys( %{ $self->{'page_cache'} } ) ) {
+        unless ( $url->is_fresh ) {
+            delete $self->{'page_cache'}->{ $url };
+        }
+    }
 
 }
 
@@ -2594,53 +2660,90 @@ sub get_page {
 # to a printable error message if there is an error.
 
 sub _page_ok {
-	my ( $res, $regexp ) = @_;
+    my ( $res, $regexp ) = @_;
 
-	# Reset error
-	$self->error(0);
+    # Reset error
+    $self->error(0);
 
-	# Check for errors
-	my $page_ok = 1;
-	my $page;
+    # Check for errors
+    my $page_ok = 1;
+    my $page;
 
-	if ( $res->is_success ) {
+    # Check login status.
+    if ( ! $self->_check_login( $res ) ) {
+        $self->error( "Not logged in" );
+        $page_ok=0;
+    }
 
-		# Page loaded, but make sure it isn't an error page.
-		$page = $res->content; # Get the content
-		$page =~ s/[ \t\n\r]+/ /g; # Strip whitespace
+    # If the page load is "successful", check for other problems.
+    elsif ( $res->is_success ) {
 
-		if ( $regexp ) {
-			# Page must match the regexp
-			unless ( $page =~ /$regexp/i ) {
-				$page_ok = 0;
-				$self->error("Page doesn't match verification pattern.");
-#				warn "Page doesn't match verification pattern.\n";
-			}
-		} else {
-			foreach my $error_regexp ( @ERROR_REGEXPS ) {
-				if ( $page =~ /$error_regexp/i ) {
-					$page_ok = 0;
-					$self->error( "Got error page." );
-#					warn "Got error page.\n";
-					last;
-				}
-			}
-		}
+        # Page loaded, but make sure it isn't an error page.
+        $page = $res->content; # Get the content
+        $page =~ s/[ \t\n\r]+/ /g; # Strip whitespace
+        
+        # If they gave us a RE with which to verify the page, look for it.
+        if ( $regexp ) {
+            # Page must match the regexp
+            unless ( $page =~ /$regexp/i ) {
+                $page_ok = 0;
+                $self->error("Page doesn't match verification pattern.");
+#               warn "Page doesn't match verification pattern.\n";
+            }
+        
+        # Otherwise, look for our known temporary errors.
+        } else {
+            foreach my $error_regexp ( @ERROR_REGEXPS ) {
+                if ( $page =~ /$error_regexp/i ) {
+                    $page_ok = 0;
+                    $self->error( "Got error page." );
+#                   warn "Got error page.\n";
+                    last;
+                }
+            }
+        }
 
-	} else {
+    } else {
 
-		$self->error("Error getting page: \n" .
-			"  " . $res->status_line);
-		$page_ok = 0;
+        $self->error("Error getting page: \n" .
+            "  " . $res->status_line);
+        $page_ok = 0;
 
-		warn "Error getting page: \n" .
-			"  " . $res->status_line . "\n";
+        warn "Error getting page: \n" .
+            "  " . $res->status_line . "\n";
 
-	}
+    }
 
-	sleep 2 unless ( $page_ok );
+    sleep 2 unless ( $page_ok );
 
-	return $page_ok;
+    return $page_ok;
+
+}
+
+=head2 _check_login
+
+Checks for "You bust be logged in to do that".  If found, tries to log
+in again and returns 0, otherwise returns 1.
+
+=cut
+
+sub _check_login {
+    my ( $res ) = @_;
+
+    # Check for the "proper" error response, or just look for the
+    # error message on the page.
+    if ( ( $res->is_error == 403 ) || ( $res->content =~ /$NOT_LOGGED_IN/is ) ) {
+        if ( $res->is_error ) {
+            warn "Error: " . $res->is_error . "\n"
+        } else {
+            warn "Got \"not logged in\" page\n";
+        }
+        # Try to log us back in. Return 0 so they'll try again.
+        $self->site_login;
+        return 0;
+    } else {
+        return 1;
+    }
 
 }
 
@@ -2658,156 +2761,244 @@ sub _page_ok {
 # submit_form returns 1 if it succeeded, 0 if it fails.
 
 =head2 submit_form( $url, $form_no, $button, $fields_ref, [ $regexp1 ],
-	[ $regexp2 ] )
+    [ $regexp2 ] )
+    
+This format is being deprecated.  Please use the format below if you
+use this method (which you shouldn't need unless you're writing more
+methods).  Be aware that I might make this method private at some point.
+    
+=head2 submit_form( $options_hashref )
 
-This powerful little method reads the web page specified by $url,
-finds the form specified by $form_no, fills in the values
-specified in $fields_ref, and clicks the button named "$button".
+ Valid options:
+ $myspace->submit_form( {
+    page => "http://some.url.org/formpage.html",
+    form_no => 1,
+    form_name => "myform",  # Use this OR form_no...
+    button => "mybutton",
+    no_click => 0,  # 0 or 1.
+    fields_ref => { field => 'value', field2 => 'value' },
+    re1 => 'something unique.?about this[ \t\n]+page',
+    re2 => 'something unique about the submitted page',
+    action => 'http://some.url.org/newpostpage.cgi', # Only needed in weird occasions
+ } );
+
+This powerful little method reads the web page specified by "page",
+finds the form specified by "form_no" or "form_name", fills in the values
+specified in "fields_ref", and clicks the button named "button".
 
 You may or may not need this method - it's used internally by
 any method that needs to fill in and post a form. I made it
 public just in case you need to fill in and post a form that's not
 handled by another method (in which case, see CONTRIBUTING below :).
 
-$url can either be a text string that is a URL, a reference to an
+"page" can either be a text string that is a URL or a reference to an
 HTTP::Response object that contains the source of the page
-that contains the form, or an empty string. If it is an empty string,
+that contains the form. If it is an empty string or not specified,
 the current page ( $myspace->current_page ) is used.
 
-$form_no is used to numerically identify the form on the page. It's a
+"form_no" is used to numerically identify the form on the page. It's a
 simple counter starting from 0.  If there are 3 forms on the page and
-you want to fill in and submit the second form, set $form_no to "1".
-For the first form, use "0".
+you want to fill in and submit the second form, set "form_no => 1".
+For the first form, use "form_no => 0".
 
-$button is the name or type of button to submit. This will frequently
+"form_name" is used to indentify the form by name.  In actuality,
+submit_form simply uses "form_name" to iterate through the forms
+and sets "form_no" for you.
+
+"button" is the name of the button to submit. This will frequently
 be "submit", but if they've named the button something clever like
-"Submit22" (as MySpace does in their login form), then you may have to
-use that.
+"Submit22" (as MySpace did in their login form), then you may have to
+use that.  If no button is specified (either by button => '' or by
+not specifying button at all), the first button on the form
+is clicked.
 
-$fields_ref is a reference to a hash that contains field names
+If "no_click" is set to 1, the form willl be submitted without
+clicking any button.   This is used to simulate the JavaScript
+form submits Myspace does on the browse pages.
+
+"fields_ref" is a reference to a hash that contains field names
 and values you want to fill in on the form.
 
-$regexp1 is an optional Regular Expression that will be used to make
+"re1" is an optional Regular Expression that will be used to make
 sure the proper form page has been loaded. The page content will
 be matched to the RE, and will be treated as an error page and retried
 until it matches. See get_page for more info.
 
-$regexp2 is an optional RE that will me used to make sure that the
+"re2" is an optional RE that will me used to make sure that the
 post was successful. USE THIS CAREFULLY! If your RE breaks, you could
 end up repeatedly posting a form. This is used by post_comemnts to make
 sure that the Verify Comment page is actually shown.
+
+"action" is the post action for the form, as in:
+
+ <form action="http://www.mysite.com/process.cgi">
+
+This is here because Myspace likes to do weird things like reset
+form actions with Javascript then post them without clicking form buttons.
 
 EXAMPLE
 
 This is how post_comment actually posts the comment:
 
-	# Submit the comment to $friend_id's page
-	$self->submit_form( "${VIEW_COMMENT_FORM}${friend_id}", 1, "submit",
-						{ 'f_comments' => "$message" }, '', 'f_comments'
-					);
-	
-	# Confirm it
-	$self->submit_form( $self->current_page, 1, "submit", {} );
-
-The comment form is a 2-step process. The first command gets the form
-and fills it in, then posts it. WWW::Myspace then returns the HTML display
-of the form with a "Post Comment" button. So we just need to click that
-button ("Post Comment" is the button's "value", but its type is "submit".
-You could probably use either value. See the "press" method in
-"perldoc HTTP::Request::Form" for more info).
-We send that confirmation page to submit_form as a reference to the
-page returned by the first post.
+    # Submit the comment to $friend_id's page
+    $self->submit_form( "${VIEW_COMMENT_FORM}${friend_id}", 1, "submit",
+                        { 'f_comments' => "$message" }, '', 'f_comments'
+                    );
+    
+    # Confirm it
+    $self->submit_form( "", 1, "submit", {} );
 
 =cut
 
 
 sub submit_form {
 
-	my ( $url, $form_no, $button, $fields_ref, $regexp1, $regexp2, $base_url ) = @_;
+    my ( $url, $form_no, $button, $fields_ref, $regexp1, $regexp2, $base_url ) = @_;
 
-	# Initialize our variables
-	my $mech = $self->mech; # For convenience
-	my $res = "";
-	my ( $field );
-#	$base_url = $BASE_URL unless $base_url;
-#	$form_no++; # For backwards compatibility.
+    # Initialize our variables
+    my $mech = $self->mech; # For convenience
+    my $res = "";
+    my ( $field );
+    my $options;
+#   $base_url = $BASE_URL unless $base_url;
+#   $form_no++; # For backwards compatibility.
 
-	# Get the page
-	( $DEBUG ) && print "Getting $url...\n";
-	if ( ref( $url ) ) {
-		# They gave us a page already
-		# Note, this might not work if $res doesn't happen to be
-		# the current URL. It will be in most cases, but i don't know
-		# what happens if it isn't.  This is leftover from pre WWW::Mechanize
-		# code and needs to be updated.
-		$res = $url;
-#		$mech->update_html( $res->content );
-	} elsif ( $url eq "" ) {
-		$res = $self->current_page;
-	} else {
-		$res = $self->get_page( $url, $regexp1 );
-		# If we couldn't get the page, return failure.
-		return 0 if $self->error;
-	}
+    # Parse the options
+    # Unless they passed a hashref of options, set using the
+    # positional parameters.
+    if ( ref $url eq "HASH" ) {
+        $options = $url;
+    } else {
+        $options = { 'url' => $url,
+            'form_no' => $form_no,
+            'button' => $button,
+            'fields_ref' => $fields_ref,
+            're1' => $regexp1,
+            're2' => $regexp2,
+            'base' => $base_url,
+            'page' => $url,
+        };
+    }
 
-	# Select the form they wanted, or return failure if we can't.
-	# +1 is for backwards-compatibility since WWW::Mechanize starts
-	# counting at 1.
-	my @forms = HTML::Form->parse( $res );
-	unless ( @forms >= $form_no ) {
-		$self->error( "Form not on page in submit_form!" );
-		return 0;
-	}
+    # Get the page
+    ( $DEBUG ) && print "Getting $url...\n";
+    if ( ref( $options->{'page'} ) eq "HTTP::Response" ) {
+        # They gave us a page already
+        $res = $options->{'page'};
+    } elsif ( ! $options->{'page'} ) {
+        $res = $self->current_page;
+    } else {
+        # Get the page
+        $res = $self->get_page( $options->{'page'}, $options->{'re1'} );
+        # If we couldn't get the page, return failure.
+        return 0 if $self->error;
+    }
 
-	my $f = $forms[ $form_no ];
-#	$mech->form_number( $form_no );
+    # Select the form they wanted, or return failure if we can't.
+    my @forms = HTML::Form->parse( $res );
+    if ( $options->{'form_no'} ) {
+        unless ( @forms >= $options->{'form_no'} ) {
+            $self->error( "Form not on page in submit_form!" );
+            return 0;
+        }
+    }
+    if ( $options->{'form_name'} ) {
+        $form_no = 0;
+        foreach my $form ( @forms ) {
+            if ( ( $form->attr( 'name' ) ) && ( $form->attr( 'name' ) eq $options->{'form_name'} ) ) {
+                $options->{'form_no'} = $form_no;
+                last;
+            }
+            $form_no++;
+        }
+    }
 
-	# Fill in the fields
-	( $DEBUG ) && print "Filling in form number " . $form_no . ".\n";
-	( $DEBUG ) && print $f->dump;
+    my $f = $forms[ $options->{'form_no'} ];
 
-#	# Grab the form 'cause we have to force it through ourselves.
-#	my $f = $mech->current_form;
+    # Set the action if they gave us one
+    if ( $options->{'action'} ) { $f->action( $options->{'action'} ) }
+    
+    # Fill in the fields
+    ( $DEBUG ) && print "Filling in form number " . $options->{'form_no'} . ".\n";
+    ( $DEBUG ) && print $f->dump;
 
-	# Loop through the fields in the form and set them.
-	foreach my $field ( $f->param ) {
-		if ( $fields_ref->{ $field } ) {
-			$f->param( $field, $fields_ref->{ $field } )
-		}
-	}
+    # Loop through the fields in the form and set them.
+    foreach my $field ( keys %{ $options->{'fields_ref'} } ) {
+        # If the field "exists" on the form, just fill it in,
+        # otherwise, add it as a hidden field.
+        if ( $f->find_input( $field ) ) {
+            if ( $f->find_input( $field )->readonly ) {
+                $f->find_input( $field )->readonly(0)
+            }
+            $f->param( $field, $options->{'fields_ref'}->{ $field } );
+        } else {
+            $f = $self->_add_to_form( $f, $field, $options->{'fields_ref'}->{ $field } );
+        }
+    }
+    
+    my $attempts = 5;
+    my $trying_again = 0;
+    do
+    {
+        # If we're trying again, back up.
+        warn $self->error . "\n" if $trying_again;
 
-	my $attempts = 5; # (Change statement below if you change this)
-	my $trying_again = 0;
-	do
-	{
-		# If we're trying again, back up.
-#		$mech->back if $trying_again;
-		warn $self->error . "\n" if $trying_again;
+        eval {
+            if ( $options->{'button'} ) {
+                $res = $self->mech->request( $f->click( $options->{'button'} ) );
+            } elsif ( $options->{'no_click'} ) {
+                # We use make_request because Myspace likes submitting forms
+                # that have buttons by using Javascript. make_request submits
+                # the form without clicking anything, whereas "click" clicks
+                # the first button, which can break things.
+                $res = $self->mech->request( $f->make_request );
+            } else {
+                # Just click the first button
+                $res = $self->mech->request( $f->click );
+            }
+        };
 
-		eval {
-			if ( $button ) {
-				$res = $self->mech->request( $f->click( "$button" ) );
-#				$res = $mech->click( "$button" );
-			} else {
-				$res = $self->mech->request( $f->click );
-#				$res = $mech->click;
-			}
-		};
-		# If it died (it will if there's no button), just return failure.
-		if ( $@ ) {
-			$self->error( $@ );
-			return 0;
-		}
+        # If it died (it will if there's no button), just return failure.
+        if ( $@ ) {
+            $self->error( $@ );
+            return 0;
+        }
 
-		$attempts--;
-		$trying_again = 1;
+        $attempts--;
+        $trying_again = 1;
 
-	} until ( ( $self->_page_ok( $res, $regexp2 ) ) || ( $attempts <= 0 ) );
+    } until ( ( $self->_page_ok( $res, $options->{'re2'} ) ) || ( $attempts <= 0 ) );
 
-	# Return the result
-	$self->{current_page} = $self->mech->res;
-	return ( ! $self->error );
+    # Return the result
+    $self->{current_page} = $res;
+    return ( ! $self->error );
 
+}
+
+=head2 _add_to_form
+
+Internal method to add a hidden field to a form. HTML::Form thinks we
+don't want to change hidden fields, and if a hidden field has no value,
+it won't even create an input object for it.  If that's way over your
+head don't worry, it just means we're fixing things with this method,
+ad submit_form will call this method for you if you pass it a field that
+doesn't show up on the form.
+
+Returns a form object that is the old form with the new field in it.
+
+ # Add field $fieldname to form $form (a HTML::Form object) and
+ # set it's value to $value.
+ $self->_add_to_form( $form, $fieldname, $value )
+
+=cut
+
+sub _add_to_form {
+
+    my ( $f, $field, $value ) = @_;
+
+    $f->push_input( 'hidden', { name => $field, value => $value } );
+    
+    return $f;
 }
 
 #---------------------------------------------------------------------
@@ -2852,46 +3043,46 @@ List the friendIDs mentioned on Tom's profile:
 
 sub get_friends_on_page {
 
-	my ( $page ) = @_;
+    my ( $page ) = @_;
 
-	# Default to current page
-	unless ( $page ) { $page = $self->current_page->content }
+    # Default to current page
+    unless ( $page ) { $page = $self->current_page->content }
 
-	my %friend_ids = ();
-	my $line;
-	my @lines = split( "\n", $page );
-	$self->{_high_friend_id} = 0;
-	$self->{_low_friend_id} = 0;
-	foreach $line ( @lines ) {
-		if ( $line =~ /${FRIEND_REGEXP}([0-9]+)/i ) {
-			unless ( ( ( $self->logged_in ) &&
-					   ( "$1" == $self->my_friend_id )
-					 ) ||
-					 ( "$1" == 6221 )
-				   ) {
-				$friend_ids{"$1"}++;
-				
-				# The following are used to construct the URL
-				# when crawling the user's "view all my friends" pages.
-				# Set high friendID on this page
-				if ( $self->{_high_friend_id} < $1 ) {
-					$self->{_high_friend_id} = $1;
-				}
-				# Set low friendID on this page
-				if ( ( $self->{_low_friend_id} == 0 ) ||
-					 ( $1 < $self->{_low_friend_id} ) ) {
-					$self->{_low_friend_id} = $1;
-				}
-			}
-		}
-	}
-	
-	if ( $DEBUG ) {
-		my @friends = keys( %friend_ids );
-		print "  Got " . @friends . " friends on page\n";
-	}
+    my %friend_ids = ();
+    my $line;
+    my @lines = split( "\n", $page );
+    $self->{_high_friend_id} = 0;
+    $self->{_low_friend_id} = 0;
+    foreach $line ( @lines ) {
+        if ( $line =~ /${FRIEND_REGEXP}([0-9]+)/i ) {
+            unless ( ( ( $self->logged_in ) &&
+                       ( "$1" == $self->my_friend_id )
+                     ) ||
+                     ( "$1" == 6221 )
+                   ) {
+                $friend_ids{"$1"}++;
+                
+                # The following are used to construct the URL
+                # when crawling the user's "view all my friends" pages.
+                # Set high friendID on this page
+                if ( $self->{_high_friend_id} < $1 ) {
+                    $self->{_high_friend_id} = $1;
+                }
+                # Set low friendID on this page
+                if ( ( $self->{_low_friend_id} == 0 ) ||
+                     ( $1 < $self->{_low_friend_id} ) ) {
+                    $self->{_low_friend_id} = $1;
+                }
+            }
+        }
+    }
+    
+    if ( $DEBUG ) {
+        my @friends = keys( %friend_ids );
+        print "  Got " . @friends . " friends on page\n";
+    }
 
-	return ( keys( %friend_ids ) );
+    return ( keys( %friend_ids ) );
 }
 
 =head2 remove_cache
@@ -2906,8 +3097,8 @@ you don't want the login data stored:
 
 sub remove_cache {
 
-	my $cache_file_path = catfile( $self->cache_dir, $self->cache_file );
-	unlink $cache_file_path;
+    my $cache_file_path = catfile( $self->cache_dir, $self->cache_file );
+    unlink $cache_file_path;
 
 }
 
@@ -2919,8 +3110,8 @@ sub remove_cache {
 Creates the cache directory in cache_dir. Only creates the
 top-level directory, croaks if it can't create it.
 
-	$myspace->cache_dir("/path/to/dir");
-	$myspace->make_cache_dir;
+    $myspace->cache_dir("/path/to/dir");
+    $myspace->make_cache_dir;
 
 This function mainly exists for the internal login method to use,
 and for related sub-modules that store their cache files by
@@ -2930,11 +3121,11 @@ default in WWW:Myspace's cache directory.
 
 sub make_cache_dir {
 
-	# Make the cache directory if it doesn't exist.
-	unless ( -d $self->cache_dir ) {
-		mkdir $self->cache_dir or croak "Can't create cache directory ".
-			$self->cache_dir;
-	}
+    # Make the cache directory if it doesn't exist.
+    unless ( -d $self->cache_dir ) {
+        mkdir $self->cache_dir or croak "Can't create cache directory ".
+            $self->cache_dir;
+    }
 
 }
 
@@ -2943,11 +3134,11 @@ sub make_cache_dir {
 
 sub _die_unless_logged_in {
 
-	my ( $method ) = @_;
-	
-	unless ( $self->logged_in ) {
-		croak "$method called when not logged in\n";
-	}
+    my ( $method ) = @_;
+    
+    unless ( $self->logged_in ) {
+        croak "$method called when not logged in\n";
+    }
 
 }
 
@@ -2961,17 +3152,17 @@ sub _die_unless_logged_in {
 
 sub _fix_textareas() {
 
-	my $x = $_[0];
-	# If this is a textarea, push an empty string as the
-	# content if it doesn't have any.
-	if ( $x->tag eq "textarea" ) {
-		$x->{_content} = [] unless defined $x->content;
-	}
+    my $x = $_[0];
+    # If this is a textarea, push an empty string as the
+    # content if it doesn't have any.
+    if ( $x->tag eq "textarea" ) {
+        $x->{_content} = [] unless defined $x->content;
+    }
 
-	# Recursively traverse the tree on our search.
-	foreach my $c ($x->content_list) {
-		_fix_textareas($c) if ref $c; # ignore text nodes
-	}
+    # Recursively traverse the tree on our search.
+    foreach my $c ($x->content_list) {
+        _fix_textareas($c) if ref $c; # ignore text nodes
+    }
 }
 
 #---------------------------------------------------------------------
@@ -2981,50 +3172,50 @@ sub _fix_textareas() {
 
 sub _get_acct {
 
-	# Initialize
-	my %prefs = ();
-	my $ref = "";
-	my ( $pref, $value, $res );
-	my $cache_filepath = catfile( $self->cache_dir, $self->cache_file);
+    # Initialize
+    my %prefs = ();
+    my $ref = "";
+    my ( $pref, $value, $res );
+    my $cache_filepath = catfile( $self->cache_dir, $self->cache_file);
 
-	# Read what we got last time.	
-	if ( open ( PREFS, "< ", $cache_filepath ) ) {
-		while (<PREFS>) {
-			chomp;
-			( $pref, $value ) = split( ":" );
-			$prefs{"$pref"} = $value;
-		}
-		
-		close PREFS;
-	}
+    # Read what we got last time.   
+    if ( open ( PREFS, "< ", $cache_filepath ) ) {
+        while (<PREFS>) {
+            chomp;
+            ( $pref, $value ) = split( ":" );
+            $prefs{"$pref"} = $value;
+        }
+        
+        close PREFS;
+    }
 
-	# Prompt them for current values
-	unless ( defined $prefs{"email"} ) { $prefs{"email"} = "" }
-	print "Email [" . $prefs{"email"} . "]: ";
-	$res = <STDIN>; chomp $res;
-	if ( $res ) {
-		$prefs{"email"} = $res;
-	}
+    # Prompt them for current values
+    unless ( defined $prefs{"email"} ) { $prefs{"email"} = "" }
+    print "Email [" . $prefs{"email"} . "]: ";
+    $res = <STDIN>; chomp $res;
+    if ( $res ) {
+        $prefs{"email"} = $res;
+    }
 
-	unless ( defined $prefs{"password"} ) { $prefs{"password"} = "" }
-	print "Password [". $prefs{"password"} . "]: ";
-	$res = <STDIN>; chomp $res;
-	if ( $res ) {
-		$prefs{"password"} = $res;
-	}
+    unless ( defined $prefs{"password"} ) { $prefs{"password"} = "" }
+    print "Password [". $prefs{"password"} . "]: ";
+    $res = <STDIN>; chomp $res;
+    if ( $res ) {
+        $prefs{"password"} = $res;
+    }
 
-	# Make the cache directory if it doesn't exist.
-	$self->make_cache_dir;
+    # Make the cache directory if it doesn't exist.
+    $self->make_cache_dir;
 
-	# Store the new values.
-	open ( PREFS, ">", $cache_filepath ) or croak $!;
-	print PREFS "email:" . $prefs{"email"} . "\n" .
-		"password:" . $prefs{"password"} . "\n";
-	close PREFS;
-	
-	# Store the account info.
-	$self->{account_name}=$prefs{"email"};
-	$self->{password}=$prefs{"password"};
+    # Store the new values.
+    open ( PREFS, ">", $cache_filepath ) or croak $!;
+    print PREFS "email:" . $prefs{"email"} . "\n" .
+        "password:" . $prefs{"password"} . "\n";
+    close PREFS;
+    
+    # Store the account info.
+    $self->{account_name}=$prefs{"email"};
+    $self->{password}=$prefs{"password"};
 }
 
 #---------------------------------------------------------------------
@@ -3035,22 +3226,22 @@ sub _get_acct {
 
 sub _get_friend_id {
 
-	my ( $homepage ) = @_;
-	
-	# Search the code for the link. This is why we like Perl. :)
-	my $page_source = $homepage->content;
-	$page_source =~ /index\.cfm\?fuseaction=user\.viewfriends\&friendID=([0-9]+)/;
-	my $friend_id=$1;
-	( $DEBUG ) && print "Got friend ID: $friend_id\n";
+    my ( $homepage ) = @_;
+    
+    # Search the code for the link. This is why we like Perl. :)
+    my $page_source = $homepage->content;
+    $page_source =~ /index\.cfm\?fuseaction=user\.viewfriends\&friendID=([0-9]+)/;
+    my $friend_id=$1;
+    ( $DEBUG ) && print "Got friend ID: $friend_id\n";
 
-	# Store it
-	$self->{my_friend_id} = $friend_id;
-	
-	if ( $friend_id ) {
-		$self->error(0)
-	} else {
-		$self->error("Couldn't get friendID from home page")
-	}
+    # Store it
+    $self->{my_friend_id} = $friend_id;
+    
+    if ( $friend_id ) {
+        $self->error(0)
+    } else {
+        $self->error("Couldn't get friendID from home page")
+    }
 
 }
 
@@ -3072,97 +3263,97 @@ sub _get_friend_id {
 
 sub _get_friend_page {
 
-	my ( $page, $source, $id ) = @_;
-	
-	my $url;
-	my $res;
-	my $success;
-	my $verify_re = '';
-	$source = '' unless defined $source;
+    my ( $page, $source, $id ) = @_;
+    
+    my $url;
+    my $res;
+    my $success;
+    my $verify_re = '';
+    $source = '' unless defined $source;
 
-	# Set the URL string for the right set of pages
-	if ( $source eq "inbox" ) {
-		$url = $MAIL_INBOX_URL . $page;
-	} elsif ( $source eq "group" ) { 
-		$url = "http://groups.myspace.com/index.cfm?fuseaction=".
-			"groups.viewMembers&groupID=${id}&page=${page}";
-	} elsif ( $source eq 'browse' ) {
-		# This page is weird. It's one big form, and the page number
-		# is just part of the form. So the first time, we just get
-		# the form, and the rest we just update the page number.
-		# Oh, and we start at page 1 instead of 0.
-		if ( $page == 1 ) {
-			# First time through we load the browse form and submit to
-			# specify our options.
-			$success = $self->submit_form(
-				$BROWSE_PAGE, 1, 'update', $id,
-				'Browse Users', 'Browse Users',
-				'http://browseusers.myspace.com/browse/');
-		} else {
-			# Then simply update the page number and submit the form
-			$id->{'Page'} = $page;
-			$success = $self->submit_form(
-				$self->current_page, 1, 'update', $id,
-				'Browse Users', 'Browse Users',
-				'http://browseusers.myspace.com/browse/' );
-		}
+    # Set the URL string for the right set of pages
+    if ( $source eq "inbox" ) {
+        $url = $MAIL_INBOX_URL . $page;
+    } elsif ( $source eq "group" ) { 
+        $url = "http://groups.myspace.com/index.cfm?fuseaction=".
+            "groups.viewMembers&groupID=${id}&page=${page}";
+    } elsif ( $source eq 'browse' ) {
+        # This page is weird. It's one big form, and the page number
+        # is just part of the form. So the first time, we just get
+        # the form, and the rest we just update the page number.
+        # Oh, and we start at page 1 instead of 0.
+        if ( $page == 1 ) {
+            # First time through we load the browse form and submit to
+            # specify our options.
+            $success = $self->submit_form(
+                $BROWSE_PAGE, 1, 'update', $id,
+                'Browse Users', 'Browse Users',
+                'http://browseusers.myspace.com/browse/');
+        } else {
+            # Then simply update the page number and submit the form
+            $id->{'Page'} = $page;
+            $success = $self->submit_form(
+                $self->current_page, 1, 'update', $id,
+                'Browse Users', 'Browse Users',
+                'http://browseusers.myspace.com/browse/' );
+        }
 
-		$res = $self->current_page;
+        $res = $self->current_page;
 
-	} else {
-		$verify_re = "View All Friends";
-		( $DEBUG ) && print "Loading friend page $page\n";
-		# Unless they specified a profile to get friends from,
-		# use our own.
-		unless ( $source eq 'profile' ) {
-			$id = $self->my_friend_id;
-		}
+    } else {
+        $verify_re = "View All Friends";
+        ( $DEBUG ) && print "Loading friend page $page\n";
+        # Unless they specified a profile to get friends from,
+        # use our own.
+        unless ( $source eq 'profile' ) {
+            $id = $self->my_friend_id;
+        }
 
-		if ( $page == 1 ) {
-			# First page
-			$url = "http://home.myspace.com/index.cfm?".
-				"fuseaction=user.viewfriends&".
-				"friendID=" . $id;
-#				"FriendCount=" . $self->friend_count . "&" .
-#				"userName=" . $self->user_name;
-#			warn "Processing friendID " . $id . "\n";
-		} else {
-			# Subsequent pages
-			$url = "http://home.myspace.com/index.cfm?".
-				"fuseaction=user.viewfriends&".
-				"friendID=" . $id . "&" .
-				"friendCount=" . $self->{_friend_count} . "&" .
-				"userName=" . $self->{_user_name} . "&" .
-				"page=" . $page . "&" .
-				"prevPage=" . $self->{_last_friend_page} . "&" .
-				"PREVPageFirstONERETURENED=" . $self->{_low_friend_id}."&".
-				"PREVPageLASTONERETURENED=" . $self->{_high_friend_id};
-#				. "&";
-#				"f_search=&searchby=&" . 
-#				"lastpageofset=" . $self->{_total_friend_pages} . "&".
-#				"TotalRecords=" . $self->friend_count;
-		}
+        if ( $page == 1 ) {
+            # First page
+            $url = "http://home.myspace.com/index.cfm?".
+                "fuseaction=user.viewfriends&".
+                "friendID=" . $id;
+#               "FriendCount=" . $self->friend_count . "&" .
+#               "userName=" . $self->user_name;
+#           warn "Processing friendID " . $id . "\n";
+        } else {
+            # Subsequent pages
+            $url = "http://home.myspace.com/index.cfm?".
+                "fuseaction=user.viewfriends&".
+                "friendID=" . $id . "&" .
+                "friendCount=" . $self->{_friend_count} . "&" .
+                "userName=" . $self->{_user_name} . "&" .
+                "page=" . $page . "&" .
+                "prevPage=" . $self->{_last_friend_page} . "&" .
+                "PREVPageFirstONERETURENED=" . $self->{_low_friend_id}."&".
+                "PREVPageLASTONERETURENED=" . $self->{_high_friend_id};
+#               . "&";
+#               "f_search=&searchby=&" . 
+#               "lastpageofset=" . $self->{_total_friend_pages} . "&".
+#               "TotalRecords=" . $self->friend_count;
+        }
 
-#			warn "processing page $url\n";
-	}
+#           warn "processing page $url\n";
+    }
 
-	# Get the page
-	unless ( $source eq 'browse' ) {
-		( $DEBUG ) && print "  Getting URL: $url\n";
-		$res = $self->get_page( $url );
-		if ( $res->content =~ /This profile is set to private. This user must add <br\/>you as a friend to see his\/her profile./ ) {
-			$self->error("User profile is set to private.");
-		}
+    # Get the page
+    unless ( $source eq 'browse' ) {
+        ( $DEBUG ) && print "  Getting URL: $url\n";
+        $res = $self->get_page( $url );
+        if ( $res->content =~ /This profile is set to private. This user must add <br\/>you as a friend to see his\/her profile./ ) {
+            $self->error("User profile is set to private.");
+        }
 
-		# Save info if we need to
-		unless ( $self->error ) {
-			$self->$save_friend_info if  (
-				( ( $source eq '' ) || ( $source eq 'profile' ) ) &&
-				( $page == 1 ) );
-		}
-	}
+        # Save info if we need to
+        unless ( $self->error ) {
+            $self->$save_friend_info if  (
+                ( ( $source eq '' ) || ( $source eq 'profile' ) ) &&
+                ( $page == 1 ) );
+        }
+    }
 
-	return $res;
+    return $res;
 }
 
 #---------------------------------------------------------------------
@@ -3172,20 +3363,20 @@ sub _get_friend_page {
 
 my sub save_friend_info {
 
-	# Get and store the friend count and user name
-	# Friend count
-	$self->current_page->content =~ /name="friendCount" value="([0-9]+)"/i;
-	$self->{_friend_count} = $1;
-	warn "Didn't get friend count" unless ( $self->{_friend_count} );
-	
-	# User name
-	$self->current_page->content =~ /name="userName" value="([^"]*)"/i;
-	$self->{_user_name} = $1;
-	warn "Didn't get user_name" unless ( $self->{_user_name} );
-	
-#	warn "Stored friend count " . $self->{_friend_count} . ", ".
-#		"user name " . $self->{_user_name} . ".\n";
-	
+    # Get and store the friend count and user name
+    # Friend count
+    $self->current_page->content =~ /name="friendCount" value="([0-9]+)"/i;
+    $self->{_friend_count} = $1;
+    warn "Didn't get friend count" unless ( $self->{_friend_count} );
+    
+    # User name
+    $self->current_page->content =~ /name="userName" value="([^"]*)"/i;
+    $self->{_user_name} = $1;
+    warn "Didn't get user_name" unless ( $self->{_user_name} );
+    
+#   warn "Stored friend count " . $self->{_friend_count} . ", ".
+#       "user name " . $self->{_user_name} . ".\n";
+    
 }
 
 =head2 _next_button
@@ -3214,13 +3405,13 @@ EXAMPLES
 
 sub _next_button {
 
-	my ( $content ) = @_;
-	
-	unless ( $content ) {
-		$content = $self->current_page->content;
-	}
+    my ( $content ) = @_;
+    
+    unless ( $content ) {
+        $content = $self->current_page->content;
+    }
 
-	$content =~ /">Next<\/a>( |&nbsp;)\&gt;/i;
+    $content =~ /">Next<\/a>( |&nbsp;)\&gt;/i;
 
 }
 
@@ -3238,13 +3429,6 @@ XXX - NOT YET FUNCTIONAL
 
 XXX - More debugging needs to be done to ensure accurate
 results, and tests need to be added to the test suite for it.
-It is working only in Basic search mode, and doesn't seem to
-maintain state between pages.  This is not a high-priority
-function for me, so if you'd like to help debug/implement it
-please do.  Send me a patch and I'll credit you. :)
-
-( Update 4/3/2006: Re-wrote the method, but it now dies due to
-bug#18521 in WWW::Mechanize ).
 
 And now back to your normal docs:
 
@@ -3267,7 +3451,8 @@ For now, you have to look at the code for the browse page:
 
  http://browseusers.myspace.com/browse/Browse.aspx
 
-and get the form variables and possible values from there.
+Switch to Advanced more and get the form variables and possible values
+from there.
 
 Note that depending on any defaults is dangerous, as this is a strange
 form indeed.
@@ -3276,43 +3461,114 @@ form indeed.
 
 sub browse {
 
-	my ( $criteria ) = @_;
-	my @friends = ();
+    my ( $criteria ) = @_;
+    my @friends = ();
 
-	# Safety check
-	croak 'Criteria must be a hash reference\n' unless ref $criteria;
+    # Safety check
+    croak 'Criteria must be a hash reference\n' unless ref $criteria;
 
-	$DEBUG = 1;
-	# Switch to advanced view
-	$self->submit_form( $BROWSE_PAGE, 1, '',
-		{
-			'__EVENTTARGET' => 'ctl00$Main$advancedView',
-		}
-	) or die;
+    my $re = "Browse Users";
 
-	# Enter the search criteria and click Update
-	$self->submit_form( $self->current_page, 1, 'ctl00$Main$update',
-		{ %{$criteria}, '__EVENTTARGET' => 'ctl00$Main$update' } ) or die;
+    # Switch to advanced view
+    $self->submit_form( {
+        'page' => $BROWSE_PAGE,
+        'form_name' => 'aspnetForm',
+        'no_click' => 1,
+        'fields_ref' => {
+                            '__EVENTTARGET' => 'ctl00$Main$advancedView',
+                        },
+        're1' => $re,
+        're2' => $re,
+    } ) or return;
 
-	# Loop through the resulting pages getting friendIDs.
-	my $page = 1;
-	do {
-		push @friends, $self->get_friends_on_page( $self->current_page->content );
-		$page++;
-		$self->submit_form( $self->current_page, 1, '',
-			{ page => $page }
-		);
-	} until ( ( $self->error ) ||
-			  ( $self->_next_button )
-			);
+    # Enter the search criteria and click Update
+    $self->submit_form( {
+        'form_name' => 'aspnetForm',
+        'action' => $self->_browse_action( 'Update' ),
+        'fields_ref' => { %{$criteria}, '__EVENTTARGET' => 'ctl00$Main$update' },
+        're1' => $re,
+        're2' => $re,
+    } ) or return;
 
-	# Sort and remove duplicates
-	my %friends = ();
-	foreach my $id ( @friends ) {
-		$friends{ $id } = 1;
-	}
+    # Loop through the resulting pages getting friendIDs.
+    my $page = 1;
+    until ( ( $self->error ) ||
+              ( ! $self->_next_button )
+            ) {
+        
+        # Get the friends from the current page
+        push @friends, $self->get_friends_on_page( $self->current_page->content );
+        
+        # Click "Next"
+        $page++;
+        $self->_browse_next( $page, $re );
+    }
 
-	return ( sort( keys( %friends ) ) );
+    # Sort and remove duplicates
+    my %friends = ();
+    foreach my $id ( @friends ) {
+        $friends{ $id } = 1;
+    }
+
+    return ( sort( keys( %friends ) ) );
+}
+
+=head2 _browse_next( $page )
+
+The browse form's Next button calls a JavaScript function that sets
+"action" and "page" in the browse form and "clicks" submit.  So we
+do the same here.  Called by browse to simulate clicking "next".
+
+=cut
+
+sub _browse_next {
+
+    my ( $page, $re ) = @_;
+
+    # Get the javascript-set action for the next button post
+    my $action = $self->_browse_action( "GotoPage" );
+    return 0 unless $action;
+    
+    # Submit the form.
+    my $submitted = $self->submit_form( {
+        'form_name' => "aspnetForm",
+        'action' => $action,
+        'no_click' => 1,
+        'fields_ref' => { page => $page },
+        're1' => $re,
+        're2' => $re,
+#       'base' => "http://browseusers.myspace.com/",
+    } );
+
+    return $submitted;
+
+}
+
+=head2 _browse_action( $function_name )
+
+Gets the action set by the specificied function on the Browse page.
+
+=cut
+
+sub _browse_action {
+
+    my ( $function ) = @_;
+
+    # Look for the action (we need MyToken)
+    $self->current_page->content =~
+        /function ${function}.*?theForm\.action = "Browse\.aspx(\?MyToken=[^"]+)"/is;
+
+#   my $action = "http://browseusers.myspace.com/browse" . $1;
+    my $args = $1;
+
+    unless ( $args ) {
+        $self->error("Couldn't find Javascript GotoPage function to set action");
+        return "";
+    }
+    
+    my $action = "http://browseusers.myspace.com/browse/Browse.aspx" . $args;
+    return $action;
+
 }
 
 =head2 search_music
@@ -3328,23 +3584,25 @@ The easiest way I've found to get your values is to fill them in on the
 search form, click "Update", then look at the page source.  Scroll to
 the botton where "PageForm" is and you'll see the values you selected.
 Put the pertinent ones (i.e. things you changed) into your script.
+Note that the field *names* are different, so just take the values,
+and use the names as described below.
 
 Any value the form can take (present or
 future) can be passed, so in theory you could write a CGI front-end also
 that just had the form, posted the values to itself, then used those
 values to call this method (i.e. do what I suggested above automatically).
 
-Here are the currently availably form labels/values (looking at the form
+Here are the currently available form labels/values (looking at the form
 helps):
 
  genreID: See the form for values
 
  search_term:
-	0: Band Name
+    0: Band Name
     1: Band Bio
-	2: Band Members
-	3: Influences
-	4: Sounds like
+    2: Band Members
+    3: Influences
+    4: Sounds like
 
  keywords: text field. Use it if you're searching by band name, etc.
 
@@ -3385,42 +3643,42 @@ browser would.
 
 sub search_music {
 
-	my ( $sc ) = @_;
-	
-	# Page verification RE
-	my $re = 'Music.*?&raquo;</font>.*?<font color="#003399">Search Results';
+    my ( $sc ) = @_;
+    
+    # Page verification RE
+    my $re = 'Music.*?&raquo;</font>.*?<font color="#003399">Search Results';
 
-	# First fill in the search form with their criteria.
-	$self->submit_form(
-		'http://musicsearch.myspace.com/index.cfm?fuseaction=music.search',
-		1, "", $sc, $re, $re, 'http://musicsearch.myspace.com/' );
+    # First fill in the search form with their criteria.
+    $self->submit_form(
+        'http://musicsearch.myspace.com/index.cfm?fuseaction=music.search',
+        1, "", $sc, $re, $re, 'http://musicsearch.myspace.com/' );
 
-	return undef if $self->error;
+    return undef if $self->error;
 
-	# Get the friends
-	my $page_no = 0;
-	my %friends = ();
-	do {
+    # Get the friends
+    my $page_no = 0;
+    my %friends = ();
+    do {
 
-		# Get the friends on this page
-		foreach my $id ( $self->get_friends_on_page ) {
-			$friends{ "$id" } = { 'page_no' => $page_no+1 };
-		}
-		
-		# Click "Next".
-		$page_no++;
-		$self->submit_form( $self->current_page, 2, "",
-		{ page => $page_no },
-		$re, $re, 'http://musicsearch.myspace.com/' );
+        # Get the friends on this page
+        foreach my $id ( $self->get_friends_on_page ) {
+            $friends{ "$id" } = { 'page_no' => $page_no+1 };
+        }
+        
+        # Click "Next".
+        $page_no++;
+        $self->submit_form( $self->current_page, 2, "",
+        { page => $page_no },
+        $re, $re, 'http://musicsearch.myspace.com/' );
 
-	} until ( ( $self->error ) || ( ! $self->_next_button ) || ( $page_no > 3 ) );
+    } until ( ( $self->error ) || ( ! $self->_next_button ) || ( $page_no > 3 ) );
 
 
-	 # Clean up and return
-	 return 
-	 	LIST { sort( keys( %friends ) ) }
-	 	HASHREF { \%friends }
-	 ;
+     # Clean up and return
+     return 
+        LIST { sort( keys( %friends ) ) }
+        HASHREF { \%friends }
+     ;
 }
 
 
@@ -3502,9 +3760,6 @@ Add methods to FriendAdder.pm to: 1-exlude friends, 2-exclude pending
 friends, 3-cache like Comment.pm, 4-exclude friends in the "messaged"
 cache file.
 
-Add test to 05-message to send a message, find it with inbox, and check its
-contents. Do this in addition to the existing read_message test.
-
 get_friends needs to throw an error, or at least set error, if it can't
 return the full list of friends (i.e. if either of the "warn" statements
 are triggered)
@@ -3512,10 +3767,7 @@ are triggered)
 Review and possibly rework code to properly use (, abuse, or replace)
 WWW::Mechanize.
 
- See: - submit_form - handling of passed $res is flakey.
-	  - delete_friends - "proper" forced handling of a passed form.
-	  
-delete_friend will probably only delete the first friend passed. Fix it.
+ See: - delete_friends - "proper" forced handling of a passed form.
 
 =head1 CONTRIBUTING
 

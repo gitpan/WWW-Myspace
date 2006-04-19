@@ -22,8 +22,10 @@ WriteMakefile(
 #        'IO::All' => 0.33, # Needed for the scripts
         'File::Spec::Functions' => 0, # Note: Forces File::Spec 0.7 or later.
         'Contextual::Return'    => 0, # For send_friend_request method
+        'Class::DBI::AbstractSearch' => 0, # FriendAdder.pm
         'Config::General'       => 0, # FriendAdder.pm
-        'IO::Prompt'            => 0, # For FriendAdder.pm 
+        'DateTime'              => 0, # FriendAdder.pm
+        'IO::Prompt'            => 0, # FriendAdder.pm 
         'List::Compare'         => 0, # FriendAdder.pm
         'Locale::SubCountry'    => 0, # FriendAdder.pm, cool_new_people
         'Math::Round'           => 0, # FriendAdder.pm

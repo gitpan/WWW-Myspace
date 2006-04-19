@@ -18,11 +18,11 @@ account
 
 =head1 VERSION
 
-Version 0.04
+Version 0.05
 
 =cut
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 =head1 SYNOPSIS
 
@@ -65,8 +65,10 @@ my %default_params = (
     max_count           => { default => 50 },
     message_on_captcha  => { default => 0 },
     myspace             => 0,
+    profile_type        => 0,
     random_sleep        => { default => 0 },
     sleep               => { default => 10 },
+    time_zone           => 0,
 );
 
 field 'myspace';
@@ -166,6 +168,11 @@ it.  If you don't feel like interacting, set this to 0.  Default is on.
 Set this to any positive integer and FriendAdder will stop friend
 requests when it reaches this upper limit.  Default is 50.
 
+=item * C<< profile_type => [ 'band' | 'personal' | 'all' ] >>
+
+Set this to band if you only want to add bands.  Set it to personal if
+you only want to add personal pages.  Defaults to "all" (adds any profile). 
+
 =item * C<< random_sleep => [0|1] >>
 
 Want your script to feel more human?  Set I<random_sleep> to 1 and
@@ -261,7 +268,7 @@ sub send_friend_requests {
     my $adds     = 0; # successful add requests
     my $captcha  = 0; # message_on_captcha attempts
     my $continue = 1; # break loop?
-    my $count    = 1; # ids processed
+    my $count    = 0; # ids processed
     my $sleep    = $self->{'sleep'};   # sleep between attempts
     
     my %codes       = (); # status messages, keyed on codes
@@ -273,6 +280,8 @@ sub send_friend_requests {
         my $data = WWW::Myspace::Data->new( 
             $self->{myspace}, { db => $self->{'db'} }
         );
+        
+        $self->{'data'} = $data;
         
         # check to see if we can access the db
         $self->{'loader'} = $data->loader();
@@ -292,7 +301,7 @@ sub send_friend_requests {
         # if we have database access, use our own friends list
         if ( $self->{'db'} ) {
         
-            $self->_report("Getting friends ids from database...\n");
+            $self->_report("Getting friend ids from database...\n");
             
             # create an iterator
             my $it = WWW::Myspace::Data::Friends->retrieve_all();
@@ -334,11 +343,14 @@ sub send_friend_requests {
             
             my @unlogged_ids = ( );
             
+            my $account_id = $self->{'data'}->get_account();
+            
             foreach my $unique_id (@unique_ids) {
                 
-                my $logged = WWW::Myspace::Data::AddLog->retrieve(
-                    friend_id => $unique_id,
-                    result_code => 'P'
+                my $logged = WWW::Myspace::Data::PostLog->search_where(
+                    account_id => [ $account_id ],
+                    friend_id => [ $unique_id ],
+                    result_code => [ 'P', 'PA', 'FF', 'FP' ],
                 );
                 
                 unless ( $logged ) {
@@ -346,8 +358,8 @@ sub send_friend_requests {
                 }
             }
             
-            my $before = @unique_ids;
-            my $after = @unlogged_ids;
+            my $before  = @unique_ids;
+            my $after   = @unlogged_ids;
             
             @unique_ids = @unlogged_ids;
         }
@@ -366,7 +378,7 @@ sub send_friend_requests {
         $self->_report("$current friends now\t");
         $self->_report("$future ids supplied by you\t");
         $self->_report("$unique unique ids\n");
-        $self->_report("You already share $shared friends\n");
+        $self->_report("Excluded $shared friends\n");
 
     }
 
@@ -379,13 +391,36 @@ sub send_friend_requests {
     }
     
     foreach my $id (@potential_friends) {
-
+        
+        ++$count;
+        
+        # throw out unwanted profiles
+        if ( $self->{'profile_type'} && $self->{'profile_type'} eq 'band' ) {
+            unless ( $self->myspace->is_band( $id  ) ) {
+                $self->_report("$count)\t$id\tSkipping personal page...\n");
+                next;
+            }
+        }
+        elsif ( $self->{'profile_type'} && $self->{'profile_type'} eq 'personal' ) {
+            if ( $self->myspace->is_band( $id  ) ) {
+                $self->_report("$count)\t$id\tSkipping band...\n");
+                next;
+            }        
+        }
+        
         # send requests individually
         my ( $status_code, $status ) =
             $self->myspace->send_friend_request( $id );
             
         ++$adds if ( $status_code eq 'P' );
 
+        # if there's a db connection and the person is already
+        # listed as a friend, we need to make sure they have
+        # been added to the table
+        if ( $self->{'db'} && $status_code eq 'FF' ) {
+            $self->{'data'}->update_friend( $id );        
+        }
+        
         if ( $status_code eq 'FC' ) {
 
             if ( $self->{'message_on_captcha'} ) {
@@ -430,16 +465,28 @@ sub send_friend_requests {
         
         if ( $self->{'db'} ) {
             
-            # friend_id is keyed as unique
-            my $friend_obj = WWW::Myspace::Data::AddLog->find_or_create(
-                { friend_id => $id }
+            my $account_id = $self->{'data'}->get_account();
+            
+            # create or update the entry in post_log
+            my $friend_obj = WWW::Myspace::Data::PostLog->find_or_create(
+                { 
+                post_type  => 'A', 
+                account_id => $account_id, 
+                friend_id  => $id 
+                }
             );
             
+            my $date_stamp = $self->{'data'}->date_stamp( 
+                    { time_zone => $self->{'time_zone'}, } 
+            );
+            
+            # set an update time
+            $friend_obj->last_post( $date_stamp );            
             $friend_obj->result_code( $status_code );
-            $friend_obj->time( time() );
             $friend_obj->update;
             
             $self->_report( "added to log ");
+            
         }
         
         # if there is still an FC status, 
@@ -491,7 +538,6 @@ sub send_friend_requests {
             $self->_report("\n\t\t\t");
             $self->_report("Sleeping for $sleep_now seconds...\n");
             sleep $sleep_now;
-            ++$count;
         }
 
     }
@@ -529,20 +575,6 @@ sub add_to_friends {
     
 }
 
-=head2 _report( )
-
-Internal method.  If the interactive switch is on, this will print.  If
-it's not, well you can probably guess.
-
-=cut
-
-sub _report {
-
-    if ( $self->{'interactive'} ) {
-        print @_;
-    }
-}
-
 =head2 return_params( )
 
 Useful for testing whether your params have been set as expected.
@@ -563,9 +595,26 @@ sub return_params {
 
 }
 
+
+=head2 _report( )
+
+Internal method.  If the interactive switch is on, this will print.  If
+it's not, well you can probably guess.
+
+=cut
+
+sub _report {
+
+    if ( $self->{'interactive'} ) {
+        print @_;
+    }
+}
+
 =head2 _die_pretty( )
 
-Internal method that deletes the Myspace object from $self and then prints $self via Data::Dumper.  The Myspace object is so big, that when you get it out of the way it can be easier to debug set parameters.
+Internal method that deletes the Myspace object from $self and then
+prints $self via Data::Dumper.  The Myspace object is so big, that when
+you get it out of the way it can be easier to debug set parameters.
 
     $adder->_die_pretty;
 

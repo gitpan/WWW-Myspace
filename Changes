@@ -1,5 +1,49 @@
 Revision history for WWW::Myspace
 
+0.42    2006-04-19
+        - All page loads now check for "You must be logged in" error and
+          re-login if necessary.  This fixes a bug many have reported in
+          which they will start receiving "Failed, Network Error" messages
+          for every post.
+        - Recoded delete_form to allow it to delete more than one
+          friend at a time.
+        - Message.pm now excludes previously posted friends whose profiles
+          were set to "private" or "away".
+        - Message.pm now displays the "counter" value for each message it's
+          sending.
+        - Removed delete_friend note from TODO.
+        - Corrected "Sorry! an unexpected error has occurred" RE check.
+          (Wasn't identifying that error, now it will).
+        - Re-wrote browse function. Returns proper number of friends,
+          needs testing to make sure filters are working, and needs
+          proper docs to make it more useful.
+        - Re-wrote submit_form to use hashref of options and accept some
+          more options needed for browse.
+        - Updated browse sample script. Doesn't require login, displays
+          error if one occurs.
+        - "Detabbed" Myspace.pm code.
+        - get_inbox sample script can now take a friendID as an argument to
+          display messages from that friendID.
+        - Comment.pm no longer prints "Excluding " messages.
+        - Switched Data.pm from add_log to post_log table
+        - Added get_account_id to Data.pm
+        - Added DateTime.pm dependancy to Data.pm 
+        - Added time_zone parameter to FriendAdder
+        - Changed $logged to be true on 'P', 'FF', 'FP' in FriendAdder
+        - Added Class::DBI::AbstractSearch dependancy to FriendAdder
+        - Added profile_type parameter to FriendAdder
+        - Myspace.pm now correctly recognizes "doing some maintenance on the
+          mail for certain users" as an error page.
+        - Changed get_account_id to get_account in Data.pm
+        - Changed add_account to set_account in Data.pm
+        - Myspace object no longer needs to be passed to Data.pm to get
+          account info
+        - FF response code in FriendAdder now automatically logs friends if
+          Data.pm is used 
+        - Added db documenation to Data.pm
+        - Removed add_log from database scheme
+        - Added date_stamp routine to Data.pm
+
 0.41    2006-04-15
         - Fixed tiny typo in Data.pm docs.
         - Fixed possible bug in FriendAdder.pm that would cause failed add

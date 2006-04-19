@@ -3,9 +3,11 @@
 
 use WWW::Myspace;
 
-my $myspace = new WWW::Myspace;
+my $myspace = new WWW::Myspace( auto_login => 0 );;
 
 my @friends = $myspace->browse( {} );
+
+print $myspace->error . "\n" if $myspace->error;
 
 print "Found " . @friends . " friends\n";
 

@@ -6,8 +6,10 @@ use WWW::Myspace::MyBase -Base;
 use Carp qw(croak cluck);
 use Class::DBI::Loader;
 use Class::DBI;
+use Class::DBI::AbstractSearch;
 use Config::General;
 use Data::Dumper;
+use DateTime;
 use Params::Validate qw(:types);
 use Scalar::Util qw(reftype);
 
@@ -17,11 +19,11 @@ WWW::Myspace::Data - WWW::Myspace database interaction
 
 =head1 VERSION
 
-Version 0.02
+Version 0.03
 
 =cut
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 =head1 SYNOPSIS
 
@@ -32,6 +34,25 @@ is intended to be used as a back end for the Myspace modules, but it can
 also be called directly from a script if you need direct database
 access.
 
+    my %db = (
+        dsn      => 'dbi:mysql:database_name',
+        user     => 'username',
+        password => 'password',
+    );
+    
+    # create a new object
+    my $data       = WWW::Myspace::Data->new( $myspace, { db => \%db } );
+    
+    # set up a database connection
+    my $loader     = $data->loader();
+    
+    # initialize the database with MySpace login info
+    my $account_id = $data->set_account( $username, $password );
+    
+    # now do something useful...
+    my $update = $data->update_friend( $friend_id );
+    
+    
 =cut
 
 =head1 CONSTRUCTOR AND STARTUP
@@ -144,9 +165,10 @@ const default_options => \%default_params;
 
 =head2 loader( )
 
-Returns the Class::DBI::Loader object.  Handy if you want to access the
-database directly.  If a loader object does not already exist, loader()
-will try to create one.
+Before you do anything, call the loader() method.  This returns the
+Class::DBI::Loader object.  Handy if you want to access the database
+directly.  If a loader object does not already exist, loader() will try
+to create one.
 
     my $loader = $data->loader();
     
@@ -167,23 +189,36 @@ sub loader {
 
 }
 
-=head2 add_account ( $account, $password )
+=head2 set_account ( $account, $password )
 
-Store your account login information in the accounts table.  The method
-attempts to log in to Myspace first.  If successful, your login
-information will be stored.  If your account already exists in the
-accounts table, your password will be updated to the password supplied
-to the method.  If successful, it returns the id of the account.  That
-is, the id which has been assigned to this account in the accounts
-table.  Returns 0 if there was a problem creating or updating the
-account.
+In order to use the database, you'll need to store your account login
+information in the accounts table.  This method attempts to log in to
+Myspace first.  If successful, your login information will be stored. 
+If your account already exists in the accounts table, your password will
+be updated to the password supplied to the method.
+
+In order to use this module, you'll have to call this function at least
+once.  Once your account has been added to the database, there's no need
+to call set_account again, provided you always use the same Myspace
+account and you don't change your password information.
+
+This mutator will also allow you to switch accounts within the same
+object. So, if you can switch from user A to user B, without creating a
+new object. In order to prevent you from shooting yourself in the foot,
+set_account() will die if it is unable to log in to MySpace with the
+username/password you provide.
+
+To prevent any problems, be sure to check the return value.  If
+successful, it returns the id of the account.  That is, the id which has
+been assigned to this account in the accounts table.  Returns 0 if there
+was a problem creating or updating the account.
 
 =cut
 
-sub add_account {
+sub set_account {
 
     my $account_name = shift;
-    my $password = shift;
+    my $password     = shift;
     
     croak "no db connection" unless ( $self->loader );
     
@@ -192,6 +227,8 @@ sub add_account {
     unless ( $myspace->logged_in ) {
         croak "Login failed using: $account_name / $password\n";
     }
+    
+    $self->{'myspace'} = $myspace;
     
     my $account = $self->{'Accounts'}->find_or_create(
         { account_name => $account_name, }
@@ -202,6 +239,7 @@ sub add_account {
     my $update = $account->update;
     
     if ( $update ) {
+        $self->{'account_id'} = $account->account_id;
         return $account->account_id;
     }
     else {
@@ -211,29 +249,17 @@ sub add_account {
 
 }
 
-=head2 update_friend( $myspace, $friend_id )
+=head2 get_account( )
 
-The "friends" table in your local database stores information about
-myspace friends, shared among all accounts using your database.
-This lets you store additional information about them, such as their
-first name, and is also used by WWW::Myspace methods and modules
-to track information related to friends.
+Returns the account id assigned by the database for the account under
+which $myspace is currently logged in.  Mostly useful for internal
+stuff, but it's available if you need it.
 
-update_friend takes a single friend id and makes sure it is represented
-in the local "friends" table.
-
-    my $data = new WWW::Myspace::Data( \%config );
-    
-    $data->update_friend( $myspace, $friend_id );
-    
 =cut
 
-sub update_friend {
-    
-    croak "no db connection" unless ( $self->loader );
+sub get_account {
 
-    my $friend_id = shift;
-    my $myspace   = $self->{'myspace'};
+    my $myspace = $self->{'myspace'};
     
     unless ( $self->{'account_id'} ) {
     
@@ -244,11 +270,41 @@ sub update_friend {
         # tweak this later to create an account automatically
         # rather than croaking
         unless ( $account ) {
-            croak "this account does not exist\n";
+            croak "this account does not exist.  call set_account to create it.\n";
         }
         
         $self->{'account_id'} = $account->account_id;
     }
+    
+    return $self->{'account_id'};
+    
+}
+
+=head2 update_friend( $friend_id )
+
+The "friends" table in your local database stores information about
+myspace friends, shared among all accounts using your database. This
+lets you store additional information about them, such as their first
+name, and is also used by WWW::Myspace methods and modules to track
+information related to friends.
+
+update_friend takes a single friend id and makes sure it is represented
+in the local "friends" table.  Returns 1 if the entry was successfully
+updated.  (Returns Class::DBI return value for the update).
+
+    my $data = new WWW::Myspace::Data( \%config );
+    
+    $data->update_friend( $friend_id );
+    
+=cut
+
+sub update_friend {
+    
+    croak "no db connection" unless ( $self->loader );
+
+    my $friend_id  = shift;
+    my $myspace    = $self->{'myspace'};
+    my $account_id = $self->get_account( );
     
     # manage profile in "friends" table
     my $friend = $self->{'Friends'}->find_or_create( 
@@ -266,8 +322,8 @@ sub update_friend {
     
     # map friend to account in "friend_to_account" table
     my $account = $self->{'FriendToAccount'}->find_or_create(
-        {   friend_id => $friend_id,
-            account_id => $self->{'account_id'},
+        {   friend_id  => $friend_id,
+            account_id => $account_id,
         }
     );
     
@@ -275,18 +331,18 @@ sub update_friend {
         $account->time( time() );
     }
     
-    $account->update;
+    return $account->update;
 
 }
 
-=head2 update_all_friends( $myspace )
+=head2 update_all_friends( )
 
 update_all_friends is really just a wrapper around update_friend  This
 method fetches a complete list of your friends currently listed at
-MySpace and makes sure that all myspace users that are friends
-of your account are represented in the local "friends" table.  It does
-not delete friends which may have been removed from your MySpace
-account since your last update.
+MySpace and makes sure that all myspace users that are friends of your
+account are represented in the local "friends" table.  It does not
+delete friends which may have been removed from your MySpace account
+since your last update.
 
 =cut
 
@@ -301,6 +357,32 @@ sub update_all_friends {
     }
 
 }
+
+
+=head2 date_stamp( )
+
+A wrapper around DateTime which provides a date stamp to be used when
+entries are updated.  This is essentially an internal routine.  When
+called internally the time zone is supplied from the value passed to
+new().
+
+    my $date_stamp = $data->date_stamp( { time_zone => 'America/Toronto' } );
+
+=cut
+
+sub date_stamp {
+
+    my $param_ref = shift;
+    
+    my $dt = DateTime->now;
+    if ( $param_ref->{'time_zone'} ) {
+        $dt->set_time_zone( $param_ref->{'time_zone'} );
+    }
+    
+    return $dt->ymd . ' ' . $dt->hms;
+
+}
+
 
 =head2 _loader( )
 
@@ -328,9 +410,9 @@ sub _loader {
         namespace               => 'WWW::Myspace::Data',
         relationships           => 1,
         options                 => { AutoCommit => 1 }, 
-        inflect                 => { child => 'children' }
+        inflect                 => { child => 'children' },      
+        additional_classes      => qw/Class::DBI::AbstractSearch/,
         
-        #additional_classes      => qw/Class::DBI::AbstractSearch/,
         #additional_base_classes => qw/My::Stuff/, # or arrayref
         #left_base_classes       => qw/Class::DBI::Sweet/, #
         #constraint              => '^foo.*',    
@@ -347,7 +429,7 @@ sub _loader {
     }
     
     unless ( $loader ) {
-        croak "couldn't not make a database connection\n";
+        croak "could not make a database connection\n";
     }
     
     return $loader;
@@ -371,6 +453,22 @@ sub _die_pretty {
      die Dumper(\$self);
 }
 
+=head1 DATABASE SCHEMA
+
+You'll find the database schema in a file called mysql.txt in the top
+directory after untarring WWW::Myspace.  This is a dump of the MySQL db
+from phpMyAdmin.  It can easily be altered for other database formats
+(like SQLite).  You can import the schema directly from the command
+line:
+
+mysql -u username -p databasename < mysql.txt
+
+You may also use a utility like phpMyAdmin to import this file as SQL.
+
+Keep in mind that the schema hasn't been 100% finalized and is subject
+to change.
+
+
 =head1 AUTHOR
 
 Olaf Alders, C<< <olaf at wundersolutions.com> >>
@@ -392,8 +490,8 @@ upgrading
 
 =head1 TO DO
 
-This module is in developer mode.  We still need to add a database
-schema and integrate it with the WWW::Myspace modules.
+This module is in developer mode.  We still need to finalize a database
+schema and integrate it fully with the other WWW::Myspace modules.
 
 =head1 SUPPORT
 
