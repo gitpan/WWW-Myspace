@@ -269,7 +269,6 @@ sub send_friend_requests {
     my $captcha  = 0; # message_on_captcha attempts
     my $continue = 1; # break loop?
     my $count    = 0; # ids processed
-    my $sleep    = $self->{'sleep'};   # sleep between attempts
     
     my %codes       = (); # status messages, keyed on codes
     my %code_report = (); # final report data, keyed on codes
@@ -299,7 +298,7 @@ sub send_friend_requests {
         my @current_friends = ( );
         
         # if we have database access, use our own friends list
-        if ( $self->{'db'} ) {
+        if ( $self->{'data'} ) {
         
             $self->_report("Getting friend ids from database...\n");
             
@@ -314,10 +313,10 @@ sub send_friend_requests {
                 my $current_friend = 
                     WWW::Myspace::Data::FriendToAccount->retrieve(
                         friend_id  => $friend->friend_id(),
-                        account_id => $self->{'myspace'}->my_friend_id,
+                        account_id => $self->{'data'}->get_account,
                 );
                 
-                unless ( $current_friend ) { 
+                if ( $current_friend ) { 
                     push ( @current_friends, $friend->friend_id );
                 }
             }
@@ -339,7 +338,7 @@ sub send_friend_requests {
 
         my @unique_ids = $lc->get_complement;
         
-        if ( $self->{'db'} && $self->{'exclude_logged_adds'} ) {
+        if ( $self->{'data'} && $self->{'exclude_logged_adds'} ) {
             
             my @unlogged_ids = ( );
             
@@ -350,7 +349,7 @@ sub send_friend_requests {
                 my $logged = WWW::Myspace::Data::PostLog->search_where(
                     account_id => [ $account_id ],
                     friend_id => [ $unique_id ],
-                    result_code => [ 'P', 'PA', 'FF', 'FP' ],
+                    result_code => [ 'P', 'FA', 'FB', 'FF', 'FP' ],
                 );
                 
                 unless ( $logged ) {
@@ -394,16 +393,22 @@ sub send_friend_requests {
         
         ++$count;
         
+        if ( $self->{'data'} ) {
+            $self->{'data'}->cache_friend( $id );
+        }
+        
         # throw out unwanted profiles
         if ( $self->{'profile_type'} && $self->{'profile_type'} eq 'band' ) {
             unless ( $self->myspace->is_band( $id  ) ) {
-                $self->_report("$count)\t$id\tSkipping personal page...\n");
+                $self->_report("$count)\t$id\tSkipping personal page.");
+                $self->_sleep_now();
                 next;
             }
         }
         elsif ( $self->{'profile_type'} && $self->{'profile_type'} eq 'personal' ) {
             if ( $self->myspace->is_band( $id  ) ) {
-                $self->_report("$count)\t$id\tSkipping band...\n");
+                $self->_report("$count)\t$id\tSkipping band.");
+                $self->_sleep_now();
                 next;
             }        
         }
@@ -417,7 +422,7 @@ sub send_friend_requests {
         # if there's a db connection and the person is already
         # listed as a friend, we need to make sure they have
         # been added to the table
-        if ( $self->{'db'} && $status_code eq 'FF' ) {
+        if ( $self->{'data'} && $status_code eq 'FF' ) {
             $self->{'data'}->update_friend( $id );        
         }
         
@@ -463,7 +468,7 @@ sub send_friend_requests {
         $codes{$status_code} = $status;
         $self->_report("$count)\t$id:\t$status ($status_code) ");
         
-        if ( $self->{'db'} ) {
+        if ( $self->{'data'} ) {
             
             my $account_id = $self->{'data'}->get_account();
             
@@ -528,16 +533,7 @@ sub send_friend_requests {
 
         # don't sleep if we're just going to print the report
         if ($continue) {
-
-            my $sleep_now = $sleep;
-
-            if ( $self->{'random_sleep'} ) {
-                $sleep_now = nearest( .01, rand($sleep) );
-            }
-
-            $self->_report("\n\t\t\t");
-            $self->_report("Sleeping for $sleep_now seconds...\n");
-            sleep $sleep_now;
+            $self->_sleep_now();
         }
 
     }
@@ -608,6 +604,26 @@ sub _report {
     if ( $self->{'interactive'} ) {
         print @_;
     }
+}
+
+=head2 _sleep_now( )
+
+Internal method that handles sleeping between requests.
+
+=cut
+
+sub _sleep_now {
+
+    my $sleep_now = $self->{'sleep'};
+
+    if ( $self->{'random_sleep'} ) {
+        $sleep_now = nearest( .01, rand($self->{'sleep'}) );
+    }
+
+    $self->_report("\n\t\t\t");
+    $self->_report("Sleeping for $sleep_now seconds...\n");
+    sleep $sleep_now;
+    
 }
 
 =head2 _die_pretty( )

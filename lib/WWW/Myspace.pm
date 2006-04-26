@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 132 2006-04-19 18:21:11Z grantg $
+# $Id: Myspace.pm 147 2006-04-26 06:37:36Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -34,11 +34,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.42
+Version 0.43
 
 =cut
 
-our $VERSION = '0.42';
+our $VERSION = '0.43';
 
 =head1 SYNOPSIS
 
@@ -1234,35 +1234,6 @@ sub friends_from_profile {
 }
 
 #---------------------------------------------------------------------
-# friends_who_emailed();
-# Return a list of friends with mail in the inbox.
-
-=head2 friends_who_emailed
-
-Returns, as a list of friend IDs, all friends with messages
-in your inbox (mail). Note that this only tells you who you have mail from,
-not how many messages, nor does it contain any method to link to those
-messages. This is primarily designed to aid in auto-responding programs
-that want to not contact (comment or email) people who have sent
-messages so someone can attend to them personally. This routine
-also disincludes Tom, mainly because it uses the same routine
-as "get_friends". Croaks if you're not logged in.
-
-    @friends = $myspace->friends_who_emailed;
-
-=cut
-
-sub friends_who_emailed {
-
-    $self->_die_unless_logged_in( 'friends_who_emailed' );
-
-    # We just call get_friends with the code "inbox" to tell it to look
-    # through those pages instead of the friends page.
-    return $self->get_friends( "inbox" );
-    
-}
-
-#---------------------------------------------------------------------
 
 =head2 friends_in_group( group_id )
 
@@ -1296,6 +1267,150 @@ sub friends_in_group {
 
 }
 
+#---------------------------------------------------------------------
+# friends_who_emailed();
+# Return a list of friends with mail in the inbox.
+
+=head2 friends_who_emailed
+
+Returns, as a list of friend IDs, all friends with messages
+in your inbox (mail). Note that this only tells you who you have mail from,
+not how many messages, nor does it contain any method to link to those
+messages. This is primarily designed to aid in auto-responding programs
+that want to not contact (comment or email) people who have sent
+messages so someone can attend to them personally. This routine
+also disincludes Tom, mainly because it uses the same routine
+as "get_friends". Croaks if you're not logged in.
+
+    @friends = $myspace->friends_who_emailed;
+
+=cut
+
+sub friends_who_emailed {
+
+    $self->_die_unless_logged_in( 'friends_who_emailed' );
+
+    # We just call get_friends with the code "inbox" to tell it to look
+    # through those pages instead of the friends page.
+    return $self->get_friends( "inbox" );
+    
+}
+
+=head2 search_music
+
+Search for bands using the search music form.
+
+Takes a hashref containing field => value pairs that are passed directly
+to submit_form to set the search criteria.
+
+ http://musicsearch.myspace.com/index.cfm?fuseaction=music.search
+
+The easiest way I've found to get your values is to fill them in on the
+search form, click "Update", then look at the page source.  Scroll to
+the botton where "PageForm" is and you'll see the values you selected.
+Put the pertinent ones (i.e. things you changed) into your script.
+Note that the field *names* are different, so just take the values,
+and use the names as described below.
+
+Any value the form can take (present or
+future) can be passed, so in theory you could write a CGI front-end also
+that just had the form, posted the values to itself, then used those
+values to call this method (i.e. do what I suggested above automatically).
+
+Here are the currently available form labels/values (looking at the form
+helps):
+
+ genreID: See the form for values
+
+ search_term:
+    0: Band Name
+    1: Band Bio
+    2: Band Members
+    3: Influences
+    4: Sounds like
+
+ keywords: text field. Use it if you're searching by band name, etc.
+
+ Country: Labeled "Location" in the form. See the form source for values.
+
+ localType: The radio buttons. Set to:
+   countryState: To search by Country / State
+   distanceZip: To search by distance and zip code.
+
+ if localType is "countryState", set this:
+   state: State code (like the post office uses, thankfully. See form code
+          if you have any questions).
+
+ If localType is "distanceZip", set these:
+   zip: The 5-digit zip code.
+   distance: Distance from zip code [0|5|10|20|50|100|500]. 0="Any" and is the
+             default.
+
+ OrderBy: [ 5 = Plays | 4 = Friends |3 = New | 2 = Alphabetical ]
+          Default is 2.
+
+IMPORTANT: Results are currently sorted by friendID regardless of the
+OrderBy setting.
+
+For those who care about details, here's how the Search Music page works:
+
+There are three forms on the page, the generic
+"search" form in the nav bar, a second form called "myForm" that is
+the user-modified update form, and a third form called "PageForm" that
+is actually used to pass the values.  PageForm is updated with the values
+after "update" is clicked in myForm. Clicking "Next" just sets
+(using JavaScript in Myspace) the page value in PageForm and submits PageForm.
+Oddly enough, PageForm ends up being a "GET", so you could theoretically
+just loop through using URLs.  But we don't, we fill in the form like a
+browser would.
+
+=cut
+
+sub search_music {
+
+    my ( $sc ) = @_;
+    
+    # Page verification RE
+    my $re = 'Music.*?&raquo;</font>.*?<font color="#003399">Search Results';
+
+    # First fill in the search form with their criteria.
+    $self->submit_form(
+        'http://musicsearch.myspace.com/index.cfm?fuseaction=music.search',
+        1, "", $sc, $re, $re, 'http://musicsearch.myspace.com/' );
+
+    return undef if $self->error;
+
+    # Get the friends
+    my $page_no = 0;
+    my %friends = ();
+    do {
+
+        # Get the friends on this page
+        foreach my $id ( $self->get_friends_on_page ) {
+            $friends{ "$id" } = { 'page_no' => $page_no+1 };
+        }
+        
+        # Click "Next".
+        $page_no++;
+        print "Getting page " . $page_no . "\n";
+        $self->submit_form( {
+            'form_name' => 'PageForm',
+            no_click => 1,
+            'fields_ref' => { page => $page_no },
+            're1' => $re,
+            're2' => $re
+        } );
+
+    } until ( ( $self->error ) || ( ! $self->_next_button ) );
+
+
+     # Clean up and return
+     return 
+        LIST { sort( keys( %friends ) ) }
+        HASHREF { \%friends }
+     ;
+}
+
 sub ____CONTACT_PEOPLE____ {}
 
 =head1 CONTACT PEOPLE
@@ -1312,18 +1427,19 @@ Post $message as a comment for the friend identified by $friend_id.
 The routine confirms success or failure by reading the resulting
 page. It returns a status string as follows:
 
- P: Posted. This means the post went through and we read the
-            phrase we needed from the resulting page.
- PA: Posted, requires approval
- FN: Failed Network. The POST returned a bad status.
- FC: Failed. A CAPTCHA response was requested.
- FF: Failed. Got "You must be someone's friend to post a comment" error.
- F: Failed. The post went through, but we didn't get the phrase
-            we needed to verify that it was ok.
+ P   =>  'Passed! Verification string received.'
+ PA  =>  'Passed, requires approval.'
+ FF  =>  'Failed, you must be someone\'s friend to post a comment about them.'
+ FN  =>  'Failed, network error (couldn\'t get the page, etc).'
+ FC  =>  'Failed, CAPTCHA response requested.'
+ F   =>  'Failed, verification string not found on page after posting.'
 
 Warning: It is possible for the status code to return a false
 "Failed" if the form post is successful but the resulting page fails
 to load.
+
+If called in scalar context, it returns the status code.  If called in
+list context, returns the status code and the description.
 
 EXAMPLE:
     use WWW::Myspace;
@@ -1332,6 +1448,12 @@ EXAMPLE:
     foreach $id ( $myspace->friends_who_emailed ) {
         $status = $myspace->post_comment( $id, "Thanks for the message!" )
     }
+
+    # Get a printable status (and print it)
+    ( $status, $desc ) = $myspace->post_comment(
+        $id, "Thanks for being my friend!"
+    );
+    print "Status of post: $desc\n";
 
 If called when you're not logged in, post_comment croaks to make you
 look stupid.
@@ -1348,6 +1470,17 @@ sub post_comment {
     my ($submitted, $attempts);
 
     $self->_die_unless_logged_in( 'post_comment' );
+
+    my %status_codes = (
+
+        P   =>  'Passed! Verification string received.',
+        PA  =>  'Passed, requires approval.',
+        FF  =>  'Failed, you must be someone\'s friend to post a comment about them.',
+        FN  =>  'Failed, network error (couldn\'t get the page, etc).',
+        FC  =>  'Failed, CAPTCHA response requested.',
+        F   =>  'Failed, verification string not found on page after posting.',
+
+    );
 
 #   my ( $dbh, $ua, $login, $message, $friend_id ) = @_;
 
@@ -1418,7 +1551,10 @@ sub post_comment {
         $status="F";
     }
 
-    return "$status";
+    return (
+        LIST { $status, $status_codes{$status} }
+        STR  { $status }
+    );
 }
 
 =head2 captcha
@@ -1841,20 +1977,24 @@ Send a message to the user identified by $friend_id. If $add_friend_button
 is a true value, HTML code for the "Add to friends" button will be added at
 the end of the message.
 
- $myspace->send_message( 6221, 'Hi Tom!', 'Just saying hi!', 0 );
+ $status = $myspace->send_message( 6221, 'Hi Tom!', 'Just saying hi!', 0 );
+ if ( $status eq "P" ) { print "Sent!\n" } else { print "Oops\n" }
 
  Returns a status code:
 
- P: Posted. Verified by HTTP response code and reading a regexp
-    from the resulting page saying the message was sent.
- FC: Failed. A CAPTCHA response was requested.
- FF: Failed. The person's profile is set to private. You must
-     be their friend to message them.
- FA: Failed. The person has set their status to "away".
- FE: Failed. The account has exceeded its daily usage.
- FN: Failed. The POST returned an unsuccessful HTTP response code.
- F:  Failed. Post went through, but we didn't see the regexp on the
-    resulting page (message may or may not have been sent).
+ P   =>  Passed! Verification string received.
+ FF  =>  Failed, profile set to private. You must be their
+         friend to message them.
+ FN  =>  Failed, network error (couldn\'t get the page, etc).
+ FA  =>  Failed, this person\s status is set to "away".
+ FE  =>  Failed, you have exceeded your daily usage.
+ FC  =>  Failed, CAPTCHA response requested.
+ F   =>  Failed, verification string not found on page after posting.
+
+If called in list context, returns the status code and text description.
+
+ ( $status, $desc ) = $myspace->send_message( $friend_id, $subject, $message );
+ print $desc . "\n";
 
 See also WWW::Myspace::Message, which installs along with the
 distribution.
@@ -1866,9 +2006,21 @@ distribution.
 sub send_message {
 
     my ( $friend_id, $subject, $message, $atf ) = @_;
-    my ( $submitted, $res, $page );
+    my ( $submitted, $res, $page, $status );
 
     $self->_die_unless_logged_in( 'send_message' );
+
+    my %status_codes = (
+
+        P   =>  'Passed! Verification string received.',
+        FF  =>  'Failed, profile set to private. You must be their friend to message them.',
+        FN  =>  'Failed, network error (couldn\'t get the page, etc).',
+        FA  =>  'Failed, this person\s status is set to "away".',
+        FE  =>  'Failed, you have exceeded your daily usage.',
+        FC  =>  'Failed, CAPTCHA response requested.',
+        F   =>  'Failed, verification string not found on page after posting.',
+
+    );
 
     # Add the button if they wanted it.
     if ( ( defined $atf ) && ( $atf ) ) {
@@ -1915,16 +2067,21 @@ sub send_message {
 
     # Return the result
     if (! $submitted ) {
-        return "FN";
+        $status = "FN";
     } elsif ( $page =~ /$VERIFY_MESSAGE_SENT/ ) {
-        return "P";
+        $status = "P";
     } elsif ( $page =~ /$EXCEED_USAGE/i ) {
-        return "FE";
+        $status = "FE";
     } elsif ( $page =~ /$CAPTCHA/ ) {
-        return "FC";
+        $status = "FC";
     } else {
-        return "F";
+        $status = "F";
     }
+    
+    return (
+        LIST { $status, $status_codes{$status} }
+        STR  { $status }
+    );
 }
 
 =head2 delete_message( @message_ids )
@@ -3571,116 +3728,6 @@ sub _browse_action {
 
 }
 
-=head2 search_music
-
-Search for bands using the search music form.
-
-Takes a hashref containing field => value pairs that are passed directly
-to submit_form to set the search criteria.
-
- http://musicsearch.myspace.com/index.cfm?fuseaction=music.search
-
-The easiest way I've found to get your values is to fill them in on the
-search form, click "Update", then look at the page source.  Scroll to
-the botton where "PageForm" is and you'll see the values you selected.
-Put the pertinent ones (i.e. things you changed) into your script.
-Note that the field *names* are different, so just take the values,
-and use the names as described below.
-
-Any value the form can take (present or
-future) can be passed, so in theory you could write a CGI front-end also
-that just had the form, posted the values to itself, then used those
-values to call this method (i.e. do what I suggested above automatically).
-
-Here are the currently available form labels/values (looking at the form
-helps):
-
- genreID: See the form for values
-
- search_term:
-    0: Band Name
-    1: Band Bio
-    2: Band Members
-    3: Influences
-    4: Sounds like
-
- keywords: text field. Use it if you're searching by band name, etc.
-
- Country: Labeled "Location" in the form. See the form source for values.
-
- localType: The radio buttons. Set to:
-   countryState: To search by Country / State
-   distanceZip: To search by distance and zip code.
-
- if localType is "countryState", set this:
-   state: State code (like the post office uses, thankfully. See form code
-          if you have any questions).
-
- If localType is "distanceZip", set these:
-   zip: The 5-digit zip code.
-   distance: Distance from zip code [0|5|10|20|50|100|500]. 0="Any" and is the
-             default.
-
- OrderBy: [ 5 = Plays | 4 = Friends |3 = New | 2 = Alphabetical ]
-          Default is 2.
-
-IMPORTANT: Results are currently sorted by friendID regardless of the
-OrderBy setting.
-
-For those who care about details, here's how the Search Music page works:
-
-There are three forms on the page, the generic
-"search" form in the nav bar, a second form called "myForm" that is
-the user-modified update form, and a third form called "PageForm" that
-is actually used to pass the values.  PageForm is updated with the values
-after "update" is clicked in myForm. Clicking "Next" just sets
-(using JavaScript in Myspace) the page value in PageForm and submits PageForm.
-Oddly enough, PageForm ends up being a "GET", so you could theoretically
-just loop through using URLs.  But we don't, we fill in the form like a
-browser would.
-
-=cut
-
-sub search_music {
-
-    my ( $sc ) = @_;
-    
-    # Page verification RE
-    my $re = 'Music.*?&raquo;</font>.*?<font color="#003399">Search Results';
-
-    # First fill in the search form with their criteria.
-    $self->submit_form(
-        'http://musicsearch.myspace.com/index.cfm?fuseaction=music.search',
-        1, "", $sc, $re, $re, 'http://musicsearch.myspace.com/' );
-
-    return undef if $self->error;
-
-    # Get the friends
-    my $page_no = 0;
-    my %friends = ();
-    do {
-
-        # Get the friends on this page
-        foreach my $id ( $self->get_friends_on_page ) {
-            $friends{ "$id" } = { 'page_no' => $page_no+1 };
-        }
-        
-        # Click "Next".
-        $page_no++;
-        $self->submit_form( $self->current_page, 2, "",
-        { page => $page_no },
-        $re, $re, 'http://musicsearch.myspace.com/' );
-
-    } until ( ( $self->error ) || ( ! $self->_next_button ) || ( $page_no > 3 ) );
-
-
-     # Clean up and return
-     return 
-        LIST { sort( keys( %friends ) ) }
-        HASHREF { \%friends }
-     ;
-}
-
 
 1;
 
@@ -3742,6 +3789,13 @@ the following warnings when logging in:
  Sec too big - 2238936 > 11647
 
 These are annoying but don't seem to affect the module.
+
+=item -
+
+If an invalid username/password is given, the module will attempt
+to log in 20 times, displaying 'Got "Not logged in" page', then
+exit with $self->error set to "Not logged in".  It really should
+check for an invalid login and return an appropriate error.
 
 =back
 

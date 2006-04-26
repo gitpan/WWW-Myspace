@@ -17,7 +17,8 @@ my @bands = $myspace->search_music(
 		Country => 'US',
 		localType => 'distanceZip',
 		zip => 91604,
-		distance => 10
+		distance => 50,
+		OrderBy => 4
 	}
 );
 

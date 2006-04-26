@@ -1,5 +1,32 @@
 Revision history for WWW::Myspace
 
+0.43    2006-04-19
+        - Factored sleep and random sleeping into _sleep_now method
+          in FriendAdder.pm
+        - FriendAdder.pm now sleeps when skipping profile_type profiles
+        - Updated FriendAdder.pm to skip adds if the following errors
+          were encountered on a previous attempt: 'P', 'FA', 'FB', 'FF', 
+          'FP'
+        - post_comment and send_message now return status code and text
+          description if called in a list context.
+        - added cache_friend to Data.pm
+        - added call to cache_friend in FriendAdder.pm
+        - Added "set_options" method to MyBase.pm. Allows you to set options
+          after calling "new".
+        - Added "get_options" method to MyBase.pm. Allows you to get the
+          value of one, more, or all options (generic accessor method).
+        - fixed bug in FriendAdder.pm that returned inaccurate current
+          friends when used with Data.pm
+        - Message.pm no longer displays "Excluding" messages.
+        - Message.pm's friend_ids method now creates an anonymous array
+          when taking a list of friendIDs to avoid possible bugs.
+        - search_music method now uses new format for call to submit_form.
+        - Removed debugging code that limits search_music to 3 pages.
+          Method functional but needs tests written.
+        - search_music moved to the "Contact People" section, out of the
+          development dungeon.
+        - Removed unfinished Poster.pm from distribution.
+
 0.42    2006-04-19
         - All page loads now check for "You must be logged in" error and
           re-login if necessary.  This fixes a bug many have reported in

@@ -14,11 +14,11 @@ WWW::Myspace::MyBase - Base class for WWW::Myspace modules
 
 =head1 VERSION
 
-Version 0.2
+Version 0.3
 
 =cut
 
-our $VERSION = '0.2';
+our $VERSION = '0.3';
 
 =head1 SYNOPSIS
 
@@ -137,6 +137,34 @@ sub new() {
 	# Unless they passed some options, we're done.
 	return $self unless ( @_ );
 	
+	# Set the options they passed.
+	$self->set_options( @_ );
+
+	# Done
+	return $self;
+
+}
+
+=head2 set_options
+
+Allows you to set additional options. This is called by the "new" method
+to parse, validate, and set options into the object.  You can call it
+yourself if you want to, either to set the options, or to change them later.
+
+ # Set up the object
+ $object->new( myspace => $myspace );
+ 
+ # Read in a config file later.
+ $object->set_options( config_file => $user_config );
+
+This also lets you override options you supply directly with, say, a
+user-supplied config file.  Otherwise, the options passed to "new" would
+override the config file.
+
+=cut
+
+sub set_options {
+
 	# Figure out the paramter format and return a hash of option=>value pairs
 	my %options = $self->parse_options( @_ );
 
@@ -145,21 +173,62 @@ sub new() {
 	foreach my $key ( keys %options ) {
 		push ( @options, $key, $options{$key} );
 	}
+
 	%options = validate( @options, $self->default_options );
-	
+
 	# Copy them into $self
 	foreach my $key ( keys( %options ) ) {
 		$self->{"$key"} = $options{"$key"}
 	}
+	
+}
 
-	# Done
-	return $self;
+=head2 get_options
+
+General accessor method for all options.
+Takes a list of options and returns their values.
+
+If called with one option, returns just the value.
+If called with more than one option, returns a list of option => value
+pairs (not necessarily in the order of your original list).
+If called with no arguments, returns a list of all options and
+their values (as option => value pairs).
+
+This is basically a "catch all" accessor method that allows you to be
+lazy ad not create accessors for your options.
+
+=cut
+
+sub get_options {
+
+	my ( @options ) = @_;
+
+	# If no options were specified, return them all
+	unless ( @options ) {
+		@options = keys( %{ $self->default_options } );
+	}
+
+	# If there's only one value requested, return just it
+	return $self->{$options[0]} if ( @options == 1 );
+	
+	# Otherwise return a hash of option => value pairs.
+	my %ret_options = ();
+	
+	foreach my $option ( @options ) {
+		if ( $self->{ $option } ) {
+			$ret_options{ $option } = $self->{ $option };
+	    } else {
+			croak "Invalid option passed to get_options";
+		}
+	}
+	
+	return ( %ret_options );
 
 }
 
 =head2 parse_options
 
-This method is called by new to determine the format of the options
+This method is called by set_options to determine the format of the options
 passed and return a hash of option=>value pairs.  If needed, you can
 call it yourself using the same formats described in "new" above.
 

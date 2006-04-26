@@ -1,4 +1,4 @@
-# $Id: Message.pm 128 2006-04-19 02:21:12Z grantg $
+# $Id: Message.pm 147 2006-04-26 06:37:36Z grantg $
 
 package WWW::Myspace::Message;
 
@@ -13,11 +13,11 @@ WWW::Myspace::Message - Auto-message your MySpace friends from Perl scripts
 
 =head1 VERSION
 
-Version 0.10
+Version 0.11
 
 =cut
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 =head1 SYNOPSIS
 
@@ -188,7 +188,7 @@ the message.
 
 sub friend_ids {
 	if ( @_ ) {
-		$self->{friend_ids} = \@_;
+		$self->{friend_ids} = [ @_ ];
 	} else {
 		return @{ $self->{friend_ids} };
 	}
@@ -454,7 +454,7 @@ sub send_message {
 					return "USAGE" if ( $result eq "FE" );
 				}
 		} else {
-			if ( $self->noisy ) { print "Excluding $id\n" }
+#			if ( $self->noisy ) { print "Excluding $id\n" }
 		}
 
 		# If we've got a max set, stop when we reach it.		

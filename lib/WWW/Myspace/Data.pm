@@ -280,6 +280,44 @@ sub get_account {
     
 }
 
+=head2 cache_friend( $friend_id )
+
+Add this friend id to the friends table.  cache_friend will not create a
+relationship between the friend_id and any account. It just logs the
+friend information in order to speed up various other operations.  It's
+basically an internal method, but you could use it to cache information
+about any friend_id that isn't tied to any specific account.  ie if you
+are spidering myspace and you just want to collect info on anyone, you
+can call this method.
+
+=cut
+
+sub cache_friend {
+
+    croak "no db connection" unless ( $self->loader );
+
+    my $friend_id  = shift;
+    my $myspace    = $self->{'myspace'};
+    
+    # manage profile in "friends" table
+    my $friend = $self->{'Friends'}->find_or_create( 
+        { friend_id => $friend_id, }
+    );
+        
+    $friend->user_name( $myspace->friend_user_name( $friend_id ) );
+    $friend->url( $myspace->friend_url( $friend_id ) );
+    
+    if ( $myspace->is_band( $friend_id  ) ) {
+        $friend->is_band( 'Y');
+    }
+    else {
+        $friend->is_band( 'N' );
+    }
+    
+    $friend->update;
+    
+}
+
 =head2 update_friend( $friend_id )
 
 The "friends" table in your local database stores information about
@@ -287,6 +325,9 @@ myspace friends, shared among all accounts using your database. This
 lets you store additional information about them, such as their first
 name, and is also used by WWW::Myspace methods and modules to track
 information related to friends.
+
+Basically this method calls cache_friend() and then creates a friend to
+account relationship.
 
 update_friend takes a single friend id and makes sure it is represented
 in the local "friends" table.  Returns 1 if the entry was successfully
@@ -306,19 +347,8 @@ sub update_friend {
     my $myspace    = $self->{'myspace'};
     my $account_id = $self->get_account( );
     
-    # manage profile in "friends" table
-    my $friend = $self->{'Friends'}->find_or_create( 
-        { friend_id => $friend_id, }
-    );
-        
-    $friend->user_name( $myspace->friend_user_name( $friend_id ) );
-    $friend->url( $myspace->friend_url( $friend_id ) );
-    
-    if ( $myspace->is_band( $friend_id  ) ) {
-        $friend->is_band( 'Y');
-    }
-    
-    $friend->update;
+    # cache profile in "friends" table
+    $self->cache_friend( $friend_id );
     
     # map friend to account in "friend_to_account" table
     my $account = $self->{'FriendToAccount'}->find_or_create(
