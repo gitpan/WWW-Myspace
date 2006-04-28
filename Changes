@@ -1,5 +1,19 @@
 Revision history for WWW::Myspace
 
+0.44    2006-04-28
+        - add_friends script now documents a known issue in which friend
+          requests will be re-sent if they are denied.
+        - FriendAdder.pm now reports the number of skipped profiles if 
+          profile_type parameter is not set to 'all' and interactive
+          mode is enabled
+        - Updated docs for is_band to note that one cannot assume that
+          a profile is a personal profile if is_band is false.
+        - Fixed issue that was causing logins to fail.
+        - Updated user_name and friend_count methods to work with new
+          Myspace change.
+        
+        VERSIONS BEFORE 0.44 WILL FAIL LOGIN VERIFICATION as of 4/28/2006.
+
 0.43    2006-04-19
         - Factored sleep and random sleeping into _sleep_now method
           in FriendAdder.pm

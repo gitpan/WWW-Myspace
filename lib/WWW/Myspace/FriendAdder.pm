@@ -8,7 +8,6 @@ use Data::Dumper;
 use IO::Prompt;
 use List::Compare;
 use Math::Round qw(nearest);
-use Params::Validate qw(:all);
 use WWW::Myspace::Data;
 
 =head1 NAME
@@ -18,11 +17,11 @@ account
 
 =head1 VERSION
 
-Version 0.05
+Version 0.06
 
 =cut
 
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 =head1 SYNOPSIS
 
@@ -373,11 +372,11 @@ sub send_friend_requests {
 
         @potential_friends = @unique_ids;
 
-        $self->_report("$total_time seconds to exclude duplicates: ");
-        $self->_report("$current friends now\t");
-        $self->_report("$future ids supplied by you\t");
-        $self->_report("$unique unique ids\n");
-        $self->_report("Excluded $shared friends\n");
+        $self->_report("$total_time seconds to exclude duplicates.\n");
+        $self->_report("$current friends now.\n");
+        $self->_report("$future ids supplied by you.\n");
+        $self->_report("$unique unique ids.\n");
+        $self->_report("$shared friends excluded.\n");
 
     }
 
@@ -389,6 +388,8 @@ sub send_friend_requests {
         $self->_report("No ids to process.  No report will display.\n");
     }
     
+    my $skipped = 0;
+    
     foreach my $id (@potential_friends) {
         
         ++$count;
@@ -398,19 +399,30 @@ sub send_friend_requests {
         }
         
         # throw out unwanted profiles
-        if ( $self->{'profile_type'} && $self->{'profile_type'} eq 'band' ) {
-            unless ( $self->myspace->is_band( $id  ) ) {
-                $self->_report("$count)\t$id\tSkipping personal page.");
+        if ( $self->{'profile_type'} ) {
+            
+            my $skip_profile = undef;
+        
+            if (    $self->{'profile_type'} eq 'band'
+                && !$self->myspace->is_band( $id  ) )
+            {
+                $skip_profile = 'personal';
+            }
+            elsif ( $self->{'profile_type'} eq 'personal'
+                &&  $self->myspace->is_band( $id  ) )
+            {
+                $skip_profile = 'band';
+            }        
+        
+            if ( $skip_profile ) {
+        
+                $self->_report("$count)\t$id\tSkipping ");
+                $self->_report("$skip_profile page.");
                 $self->_sleep_now();
+
+                ++$skipped;
                 next;
             }
-        }
-        elsif ( $self->{'profile_type'} && $self->{'profile_type'} eq 'personal' ) {
-            if ( $self->myspace->is_band( $id  ) ) {
-                $self->_report("$count)\t$id\tSkipping band.");
-                $self->_sleep_now();
-                next;
-            }        
         }
         
         # send requests individually
@@ -526,7 +538,7 @@ sub send_friend_requests {
 
         if ( $adds >= $self->{'max_count'} ) {
             $continue = undef;
-            $self->_report("\n\nMax attempts ($self->{'max_count'})");
+            $self->_report("\n\nMax attempts ($self->{'max_count'}) ");
             $self->_report("reached. Exiting nicely...\n\n");
             last;
         }
@@ -544,6 +556,10 @@ sub send_friend_requests {
         
         if ($captcha) {
             print "$captcha 'message on captcha' attempts\n";
+        }
+        
+        if ($skipped) {
+            print "$skipped profiles skipped\n";
         }
 
         foreach my $response_code ( keys %code_report ) {

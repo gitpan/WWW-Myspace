@@ -116,6 +116,14 @@ Original code by Olaf Alders (http://www.wundersolutions.com).
 Updated, documented, and added to module by Grant Grueninger,
 C<< <grantg at cpan.org> >>
 
+=head1 KNOWN ISSUES
+
+Friend requests are not logged, so if someone denies your request,
+it will be resent the next time the script is run if they're in the
+list of friends again (i.e. if you run it on the same profile, which you
+probably will). The only current workaround is to use the database
+options in FriendAdder.
+
 =head1 BUGS
 
 Please report any bugs or feature requests, or send any patches, to

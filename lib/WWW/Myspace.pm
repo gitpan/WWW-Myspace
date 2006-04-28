@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 147 2006-04-26 06:37:36Z grantg $
+# $Id: Myspace.pm 157 2006-04-28 22:08:27Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -34,11 +34,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.43
+Version 0.44
 
 =cut
 
-our $VERSION = '0.43';
+our $VERSION = '0.44';
 
 =head1 SYNOPSIS
 
@@ -97,7 +97,7 @@ our $HOME_PAGE="http://home.myspace.com/index.cfm?fuseaction=user";
 
 # What regexp should we look for to verify that we're logged in?
 # This is checked against the home page when we log in.
-our $VERIFY_HOME_PAGE = 'Hello,.*My Mail.*You have .* friends';
+our $VERIFY_HOME_PAGE = 'Hello,.*My Mail.*You have.*friends';
 
 # What's the URL to the Browse page?
 our $BROWSE_PAGE = 'http://browseusers.myspace.com/browse/Browse.aspx';
@@ -701,6 +701,10 @@ request.
      print "They're a band, go listen to them!\n";
  }
 
+IMPORTANT: You can NOT assume that a profile is a personal profile if
+is_band is false.  It could be a film profile or some future type of
+profile.  There is currently no test for a personal or film profile.
+
 =cut
 
 sub is_band {
@@ -763,11 +767,11 @@ sub user_name {
     if ( @_ ) {
         my ( $homepage ) = @_;
         my $page_source = $homepage->content;
-        if ( $page_source =~ /<h4 +class="heading">Hello, (.*)\!<\/h4>/ ) {
+        if ( $page_source =~ /<h4 +class="heading">Hello,( |&nbsp;)(.*)\!<\/h4>/ ) {
 #           my $line = $1;
 #           $line =~ s/\+/ /g;
 #           $line =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
-            $self->{user_name} = $1;
+            $self->{user_name} = $2;
         }
     }
     
@@ -855,8 +859,8 @@ sub friend_count {
         my ( $homepage ) = @_;
         my $page_source = $homepage->content;
 
-        if ( $page_source =~ /You have (<span>)?<a [^>]+>([0-9]+)<\/a>(<\/span>)? friends/ ) {
-            $self->{friend_count} = $2;
+        if ( $page_source =~ /You have( |&nbsp;)(<span>)?<a [^>]+>([0-9]+)<\/a>(<\/span>)?( |&nbsp;)friends/ ) {
+            $self->{friend_count} = $3;
         }
     }
     
