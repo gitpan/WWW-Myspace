@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 157 2006-04-28 22:08:27Z grantg $
+# $Id: Myspace.pm 168 2006-05-09 03:29:17Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -34,11 +34,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.44
+Version 0.45
 
 =cut
 
-our $VERSION = '0.44';
+our $VERSION = '0.45';
 
 =head1 SYNOPSIS
 
@@ -465,9 +465,21 @@ need to be logged in to access certain functions, so it's semi-silly
 to make you log in the second you call "new".  Plus, it's not good
 practice to have "new" require stuff. Bad me.
 
-So for now this is only useful to you if you find yourself logged out for
-some reason and want to log back in without making a new WWW::Myspace
-object.  It's more useful for me though.
+If you call the new method with "auto_login => 0", you'll need to
+call this method if you want to log in.
+
+It's also called automatically if the _check_login method finds that
+you've been mysteriously logged out, for example if Myspace.com were
+written in Cold Fusion running on Windows.
+
+If the login gets a "you must be logged-in" page when you first try to
+log in, $myspace->error will be set to an error message that says to
+check the username and password.
+
+Once login is successful for a given username/password combination,
+the object "remembers" that the username/password
+is valid, and if it encounters a "you must be logged-in" page, it will
+try up to 20 times to re-login.  Clever, huh?
 
 =cut
 
@@ -482,18 +494,8 @@ sub site_login {
     croak "site_login called but password isn't set" unless ( $self->password );
 
     # Now log in
-    my $submitted = $self->submit_form( "$BASE_URL", 1, "",
-                        { 'email' => $self->account_name,
-                          'password' => $self->password
-                        }
-                      );
-
-    # Check for success
-    if ( $submitted ) {
-        ( $DEBUG ) && print $self->current_page->content;
-    } else {
-        croak $self->error;
-    }
+    $self->_try_login;
+    return if $self->error;
 
     # We probably have an ad or somesuch (started 1/7/2006)
     # so explicitly request our Home.
@@ -510,6 +512,72 @@ sub site_login {
         return;
     }
 
+    # Initialize basic account/login-specific settings after login
+    $self->_init_account;
+
+}
+
+# _try_login
+# You call this as $self->_try_login.  Attempts to log in using
+# the set account_name and password. It gets and submits the login form,
+# then checks for a valid submission and for a "you must be logged-in"
+# page.
+# If called with a number as an argument, tries that many times to
+# submit the form.  It calls itself recursively.
+sub _try_login {
+
+    # Set the recursive tries counter.
+    my ( $tries_left ) = @_;
+    if ( $tries_left ) { $tries_left--;  return if ( $tries_left ) < 1; }
+    $tries_left = 20 unless defined $tries_left;
+
+    # Submit the login form
+    my $submitted = $self->submit_form( "$BASE_URL", 1, "",
+                    { 'email' => $self->account_name,
+                      'password' => $self->password
+                    }
+                  );
+
+    # Check for success
+    if ( $submitted ) {
+        ( $DEBUG ) && print $self->current_page->content;
+
+        # Check for invalid login page, which means we either have
+        # an invalid login/password, or myspace is messing up again.
+        unless ( $self->_check_login ) {
+            # Fail unless we already know this account/password is good, in
+            # which case we'll just beat the door down until we can get in
+            # or the maximum number of attempts has been reached.
+            if ( $self->_account_verified ) {
+                $self->_try_login( $tries_left );
+            } else {
+                $self->error( "Login Failed.  Got 'You Must Be Logged-In' page ".
+                    "when logging in.\nCheck username and password." );
+                return;
+            }
+        }
+    } else {
+        return;
+#        croak $self->error;
+    }
+
+}
+
+# _account_verified
+# Returns true if we've verified that the current account and password
+# are valid (by successfully logging in with them)
+sub _account_verified {
+
+    ( ( $self->{_account_verified}->{ $self->account_name } ) &&
+      ( $self->password = $self->{_account_verified}->{ $self->account_name } )
+    )
+
+}
+
+# _init_account
+# Initialize basic account/login-specific settings after login
+sub _init_account {
+    
     # Get our friend ID from our profile page (which happens to
     # be the page we go to after logging in).
     $self->_get_friend_id( $self->current_page );
@@ -523,6 +591,9 @@ sub site_login {
     
     # Cache whether or not we're a band.
     $self->is_band;
+
+    # Note that we've verified this account/password
+    $self->{_account_verified}->{ $self->account_name } = $self->password;
 
 }
 
@@ -1053,8 +1124,25 @@ sub cool_new_people {
 # Return, as an array of friend IDs, all of our friends.
 # For each friend page, grep for the "view profile" links, which
 # contain the friend IDs.
+# Accepts a source and source_id. 
+# source can be:
+# - inbox: read friendIDs from user's mail inbox
+# - group: Read friendIDs from the group specified by source_id
+# - profile: Read friendIDs from the profile specified by source_id
+# - nothing: Reads friendIDs from the logged-in user's profile.
+# The last option is identical to calling get_friends with "profile" and
+# the friendID of the logged-in user, except that get_friends will
+# croak if not logged in (because it can't get the friend_id).
+# To the outside world, these options don't exist - they're passed
+# by convenience methods.
+#
+# Options:
+# start_page - not implemented yet
+# end_page: Stop on this page
+# max_count: Stop after retreiving this many friends.
+#            May retreive slightly more than max_count.
 
-=head2 get_friends
+=head2 get_friends( %options )
 
 Returns, as a list of friendIDs, all of your friends. It does not include
 Tom, because he's everybody's friend and when you're debugging your band
@@ -1062,6 +1150,20 @@ central CGI page it's probably best to limit your mistakes to
 actual friends.
 
  @friends = $myspace->get_friends;
+
+Accepts the following options:
+
+ end_page:  Stop on this page.
+            $myspace->get_friends( end_page => 5 );
+ max_count: Return this many friendIDs.
+            $myspace->get_friends( max_count => 300 );
+
+If you specify max_count and end_page, get_friends will stop when it
+hits the earliest condition that matches.
+
+max_count may return up to 40 more friends than you specify.  This
+is because it reads each friend page, and returns when it's gathered
+max_count or more friends (and there are 40 per page).
 
 As of version 0.37, get_friends is context sensitive and returns
 additional information about each friend if called in a hashref context.
@@ -1084,17 +1186,20 @@ logged in.
 
 sub get_friends {
 
-    my ( $source, $source_id ) = @_;
+    my ( %options ) = @_;
+    
+    my ( $source, $source_id );
+    if ( $options{'source'} ) { $source = $options{'source'} }
+    if ( $options{'id'} ) { $source_id = $options{'id'} }
     $source = "" unless defined $source;
 
     # Can't get "our" friends if we're not logged in.
-    unless ( ( $source eq 'profile' ) || ( $source eq 'browse' ) ) {
+    unless ( ( $source eq 'profile' )  ) {
         $self->_die_unless_logged_in( 'get_friends' );
     }
 
-    # Browse and view friends start at page 1, the rest start at 0. 
-    my $page=0; $page++ if ( ( $source eq "" ) || ( $source eq "profile" ) ||
-                             ($source eq 'browse' ) );
+    # Profiles' friend lists start at page 1, the rest start at 0. 
+    my $page=0; $page++ if ( ( $source eq "" ) || ( $source eq "profile" ) );
 
     # Initialize
     my $friends_page="";
@@ -1125,11 +1230,15 @@ sub get_friends {
                 'page_no' => $page
             };
             $friend_ids{"$id"}->{page_no}++ unless ( ( $source eq "" ) ||
-                                ( $source eq "profile" ) ||
-                                ( $source eq 'browse' ) );
+                                ( $source eq "profile" ) );
         }
 
+        # See if we're done.
         last unless ( $self->_next_button( $friends_page->content ) );
+        last if ( ( $options{'end_page'} ) && ( $page >= $options{'end_page'} ) );
+        last if ( ( $options{'max_count'} ) &&
+                  ( keys( %friend_ids ) >= $options{'max_count'} )
+                );
 
         # Warn if we got a page with no friendIDs on it.
         # (XXX This should probably throw an error)
@@ -1150,11 +1259,11 @@ sub get_friends {
     
     if ( ( ( $source eq "" ) || ( $source eq "profile" ) ) && ( $self->{_friend_count} ) ) {
         my $myspace_friend_count;
-        if ( $source ) {
+#        if ( $source ) {
             $myspace_friend_count = $self->{_friend_count};
-        } else {
-            $myspace_friend_count = $self->friend_count;
-        }
+#        } else {
+#            $myspace_friend_count = $self->friend_count;
+#        }
         my @friends = keys( %friend_ids );
         my $friend_count = @friends;
         my $error_allowed = $myspace_friend_count * .05;
@@ -1190,19 +1299,30 @@ sub get_friends {
 #---------------------------------------------------------------------
 # friends_from_profile( friend_id );
 
-=head2 friends_from_profile( friend_id )
+=head2 friends_from_profile( %options )
 
-Returns a list of the friends of the profile specified by friend_id.
+Returns a list of the friends of the profile(s)s specified by the "id" option.
+id can be a friendID or a reference to an array of friendIDs.
 If passed a list of friend IDs, scans each profile and returns a sorted,
 unique list of friendIDs.  Yes, that means if you pass 5 friendIDs and
 they have friends in common, you'll only get each friendID once.
 You're welcome.
 
+Also accepts the same options as the get_friends method
+(end_page, max_count, etc).
+
  Examples:
  
  # Band 12345 and 54366 sound like us, get their friends list
- @similar_bands_friends=$myspace->friends_from_profile( 12345, 54366 );
- 
+ @similar_bands_friends=
+   $myspace->friends_from_profile( id => [ 12345, 54366 ] );
+
+ # Get the first 500 friends from profile 12345
+ @friends = $myspace->friends_from_profile(
+                id => 12345,
+                max_count => 500
+            );
+
  # a further example
  # before you do anything with these
  # ids, make sure you don't already
@@ -1221,12 +1341,36 @@ You're welcome.
 
 sub friends_from_profile {
     my ( @profiles ) = @_;
+    my ( %options );
+    
+    # Check for old format ( @friend_ids ) or new ( id => \@friend_ids )
+    if ( $profiles[0] !~ /[0-9]+/ ) {
+        ( %options ) = ( @profiles );
+    } else {
+        %options = ( id => \@profiles )
+    }
     my @friends = ();
     my $id;
     my %friend_ids = ();
 
+    # Get the profiles.  Take an arrayref or a single number
+    if ( ref $options{'id'} ) {
+        ( @profiles ) = ( @{ $options{'id'} } );
+    } else {
+        ( @profiles ) = ( $options{'id'} );
+    }
+
+    # Delete the id option
+    delete $options{'id'};
+    
+    # Get the friendIDs
     foreach $id ( @profiles ) {
-        push ( @friends, $self->get_friends( 'profile', $id ) )
+        push ( @friends,
+               $self->get_friends(
+                   source => 'profile',
+                   id => $id,
+                   %options )
+             );
     }
     
     # Sort and return
@@ -1267,7 +1411,7 @@ sub friends_in_group {
     return () unless ( @_ );
 
     # Return the friends.
-    return $self->get_friends( 'group', @_ );
+    return $self->get_friends( source => 'group', id => $_[0] );
 
 }
 
@@ -1296,7 +1440,7 @@ sub friends_who_emailed {
 
     # We just call get_friends with the code "inbox" to tell it to look
     # through those pages instead of the friends page.
-    return $self->get_friends( "inbox" );
+    return $self->get_friends( source => "inbox" );
     
 }
 
@@ -1474,6 +1618,10 @@ sub post_comment {
     my ($submitted, $attempts);
 
     $self->_die_unless_logged_in( 'post_comment' );
+    
+    # Check data
+    croak "Must pass friend_id and message to post_comment" unless
+        ( ( $friend_id ) && ( $message ) );
 
     my %status_codes = (
 
@@ -1531,12 +1679,12 @@ sub post_comment {
     
             # Otherwise, confirm it.
             ( $DEBUG ) && print "Confirming comment...\n";
-            $submitted = $self->submit_form( $self->current_page, 1, "",
+            $submitted = $self->submit_form( '', 1, "",
                     {} );
         }
     } else {
         # Post the confirmation
-        $submitted = $self->submit_form( $self->current_page, 1, '',
+        $submitted = $self->submit_form( '', 1, '',
             { 'CAPTCHAResponse' => $captcha_response } );
     }
 
@@ -1557,7 +1705,7 @@ sub post_comment {
 
     return (
         LIST { $status, $status_codes{$status} }
-        STR  { $status }
+        SCALAR  { $status }
     );
 }
 
@@ -2084,7 +2232,7 @@ sub send_message {
     
     return (
         LIST { $status, $status_codes{$status} }
-        STR  { $status }
+        SCALAR  { $status }
     );
 }
 
@@ -2550,7 +2698,7 @@ sub send_friend_request {
  
     return (
         LIST { $return_code, $status_codes{$return_code} }
-        STR  { $return_code }
+        SCALAR  { $return_code }
     );
 }
 
@@ -2769,7 +2917,7 @@ sub _cache_page {
 
     $self->{page_cache}->{$url} = $res;
     
-    $self->{clean_cache};
+    $self->_clean_cache;
 
 }
 
@@ -2830,8 +2978,9 @@ sub _page_ok {
     my $page_ok = 1;
     my $page;
 
-    # Check login status.
-    if ( ! $self->_check_login( $res ) ) {
+    # If we think we're logged in, check for the "You must be logged-in"
+    # error page.
+    if ( ( $self->logged_in ) && ( ! $self->_check_login( $res ) ) ) {
         $self->error( "Not logged in" );
         $page_ok=0;
     }
@@ -2883,13 +3032,16 @@ sub _page_ok {
 
 =head2 _check_login
 
-Checks for "You bust be logged in to do that".  If found, tries to log
+Checks for "You must be logged in to do that".  If found, tries to log
 in again and returns 0, otherwise returns 1.
 
 =cut
 
 sub _check_login {
     my ( $res ) = @_;
+
+    # Check the current page by default
+    unless ( $res ) { $res = $self->current_page }
 
     # Check for the "proper" error response, or just look for the
     # error message on the page.
@@ -2899,8 +3051,9 @@ sub _check_login {
         } else {
             warn "Got \"not logged in\" page\n";
         }
-        # Try to log us back in. Return 0 so they'll try again.
-        $self->site_login;
+        # If we already logged in, try to log us back in.
+        if ( $self->logged_in ) { $self->site_login }
+        # Return 0 so they'll try again.
         return 0;
     } else {
         return 1;
@@ -3101,7 +3254,7 @@ sub submit_form {
     my $trying_again = 0;
     do
     {
-        # If we're trying again, back up.
+        # If we're trying again, mention it.
         warn $self->error . "\n" if $trying_again;
 
         eval {
@@ -3426,9 +3579,7 @@ sub _get_friend_page {
 
     my ( $page, $source, $id ) = @_;
     
-    my $url;
-    my $res;
-    my $success;
+    my ( $url, $res, $success );
     my $verify_re = '';
     $source = '' unless defined $source;
 
@@ -3438,29 +3589,6 @@ sub _get_friend_page {
     } elsif ( $source eq "group" ) { 
         $url = "http://groups.myspace.com/index.cfm?fuseaction=".
             "groups.viewMembers&groupID=${id}&page=${page}";
-    } elsif ( $source eq 'browse' ) {
-        # This page is weird. It's one big form, and the page number
-        # is just part of the form. So the first time, we just get
-        # the form, and the rest we just update the page number.
-        # Oh, and we start at page 1 instead of 0.
-        if ( $page == 1 ) {
-            # First time through we load the browse form and submit to
-            # specify our options.
-            $success = $self->submit_form(
-                $BROWSE_PAGE, 1, 'update', $id,
-                'Browse Users', 'Browse Users',
-                'http://browseusers.myspace.com/browse/');
-        } else {
-            # Then simply update the page number and submit the form
-            $id->{'Page'} = $page;
-            $success = $self->submit_form(
-                $self->current_page, 1, 'update', $id,
-                'Browse Users', 'Browse Users',
-                'http://browseusers.myspace.com/browse/' );
-        }
-
-        $res = $self->current_page;
-
     } else {
         $verify_re = "View All Friends";
         ( $DEBUG ) && print "Loading friend page $page\n";
@@ -3475,9 +3603,6 @@ sub _get_friend_page {
             $url = "http://home.myspace.com/index.cfm?".
                 "fuseaction=user.viewfriends&".
                 "friendID=" . $id;
-#               "FriendCount=" . $self->friend_count . "&" .
-#               "userName=" . $self->user_name;
-#           warn "Processing friendID " . $id . "\n";
         } else {
             # Subsequent pages
             $url = "http://home.myspace.com/index.cfm?".
@@ -3489,29 +3614,22 @@ sub _get_friend_page {
                 "prevPage=" . $self->{_last_friend_page} . "&" .
                 "PREVPageFirstONERETURENED=" . $self->{_low_friend_id}."&".
                 "PREVPageLASTONERETURENED=" . $self->{_high_friend_id};
-#               . "&";
-#               "f_search=&searchby=&" . 
-#               "lastpageofset=" . $self->{_total_friend_pages} . "&".
-#               "TotalRecords=" . $self->friend_count;
         }
 
-#           warn "processing page $url\n";
     }
 
     # Get the page
-    unless ( $source eq 'browse' ) {
-        ( $DEBUG ) && print "  Getting URL: $url\n";
-        $res = $self->get_page( $url );
-        if ( $res->content =~ /This profile is set to private. This user must add <br\/>you as a friend to see his\/her profile./ ) {
-            $self->error("User profile is set to private.");
-        }
+    ( $DEBUG ) && print "  Getting URL: $url\n";
+    $res = $self->get_page( $url );
+    if ( $res->content =~ /This profile is set to private. This user must add <br\/>you as a friend to see his\/her profile./ ) {
+        $self->error("User profile is set to private.");
+    }
 
-        # Save info if we need to
-        unless ( $self->error ) {
-            $self->$save_friend_info if  (
-                ( ( $source eq '' ) || ( $source eq 'profile' ) ) &&
-                ( $page == 1 ) );
-        }
+    # Save info if we need to
+    unless ( $self->error ) {
+        $self->$save_friend_info if  (
+            ( ( $source eq '' ) || ( $source eq 'profile' ) ) &&
+            ( $page == 1 ) );
     }
 
     return $res;
@@ -3573,6 +3691,16 @@ sub _next_button {
     }
 
     $content =~ /">Next<\/a>( |&nbsp;)\&gt;/i;
+
+}
+
+# Simple method to count the keys in a hash
+
+my sub count_keys {
+
+    my ( $hashref ) = @_;
+    
+    return keys( %{$hashref} );
 
 }
 
@@ -3796,10 +3924,10 @@ These are annoying but don't seem to affect the module.
 
 =item -
 
-If an invalid username/password is given, the module will attempt
-to log in 20 times, displaying 'Got "Not logged in" page', then
-exit with $self->error set to "Not logged in".  It really should
-check for an invalid login and return an appropriate error.
+site_login will give up after the first try when initialy logging in if
+it encounters the "You must be logged-in" page.  This is a "feature"
+used to check for invalid username/password, but should probably
+check a couple times to make sure it isn't a Myspace problem.
 
 =back
 

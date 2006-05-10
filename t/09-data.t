@@ -15,7 +15,17 @@ my $myspace = $CONFIG->{'acct1'}->{'myspace'};
 
 use WWW::Myspace::Data;
 
-my $adder = WWW::Myspace::Data->new();
+my $data = WWW::Myspace::Data->new();
  
-isa_ok($adder, 'WWW::Myspace::Data');
+isa_ok($data, 'WWW::Myspace::Data');
+
+# my $time = ();
+# 
+# print "time is $time";
+# 
+# my $date_stamp = $data->date_stamp( 
+#     { time_zone => 'America/Toronto', epoch => $time, }
+# );
+# 
+# print $date_stamp;
 

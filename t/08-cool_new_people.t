@@ -14,6 +14,7 @@ login_myspace or die "Login Failed - can't run tests";
 my $myspace = $CONFIG->{'acct1'}->{'myspace'};
 
 my @cool_new_people = $myspace->cool_new_people('US');
+warn $myspace->error if $myspace->error;
 
 # Just make sure it returned more than 10 people.
 cmp_ok( @cool_new_people, '>', 10, "cool_new_people returned more than 10 IDs" );

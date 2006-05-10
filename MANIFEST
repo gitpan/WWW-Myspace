@@ -23,6 +23,7 @@ t/07-friend_adder.t
 t/08-cool_new_people.t
 t/09-data.t
 t/10-mybase.t
+t/11-badlogin.t
 t/99-enduser.t
 t/boilerplate.t
 t/pod-coverage.t

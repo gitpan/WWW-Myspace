@@ -1,5 +1,53 @@
 Revision history for WWW::Myspace
 
+0.45    2006-05-09
+        - Added note regarding logins to test output.
+        - Fixed bug in FriendAdder.pm that re-cached friend ids even
+          if they already existed in the database
+        - Added methods to FriendAdder.pm and Data.pm to take advantage
+          of caching.  FriendAdder.pm's is_band will first attempt to
+          get is_band info from the database before using the Myspace.pm 
+          method
+        - Cleaned up get_friends code
+        - get_friends now accepts a hash of options.  Current options are
+          max_count and end_page.
+        - friends_from_profile accepts a hash of options like get_friends
+          (same options).  IDs can be passed as an array reference or
+          as a single ID ( id => 12345 ) or ( id => [ 12345, 123456 ] ).
+        - Altered MySQL table structures to make timestamps consistent
+        - add_log table has been dropped in database schema
+        - date_stamp now allows user to provide an epoch value in 
+          Data.pm
+        - accelerated initial sorting of ids in FriendAdder when Data.pm
+          is used
+        - Added debugging code to Comment.pm to help track occasional
+          error that causes the module to die with an error about calling
+          post_comment in a boolean context.
+        - Removed explicit "$self->current_page" from submit_form calls in
+          post_comment method.
+        - site_login now checks for the "You must be logged in" page
+          immediately after submitting the login form.
+          In short, if your password is wrong, it'll try once then
+          return 0 and set $myspace->error.  Once logged in, it will cache
+          the username/password as "valid", and subsequent "You must be
+          logged in" pages will be retried more vigorously.
+        - Added bad login test script.
+        - post_comment now croaks unless friend_id and message are passed.
+        - Fixed bug that would cause incorrect warning from get_friends if
+          called a second time after adding or deleting friends within the
+          same script.
+        - Modified post_comment to check for SCALAR instead of STR in
+          contextual "return" statement.  This hopefully fixes an
+          error which caused WWW::Myspace::Comment::post_comments to fail
+          with "Can't call WWW::Myspace::post_comment in boolean context
+          at /Library/Perl/5.8.6/WWW/Myspace/Comment.pm line 448".
+          (This most notibly affects approve_friends, which would trip this
+          error when posting general comments after approving friends).
+        - Modified send_message and send_friend_request to check for
+          SCALAR instead of STR in contextual "return" statement.
+        - Modularized site_login method code.
+        - Added test to verify logged_in = 1 to 01-login.t.
+
 0.44    2006-04-28
         - add_friends script now documents a known issue in which friend
           requests will be re-sent if they are denied.

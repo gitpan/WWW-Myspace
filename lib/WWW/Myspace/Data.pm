@@ -19,11 +19,11 @@ WWW::Myspace::Data - WWW::Myspace database interaction
 
 =head1 VERSION
 
-Version 0.03
+Version 0.04
 
 =cut
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 =head1 SYNOPSIS
 
@@ -115,7 +115,13 @@ command line, it will default to the user you are logged in as.
 
 Your database password (if any).  If you don't need a password to access
 your database, just leave this blank.
-    
+
+=item * C<< time_zone => $value >>
+
+This is any valid L<DateTime> time zone designation.  eg:
+
+    time_zone => 'America/Toronto'
+
 =back
 
 Optional Parameters
@@ -158,6 +164,7 @@ my %default_params = (
     config_file_format  => { default => 'YAML' },
     db                  => { type => HASHREF },
     myspace             => 0,
+    time_zone           => 0,
 );
 
 
@@ -313,9 +320,12 @@ sub cache_friend {
     else {
         $friend->is_band( 'N' );
     }
+
+    $self->{'last_lookup_id'} = $friend_id;
     
-    $friend->update;
-    
+    $friend->last_update( $self->date_stamp );
+    return $friend->update;
+        
 }
 
 =head2 update_friend( $friend_id )
@@ -357,8 +367,8 @@ sub update_friend {
         }
     );
     
-    unless ( $account->time ) {
-        $account->time( time() );
+    if ( $account->friend_since eq '0000-00-00 00:00:00') {
+        $account->friend_since( $self->date_stamp );
     }
     
     return $account->update;
@@ -379,8 +389,6 @@ since your last update.
 sub update_all_friends {
     
     my @friends = $self->{'myspace'}->get_friends;
-    # test on 2 ids rather than fetching all friends
-    #my @friends = ( '6759473', '1000070' );
     
     foreach my $friend_id ( @friends ) {
         $self->update_friend( $friend_id );
@@ -396,7 +404,25 @@ entries are updated.  This is essentially an internal routine.  When
 called internally the time zone is supplied from the value passed to
 new().
 
-    my $date_stamp = $data->date_stamp( { time_zone => 'America/Toronto' } );
+Optional Parameters
+
+=over 4
+
+=item * C<< time_zone => $value >>
+    
+Any valid L<DateTime> time zone, like 'America/Toronto' or
+'America/Chicago'.  Defaults to GMT.
+
+=item * C<< epoch => $value >>
+    
+Any positive number representing seconds since the epoch.  Defaults to 
+current system time
+
+    my $date_stamp = $data->date_stamp( 
+        { time_zone => 'America/Toronto', epoch => time(), } 
+    );
+
+=back
 
 =cut
 
@@ -404,16 +430,127 @@ sub date_stamp {
 
     my $param_ref = shift;
     
-    my $dt = DateTime->now;
+    my $dt = undef;
+    
+    if ( $param_ref->{'epoch'} && $param_ref->{'epoch'} > 0 ) {
+        $dt = DateTime->from_epoch( epoch => $param_ref->{'epoch'} );
+    }
+    else {
+        $dt = DateTime->now;
+    }
+    
     if ( $param_ref->{'time_zone'} ) {
         $dt->set_time_zone( $param_ref->{'time_zone'} );
+    }
+    
+    elsif ( $self->{'time_zone'} ) {
+        $dt->set_time_zone( $self->{'time_zone'} );
     }
     
     return $dt->ymd . ' ' . $dt->hms;
 
 }
 
+=head2 is_band( )
 
+Calls is_band_from_cache to see if the friend id is a band profile.  If
+it returns undef, the function will look up the info using Myspace.pm's
+is_band function, cache the info and return the result.
+
+=cut
+
+sub is_band {
+
+    my $friend_id = shift;
+    
+    my $is_band = $self->is_band_from_cache( $friend_id );
+    
+    # don't return on undef
+    if ( defined $is_band ) {
+        return $is_band;
+    }
+    else {
+        $self->cache_friend( $friend_id );
+        $self->{'last_lookup_id'} = $friend_id;
+        return $self->is_band_from_cache( $friend_id );
+    }
+
+}
+
+=head2 is_band_from_cache( )
+
+Checks the database to see if the friend id is a band profile. Returns
+undef if the id could not be found or band info is not cached for this
+id.
+=cut
+
+sub is_band_from_cache {
+
+    my $friend_id = shift;
+    
+    my $friend = $self->{'Friends'}->retrieve( 
+        friend_id => $friend_id,
+    );    
+
+    if ( $friend ) {
+
+        if ( !$friend->is_band ) {
+        
+            # if it's a NULL value, a proper lookup is needed
+            return undef;
+        }
+        elsif ( $friend->is_band eq 'Y') {
+            return 1;
+        }
+        elsif ( $friend->is_band eq 'N' ) {
+            return 0;
+        }
+
+    }
+    else {
+        return undef;
+    }
+
+}
+
+=head2 get_last_lookup_id ( )
+
+Returns the friend id of the last id for which a Myspace.pm 
+lookup was performed.  This is used by FriendAdder.pm to determine
+whether to sleep after skipping a profile.  If the lookup did not extend
+beyond the database, there's no reason to sleep.  May be useful for
+troubleshooting as well.
+
+=cut
+
+sub get_last_lookup_id {
+
+    return $self->{'last_lookup_id'};
+
+}
+
+=head2 is_cached( $friend_id )
+
+Returns 1 if this friend is in the database, 0 if not.
+
+=cut
+
+sub is_cached {
+
+    my $friend_id = shift;
+    
+    my $friend = $self->{'Friends'}->retrieve( 
+        friend_id => $friend_id,
+    ); 
+
+    if ( $friend ) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
+
+}
 =head2 _loader( )
 
 This is a private method, which creates a Class::DBI::Loader object,

@@ -1,4 +1,4 @@
-# $Id: Comment.pm 112 2006-04-17 19:46:40Z grantg $
+# $Id: Comment.pm 166 2006-05-09 02:45:40Z grantg $
 
 package WWW::Myspace::Comment;
 
@@ -12,11 +12,11 @@ WWW::Myspace::Comment - Auto-comment your MySpace friends from Perl scripts
 
 =head1 VERSION
 
-Version 0.13
+Version 0.14
 
 =cut
 
-our $VERSION = '0.13';
+our $VERSION = '0.14';
 
 =head1 SYNOPSIS
 
@@ -407,7 +407,7 @@ friend's pages.
 	sleep 24*60*60; #Sleep for a day, or run using cron
  }
 
- 
+
 
 =cut
 
@@ -443,7 +443,7 @@ sub post_comments {
 	$self->friend_ids( @friend_ids );
 
 	foreach $id ( @friend_ids ) {
-	
+
 		# If they're not on the exclude list, post a comment.
 		unless ( $self->commented->{"$id"} ) {
 
@@ -470,6 +470,16 @@ sub post_comments {
 				}
 				# Log our attempt and the result
 				$self->_write_exclusions( $id, $result );
+				
+				# Debugging code to help track down a weird occasional bug
+				# that causes this module to die with:
+				# Can't call WWW::Myspace::post_comment in boolean context 
+				# at /Library/Perl/5.8.6/WWW/Myspace/Comment.pm line 448
+#				if ( warn(  ref $result ) ) {
+#					confess "Comment post result is a reference of type " . ref $result . "\n".
+#						"result value: $result\n" .
+#						"friendID: $id, message: " . $self->message
+#				}
 	
 				# Notify the user and if necessary act on the result
 				if ( $self->noisy ) {
@@ -748,9 +758,16 @@ L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=WWW-Myspace>.
 I will be notified, and then you'll automatically be notified of progress on
 your bug as I make changes.
 
+=head1 KNOWN ISSUES
+
+- WWW::Myspace::Comment will (very) occasionally die with the following
+  error: Can't call WWW::Myspace::post_comment in boolean context at
+  /Library/Perl/5.8.6/WWW/Myspace/Comment.pm line 448
+  (Hopefully fixed in WWW::Myspace version 0.45).
+
 =head1 NOTES
 
-CAPTCHA: WWW::Myspace allows 53 to 55 posts before requiring a CAPTCHA response,
+CAPTCHA: WWW::Myspace allows 51 to 55 posts before requiring a CAPTCHA response,
 then allows 3 before requiring it again. Not sure what the timeout
 is on this, but running 50 a day seems to work.
 

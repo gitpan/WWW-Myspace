@@ -1,12 +1,18 @@
 #!perl -T
 
-use Test::More tests => 15;
+use Test::More tests => 16;
 #use Test::More 'no_plan';
 
 use lib 't';
 use TestConfig;
 # This logs us in only if they have a local config file.
 login_myspace or die "Login Failed - can't run tests";
+
+unless ( $CONFIG->{login} ) {
+	diag "Running tests without login.  If you want to run the full test\n".
+		 "suite (not required), see the README file that came with the\n".
+		 "distribution.";
+}
 
 # Some setup
 my $response;
@@ -18,7 +24,9 @@ my $myspace2 = $CONFIG->{'acct2'}->{'myspace'};
 ok( ref $myspace, 'Create myspace object' );
 
 SKIP: {
-	skip "Not logged in", 6 unless $CONFIG->{login};
+	skip "Not logged in", 7 unless $CONFIG->{login};
+
+	ok( $myspace->logged_in, "Login successful" );
 
 	cmp_ok( $myspace->my_friend_id, '==', $CONFIG->{'acct1'}->{'friend_id'},
 		'Verify friend ID' );

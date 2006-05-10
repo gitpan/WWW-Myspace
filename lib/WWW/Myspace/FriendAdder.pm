@@ -17,11 +17,11 @@ account
 
 =head1 VERSION
 
-Version 0.06
+Version 0.07
 
 =cut
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 
 =head1 SYNOPSIS
 
@@ -269,6 +269,7 @@ sub send_friend_requests {
     my $continue = 1; # break loop?
     my $count    = 0; # ids processed
     
+    my @unique_ids  = (); # friends who are safe to contact
     my %codes       = (); # status messages, keyed on codes
     my %code_report = (); # final report data, keyed on codes
     
@@ -276,7 +277,11 @@ sub send_friend_requests {
     if ( $self->{'db'} && !$self->{'loader'} ) {
                 
         my $data = WWW::Myspace::Data->new( 
-            $self->{myspace}, { db => $self->{'db'} }
+            $self->{myspace}, 
+            { 
+                db        => $self->{'db'}, 
+                time_zone => $self->{'time_zone'}, 
+            }
         );
         
         $self->{'data'} = $data;
@@ -293,90 +298,76 @@ sub send_friend_requests {
     
     if ( $self->{'exclude_my_friends'} ) {
 
-        my $start_time      = time();
-        my @current_friends = ( );
+        my $start_time = time();
         
         # if we have database access, use our own friends list
         if ( $self->{'data'} ) {
         
-            $self->_report("Getting friend ids from database...\n");
-            
-            # create an iterator
-            my $it = WWW::Myspace::Data::Friends->retrieve_all();
-            
-            while ( my $friend = $it->next ) {
-                
-                # does this friend id match the account?                
-                my $friend_id = $friend->friend_id();
-                
-                my $current_friend = 
-                    WWW::Myspace::Data::FriendToAccount->retrieve(
-                        friend_id  => $friend->friend_id(),
-                        account_id => $self->{'data'}->get_account,
-                );
-                
-                if ( $current_friend ) { 
-                    push ( @current_friends, $friend->friend_id );
-                }
-            }
-        }
-        else {
-            $self->_report("Getting friend ids from Myspace...\n");
-            @current_friends = $self->myspace->get_friends;
-        }
-        
-        $self->_report( "List finished.  Tossing out matches...\n");
-        
-        # accelerated means that no sorting takes place
-        my $lc = List::Compare->new(
-            {
-                lists => [ \@current_friends, \@potential_friends],
-                accelerated => 1,
-            }
-        );
-
-        my @unique_ids = $lc->get_complement;
-        
-        if ( $self->{'data'} && $self->{'exclude_logged_adds'} ) {
-            
-            my @unlogged_ids = ( );
-            
+            $self->_report("Checking friend ids in database...\n");
+                        
             my $account_id = $self->{'data'}->get_account();
             
-            foreach my $unique_id (@unique_ids) {
+            foreach my $friend_id ( @potential_friends ) {
+
+                # first see if this is already a friend
+                my $current_friend = 
+                    WWW::Myspace::Data::FriendToAccount->retrieve(
+                        friend_id  => $friend_id,
+                        account_id => $account_id,
+                );
                 
+                if ( $current_friend ) {
+                    next;
+                }
+                
+                # see if an attempt has already been made
                 my $logged = WWW::Myspace::Data::PostLog->search_where(
                     account_id => [ $account_id ],
-                    friend_id => [ $unique_id ],
+                    friend_id => [ $friend_id ],
                     result_code => [ 'P', 'FA', 'FB', 'FF', 'FP' ],
                 );
                 
                 unless ( $logged ) {
-                    push (@unlogged_ids, $unique_id);
+                    push (@unique_ids, $friend_id);
                 }
             }
-            
-            my $before  = @unique_ids;
-            my $after   = @unlogged_ids;
-            
-            @unique_ids = @unlogged_ids;
+             
         }
         
+        else {
+        
+            # no database access -- get everything from myspace
+            
+            $self->_report("Getting friend ids from Myspace...\n");
+            my @current_friends = $self->myspace->get_friends;
+        
+            $self->_report( "List finished.  Tossing out matches...\n");
+            
+            # accelerated means that no sorting takes place
+            my $lc = List::Compare->new(
+                {
+                    lists => [ \@current_friends, \@potential_friends],
+                    accelerated => 1,
+                }
+            );
+    
+            @unique_ids = $lc->get_complement;
+        
+        }
+       
         # assemble some stats
-        my $current     = @current_friends;
         my $future      = @potential_friends;
         my $unique      = @unique_ids;
         my $shared      = $future - $unique;
         my $finish_time = time();
         my $total_time  = $finish_time - $start_time;
-
-        @potential_friends = @unique_ids;
-
+    
         $self->_report("$total_time seconds to exclude duplicates.\n");
-        $self->_report("$current friends now.\n");
         $self->_report("$future ids supplied by you.\n");
         $self->_report("$unique unique ids.\n");
         $self->_report("$shared friends excluded.\n");
+            
+        @potential_friends = @unique_ids;
 
     }
 
@@ -395,7 +386,9 @@ sub send_friend_requests {
         ++$count;
         
         if ( $self->{'data'} ) {
-            $self->{'data'}->cache_friend( $id );
+            unless ( $self->{'data'}->is_cached( $id ) ) {
+                $self->{'data'}->cache_friend( $id );
+            }
         }
         
         # throw out unwanted profiles
@@ -404,12 +397,13 @@ sub send_friend_requests {
             my $skip_profile = undef;
         
             if (    $self->{'profile_type'} eq 'band'
-                && !$self->myspace->is_band( $id  ) )
+                && !$self->is_band( $id  ) )
             {
                 $skip_profile = 'personal';
             }
+            
             elsif ( $self->{'profile_type'} eq 'personal'
-                &&  $self->myspace->is_band( $id  ) )
+                &&  $self->is_band( $id  ) )
             {
                 $skip_profile = 'band';
             }        
@@ -418,8 +412,26 @@ sub send_friend_requests {
         
                 $self->_report("$count)\t$id\tSkipping ");
                 $self->_report("$skip_profile page.");
-                $self->_sleep_now();
-
+                
+                # sleep only if the data was not pulled from the cache
+                if ( $self->{'data'} ) {
+                
+                    my $last_id = $self->{'data'}->get_last_lookup_id;
+                    
+                    #if ( $last_id ) {
+                    #    $self->_report(" last id $last_id ");
+                    #}
+                    
+                    if ( $last_id && $last_id == $id ) {
+                        $self->_sleep_now();
+                    }
+                    else {
+                        $self->_report(" From cache. Continuing.\n");
+                    }
+                }
+                else {
+                    $self->_sleep_now();
+                }
                 ++$skipped;
                 next;
             }
@@ -587,6 +599,27 @@ sub add_to_friends {
     
 }
 
+=head2 is_band {
+
+If a Data.pm object exists, returns the value of $data->is_band 
+Otherwise, returns the value of $myspace->is_band
+
+=cut
+
+
+sub is_band {
+
+    my $friend_id = shift;
+    
+    if ( $self->{'data'} ) {
+        return $self->{'data'}->is_band( $friend_id );
+    }
+    else {
+        return $self->myspace->is_band( $friend_id );
+    }
+    
+}
+
 =head2 return_params( )
 
 Useful for testing whether your params have been set as expected.
@@ -657,6 +690,7 @@ sub _die_pretty {
      delete $self->{'myspace'};
      die Dumper(\$self);
 }
+
 
 =head1 AUTHOR
 
