@@ -1,5 +1,43 @@
 Revision history for WWW::Myspace
 
+0.46    2006-05-24
+        - get_friends and friends_from_profile now accept an "exclude"
+          option that lets you pass a reference to a list or hash of
+          friendIDs to exclude.  Since friendIDs are excluded as they are
+          read, passing an exclude list along with a max_count is much more
+          efficient (and faster) than reading all friends, then excluding.
+        - get_friends is now documented to accept a "source" option
+          ( group, profile, or inbox ) and "id" option (friendID or groupID
+          as appropriate to the source).  This both makes it possible to
+          use the new features on a group (because friends_from_group doesn't
+          take options yet), and makes the other methods convenience methods
+          (which they really already were, it just wasn't documented).
+        - Changed RE in friend_count to match Myspace formatting change.
+          Made more "robust".
+        - Changed RE in user_name to match Myspace formatting change.
+          Made more "robust".
+        - get_friends now sets $myspace->error if it encounters a page with
+          no friends on it.
+        - Changed RE in is_band to handle whitespace and account for Myspace
+          formatting change.
+        - Added _previous_button internal method.
+        - Updated REs in internal save_friend_info method to check for
+          whitespace instead of single space for robustness.
+        - Updated "private profile" RE in _get_friend_page to check for
+          whitespace instead of single spaces; added check for whitespace
+          after <br>.
+        - message_group will now die if get_friends returns with an error.
+        - get_friends now checks for "View All Friends", a Previous or
+          Next link, and for the </html> tag to make sure it's got a full
+          page, and displays a warning if it encounters a page with less than
+          35 friends on it.
+
+        THE FOLLOWING METHODS WILL NOT WORK WITH PREVIOUS VERSIONS
+        DUE TO MYSPACE CHANGES:
+        - friend_count
+        - user_name
+        - is_band
+
 0.45    2006-05-09
         - Added note regarding logins to test output.
         - Fixed bug in FriendAdder.pm that re-cached friend ids even

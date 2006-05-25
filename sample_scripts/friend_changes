@@ -31,12 +31,12 @@ my @added_friends = $fc->added_friends;
 
 my @deleted_friends = $fc->deleted_friends;
 
-print "Added friends:\n";
+print "Added " . @added_friends . " friends:\n";
 foreach $id ( @added_friends ) {
 	print $id. "\n";
 }
 
-print "Deleted friends:\n";
+print "Deleted " . @deleted_friends . " friends:\n";
 foreach $id ( @deleted_friends ) {
 	print $id. "\n";
 }

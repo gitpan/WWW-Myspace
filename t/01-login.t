@@ -30,22 +30,22 @@ SKIP: {
 
 	cmp_ok( $myspace->my_friend_id, '==', $CONFIG->{'acct1'}->{'friend_id'},
 		'Verify friend ID' );
-	
+
 	is( $myspace->account_name, $CONFIG->{'acct1'}->{'username'},
 		'Verify account_name' );
-	
+
 	is( $myspace->user_name, $CONFIG->{'acct1'}->{'user_name'},
 		'Verify user_name' );
 
 	# This should return more than 0 friends. If the regexp breaks,
 	# this'll return something else, like undefined.
 	cmp_ok( $myspace->friend_count, '>', 0, 'Check friend_count' );
-	
+
 	# Get friends
 	@friends = $myspace->get_friends;
-	
+
 	ok( @friends, 'Retreived friend list' );
-	
+
 	if ( @friends != 2 ) {
 		diag( 'Account has ' . @friends . ' friends' );
 	}

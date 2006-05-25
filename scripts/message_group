@@ -54,7 +54,7 @@ might like your music because they like that band.
 
 This script will read the config file and start messaging. If
 it hits the max_count value or a CAPTCHA response, it will sleep
-for 12 hours, then continue. If the script is stopped or interrupted,
+for 24 hours, then continue. If the script is stopped or interrupted,
 re-run it using the same config file and it will pick up where it left
 off. The script invokes the send_all method in WWW::Myspace::Message.
 Use perldoc WWW::Myspace::Message to read the docs on that module.
@@ -166,6 +166,7 @@ sub exclude_my_friends {
 
 	# Get myspace friends
 	@myfriends = $myspace->get_friends;
+	die $myspace->error if $myspace->error;
 
 	foreach $id ( @myfriends ) {
 		$friends{"$id"}++;

@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 168 2006-05-09 03:29:17Z grantg $
+# $Id: Myspace.pm 176 2006-05-25 05:08:01Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -34,11 +34,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.45
+Version 0.46
 
 =cut
 
-our $VERSION = '0.45';
+our $VERSION = '0.46';
 
 =head1 SYNOPSIS
 
@@ -788,7 +788,7 @@ sub is_band {
         my $res = $self->get_profile( $friend_id );
         unless ( $self->error ) {
             # Scan the page for band-specific RE (the music player plug-in).
-            if ( $res->content =~ /<PARAM NAME="Movie" VALUE="http:\/\/lads.myspace.com\/music\/musicplayer.swf/i ) {
+            if ( $res->content =~ /oas_ad\("www\.myspace\.com\/bandprofile,/i ) {
                 return 1;
             } else {
                 return 0;
@@ -804,7 +804,7 @@ sub is_band {
         # just after loading the login profile page. site_login calls
         # this method to take care of that problem.
         unless ( defined $self->{is_band} ) {
-            if ( $self->current_page->content =~ />My Bulletin Space</i ) {
+            if ( $self->current_page->content =~ />\s*My Bulletin Space\s*</i ) {
                 $self->{is_band} = 0;
             } else {
                 $self->{is_band} = 1;
@@ -838,7 +838,7 @@ sub user_name {
     if ( @_ ) {
         my ( $homepage ) = @_;
         my $page_source = $homepage->content;
-        if ( $page_source =~ /<h4 +class="heading">Hello,( |&nbsp;)(.*)\!<\/h4>/ ) {
+        if ( $page_source =~ /<h4 +class="heading">\s*Hello,(\s|&nbsp;)+(.*)\!\s*<\/h4>/ ) {
 #           my $line = $1;
 #           $line =~ s/\+/ /g;
 #           $line =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
@@ -930,7 +930,7 @@ sub friend_count {
         my ( $homepage ) = @_;
         my $page_source = $homepage->content;
 
-        if ( $page_source =~ /You have( |&nbsp;)(<span>)?<a [^>]+>([0-9]+)<\/a>(<\/span>)?( |&nbsp;)friends/ ) {
+        if ( $page_source =~ /You have(\s|&nbsp;|<span>)*(<a [^>]+>)?([0-9]+)(<\/a>)?(<\/span>|\s|&nbsp;)*friends/ ) {
             $self->{friend_count} = $3;
         }
     }
@@ -1149,14 +1149,57 @@ Tom, because he's everybody's friend and when you're debugging your band
 central CGI page it's probably best to limit your mistakes to
 actual friends.
 
+ # Simplest form - gets your friends.
  @friends = $myspace->get_friends;
+ 
+ # Advanced form
+ @friends = $myspace->(
+    source => 'group',  # 'profile', 'group', 'inbox', or ''
+    id => $group_id,    # friendID or groupID as appropriate
+    end_page => $end_page,  # Stop on this page. All pages if not included.
+    max_count => 300,   # Number of friends to return
+    exclude => \%exclude_hash,  # Don't include these friendIDs
+ );
 
 Accepts the following options:
 
+ source:    "profile", "inbox", or "group"
+            If not specified, gets your friends.
+            profile: Get friends from the profile specified by the "id" option.
+            inbox: Get friends from your inbox (see the
+                  "friends_who_emailed" method below)
+            group: Get the friends from the group specified by the "id" option.
+ id:        The friendID or groupID (depending on "source").
+            "id" is only needed for "profile" or "group".
+            (See the "friends_in_group" method for more info).
  end_page:  Stop on this page.
             $myspace->get_friends( end_page => 5 );
+            If not specified, gets all pages.
+            See note below about interaction with other options.
  max_count: Return this many friendIDs.
             $myspace->get_friends( max_count => 300 );
+            Stops searching and returns when max_count is reached.
+            (See note below).
+ exclude:   Exclude these friends, passed as a HASHREF
+            containing friendIDs as its keys.
+            If the "value" side of the pair is a true value,
+            the friendID will be excluded.
+            $myspace->get_friends( exclude => { 12345 => 1 };
+            $myspace->get_friends( exclude => \%exclude_friends );
+            
+            You can also pass a reference to an array for convenience,
+            but it will be turned into a hash, so it's a bit slower.
+            $myspace->get_friends( exclude => [ 12345, 123456 ] );
+            $myspace->get_friends( exclude => \@exclude_list );
+
+Combine max_count and exclude for handy functionality:
+ # This gets 300 friends, excluding those in the %exclude_friends
+ # hash.
+ $myspace->get_friends( source => 'group',
+                        id => $group_id,
+                        exclude => \%exclude_friends,
+                        max_count => 300
+                      );
 
 If you specify max_count and end_page, get_friends will stop when it
 hits the earliest condition that matches.
@@ -1194,7 +1237,7 @@ sub get_friends {
     $source = "" unless defined $source;
 
     # Can't get "our" friends if we're not logged in.
-    unless ( ( $source eq 'profile' )  ) {
+    unless ( ( $source eq 'profile' ) || ( $source eq 'group' ) ) {
         $self->_die_unless_logged_in( 'get_friends' );
     }
 
@@ -1206,6 +1249,15 @@ sub get_friends {
     my %friend_ids = ();
     my @friends_on_page = ();
     my ( $id );
+    my %myexclude = ();
+
+    # Fix exclusions if they gave us an array.
+    if ( ref $options{'exclude'} eq "ARRAY" ) {
+        foreach $id ( @{ $options{'exclude'} } ) {
+            $myexclude{ $id }++;
+        }
+        $options{'exclude'} = \%myexclude;
+    }
 
     # Loop until we get an empty page or there isn't a "next" link.
     while ( 1 ) {
@@ -1220,17 +1272,25 @@ sub get_friends {
         # Grep the friend IDs out
         @friends_on_page = $self->get_friends_on_page( $friends_page->content );
         ( $DEBUG ) && print "Done with page $page\n";
-        
+
 #       warn "Got ". @friends_on_page . " friends\n";
+
+        # Check the page
+        if ( ( $self->{_friend_count} > 40 ) &&
+             ( $self->_next_button( $friends_page->content ) ) &&
+             ( @friends_on_page < 35 )
+           ) {
+            warn "Got only " . @friends_on_page . " friends on page $page.\n";
+        }
 
         # Add them to the list
         # (This prevents duplicates for inbox, comments, etc)
         foreach $id ( @friends_on_page ) {
-            $friend_ids{"$id"}={
-                'page_no' => $page
-            };
-            $friend_ids{"$id"}->{page_no}++ unless ( ( $source eq "" ) ||
-                                ( $source eq "profile" ) );
+            unless ( $options{'exclude'}->{ $id } ) {
+                $friend_ids{"$id"}={ 'page_no' => $page };
+                $friend_ids{"$id"}->{page_no}++ unless ( ( $source eq "" ) ||
+                                    ( $source eq "profile" ) );
+            }
         }
 
         # See if we're done.
@@ -1241,8 +1301,11 @@ sub get_friends {
                 );
 
         # Warn if we got a page with no friendIDs on it.
-        # (XXX This should probably throw an error)
-        unless ( @friends_on_page ) { warn "Page $page had no friends\n" }
+        unless ( @friends_on_page ) {
+            $self->error("Page $page had no friends");
+            warn $self->error;
+            last;
+        }
 
         # Next!
         $self->{_last_friend_page} = $page;
@@ -1253,7 +1316,7 @@ sub get_friends {
 
     # Returning an incomplete list of our friends can be dangerous
     # since it's used to do exclusions. Do a
-    # safety check. We see if the friend count is within 5% of the
+    # safety check. We see if the friend count is within 10% of the
     # number of friends returned (no, myspace's friend counter is never
     # actually right.....)
     
@@ -1266,7 +1329,7 @@ sub get_friends {
 #        }
         my @friends = keys( %friend_ids );
         my $friend_count = @friends;
-        my $error_allowed = $myspace_friend_count * .05;
+        my $error_allowed = $myspace_friend_count * .10;
         my $error_offset = abs ( $myspace_friend_count - $friend_count );
         if ( $error_allowed < 10 ) { $error_allowed = 10 };
         
@@ -1383,11 +1446,15 @@ sub friends_from_profile {
 
 #---------------------------------------------------------------------
 
-=head2 friends_in_group( group_id )
+=head2 friends_in_group( group_id );
+
+Convenience method: Same as calling
+"get_friends( source => 'group', id => $group_id )".
 
 Returns a list of the friend IDs of all people in the
 group identified by group_id. Tom is disincluded as in get_friends
 (because the same routine is used to get the friendIDs).
+
 
 Example:
 
@@ -1420,6 +1487,8 @@ sub friends_in_group {
 # Return a list of friends with mail in the inbox.
 
 =head2 friends_who_emailed
+
+Convenience method, same as calling "get_friends( source => 'inbox' )".
 
 Returns, as a list of friend IDs, all friends with messages
 in your inbox (mail). Note that this only tells you who you have mail from,
@@ -3590,7 +3659,8 @@ sub _get_friend_page {
         $url = "http://groups.myspace.com/index.cfm?fuseaction=".
             "groups.viewMembers&groupID=${id}&page=${page}";
     } else {
-        $verify_re = "View All Friends";
+        # Make sure we got the friend page, and that we got the whole page.
+        $verify_re = "View All Friends.*(Previous|Next).*<\/html>";
         ( $DEBUG ) && print "Loading friend page $page\n";
         # Unless they specified a profile to get friends from,
         # use our own.
@@ -3621,7 +3691,7 @@ sub _get_friend_page {
     # Get the page
     ( $DEBUG ) && print "  Getting URL: $url\n";
     $res = $self->get_page( $url );
-    if ( $res->content =~ /This profile is set to private. This user must add <br\/>you as a friend to see his\/her profile./ ) {
+    if ( $res->content =~ /This\s+profile\s+is\s+set\s+to\s+private.\s+This\s+user\s+must\s+add\s+<br\/>\s*you\s+as\s+a\s+friend\s+to\s+see\s+his\/her\s+profile./ ) {
         $self->error("User profile is set to private.");
     }
 
@@ -3644,12 +3714,12 @@ my sub save_friend_info {
 
     # Get and store the friend count and user name
     # Friend count
-    $self->current_page->content =~ /name="friendCount" value="([0-9]+)"/i;
+    $self->current_page->content =~ /name="friendCount"\s+value="([0-9]+)"/i;
     $self->{_friend_count} = $1;
     warn "Didn't get friend count" unless ( $self->{_friend_count} );
     
     # User name
-    $self->current_page->content =~ /name="userName" value="([^"]*)"/i;
+    $self->current_page->content =~ /name="userName"\s+value="([^"]*)"/i;
     $self->{_user_name} = $1;
     warn "Didn't get user_name" unless ( $self->{_user_name} );
     
@@ -3683,6 +3753,33 @@ EXAMPLES
 =cut
 
 sub _next_button {
+
+    my ( $content ) = @_;
+    
+    unless ( $content ) {
+        $content = $self->current_page->content;
+    }
+
+    $content =~ /">Next<\/a>( |&nbsp;)\&gt;/i;
+
+}
+
+=head2 _previous_button
+
+As you might guess, returns true if there's a "Previous" link on the
+page. This is used to sanity-check functions like get_friends.  If there
+isn't a "Next" button, this method can be used to make sure there is a
+"Previous" button.
+
+ # Exit the loop if we're on the last page
+ last unless (
+   $self->_next_button( $page_source ) &&
+   $self->_previous_button( $page_source )
+ );
+
+=cut
+
+sub _previous_button {
 
     my ( $content ) = @_;
     
