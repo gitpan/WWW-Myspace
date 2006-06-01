@@ -1,5 +1,13 @@
 Revision history for WWW::Myspace
 
+0.47    2006-05-31
+        - send_message REs updated due to change in MySpace site.
+        
+        THE FOLLOWING METHODS WILL NOT WORK WITH PREVIOUS VERSIONS
+        DUE TO MYSPACE CHANGES:
+        - send_message
+        - reply_message
+
 0.46    2006-05-24
         - get_friends and friends_from_profile now accept an "exclude"
           option that lets you pass a reference to a list or hash of

@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 176 2006-05-25 05:08:01Z grantg $
+# $Id: Myspace.pm 178 2006-06-01 01:57:36Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -34,11 +34,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.46
+Version 0.47
 
 =cut
 
-our $VERSION = '0.46';
+our $VERSION = '0.47';
 
 =head1 SYNOPSIS
 
@@ -190,8 +190,8 @@ our @ERROR_REGEXPS = (
 
 # If we exceed our daily mail usage, what regexp would we see?
 # (Note: they've misspelled usage, so the ? is in case they fix it.)
-#our $EXCEED_USAGE = "User has exceeded their daily use?age";
-our $EXCEED_USAGE = "User has exceeded their daily useage\.";
+our $EXCEED_USAGE = "User has exceeded their daily use?age";
+#our $EXCEED_USAGE = "User has exceeded their daily useage\.";
 
 # What RE should we look for to tell if we're on the "You must be logged
 # in to do that!" page? XXX - CONFIRM THIS!
@@ -2252,7 +2252,7 @@ sub send_message {
 
     # Try to get the message form
     $res = $self->get_page( "${SEND_MESSAGE_FORM}${friend_id}",
-        "Mail Center<br>Send a Message|$MAIL_PRIVATE_ERROR|$MAIL_AWAY_ERROR" );
+        'Mail Center\s*<br>\s*Send a Message|'.$MAIL_PRIVATE_ERROR.'|'.$MAIL_AWAY_ERROR );
 
     # Check for network error
     if ( $self->error ) {
