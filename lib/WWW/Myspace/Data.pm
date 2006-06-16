@@ -1,6 +1,5 @@
 package WWW::Myspace::Data;
 
-#use Spiffy -Base;
 use WWW::Myspace::MyBase -Base;
 
 use Carp qw(croak cluck);
@@ -10,7 +9,7 @@ use Class::DBI::AbstractSearch;
 use Config::General;
 use Data::Dumper;
 use DateTime;
-use Params::Validate qw(:types);
+use Params::Validate qw(:types validate);
 use Scalar::Util qw(reftype);
 
 =head1 NAME
@@ -19,11 +18,11 @@ WWW::Myspace::Data - WWW::Myspace database interaction
 
 =head1 VERSION
 
-Version 0.04
+Version 0.05
 
 =cut
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 =head1 SYNOPSIS
 
@@ -46,7 +45,7 @@ access.
     # set up a database connection
     my $loader     = $data->loader();
     
-    # initialize the database with MySpace login info
+    # initialize the database with Myspace login info
     my $account_id = $data->set_account( $username, $password );
     
     # now do something useful...
@@ -148,9 +147,9 @@ look for a config file.  Default file format is L<YAML>.
 =item * C<< config_file_format => [YAML|CFG] >>
 
 If you have chosen to use a configuration file, you may state explicitly
-which format you are using.  You may choose between YAML and
+which format you are using.  You may choose between L<YAML> and
 L<Config::General>.  If you choose not to pass this parameter, it will
-default to L<YAML>.
+default to YAML.
 
 =back
 
@@ -212,7 +211,7 @@ account and you don't change your password information.
 This mutator will also allow you to switch accounts within the same
 object. So, if you can switch from user A to user B, without creating a
 new object. In order to prevent you from shooting yourself in the foot,
-set_account() will die if it is unable to log in to MySpace with the
+set_account() will die if it is unable to log in to Myspace with the
 username/password you provide.
 
 To prevent any problems, be sure to check the return value.  If
@@ -302,23 +301,107 @@ can call this method.
 sub cache_friend {
 
     croak "no db connection" unless ( $self->loader );
-
+    
     my $friend_id  = shift;
     my $myspace    = $self->{'myspace'};
     
-    # manage profile in "friends" table
-    my $friend = $self->{'Friends'}->find_or_create( 
-        { friend_id => $friend_id, }
-    );
-        
-    $friend->user_name( $myspace->friend_user_name( $friend_id ) );
-    $friend->url( $myspace->friend_url( $friend_id ) );
+    croak 'friend_id required' unless $friend_id;    
     
-    if ( $myspace->is_band( $friend_id  ) ) {
-        $friend->is_band( 'Y');
+    # manage profile in "friends" table
+    my $friend = $self->_find_or_create_friend( $friend_id );
+
+    my $res = $myspace->get_profile( $friend_id );
+    my $content = $res->content;
+    
+    my %profile = ( );
+    
+    # first, do some generic tests
+    
+    # myspace URL
+    if ( $content =~ /\<title\>[\s]*www.myspace\.com\/([\S]*)[\s]*\<\/title\>/ ) {
+        $profile{'url'} = $1;
     }
-    else {
-        $friend->is_band( 'N' );
+    
+    # myspace username
+    if ( $content =~ /index\.cfm\?fuseaction=user\&circuitaction\=viewProfile_commentForm\&friendID\=[0-9]+\&name\=([^\&]+)\&/ ) {
+        my $line = $1;
+        $line =~ s/\+/ /g;
+        $line =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
+        $profile{'user_name'} = $line;
+    }
+    
+    if ( $content =~ /ctl00_Main_ctl00_UserBasicInformation1_hlDefaultImage(.*?Last Login.*?)<br>/ms) {
+        
+        # split the data on line breaks and evaluate it from there
+        # band pages have more line breaks than personal pages
+        my @lines = split(/<br>/, $1);
+    
+        my $size = @lines;
+        
+        # personal profile
+        if ( $size == 9 ) {
+        
+            $profile{'is_band'} = 'N';        
+
+            if ( $content =~ />"(.*?)"</ms ) {
+                $profile{'tagline'} = $1;
+            }
+            
+            $profile{'sex'} = $lines[2];
+            if ( $content =~ /(\d{1,}) years old/ ) {
+                $profile{'age'} = $1;
+            }
+            
+            ($profile{'city'}, $profile{'region'}) = $self->_regex_city($lines[4]);
+            $profile{'country'} = $lines[5];
+            $profile{'last_login'} = $self->_regex_date($lines[8]);
+            
+        }
+        
+        # band profile
+        elsif ( $size == 11 ) {
+        
+            $profile{'is_band'} = 'Y';        
+
+            if ( $content =~ m/Member Since.*?(\d\d\/\d\d\/\d\d\d\d)/ ) {
+                $profile{'member_since'} = $self->_regex_date($1);
+            }
+            
+            if ( $lines[1] =~ /<strong>.*?"(.*?)".*?<\/strong>/ms ) {
+                $profile{'tagline'} = $1;
+            }
+            
+            ($profile{'city'}, $profile{'region'}) = $self->_regex_city($lines[3]);
+            $profile{'country'} = $lines[4];
+            
+            if ($lines[6] =~ /(\d{1,})/) {
+                $profile{'profile_views'} = $1;
+            }
+
+            $profile{'last_login'} = $self->_regex_date($lines[10]);
+            
+        }
+    
+        foreach my $key ( keys %profile ) {
+            if ( $profile{$key} && $profile{$key} =~ /[0-9a-zA-Z]/ ) {
+                $profile{$key} =~ s/\t//g;          # remove tabs
+                $profile{$key} =~ s/^\s{1,}//g;     # remove leading whitespace
+                $profile{$key} =~ s/\s{1,}$//g;     # remove trailing whitespace
+            }
+        }
+        
+#         my $count = 0;
+#         foreach (@lines) {
+#             print "$count) $_\n";
+#             ++$count;
+#         } 
+        
+    }
+
+    foreach my $key ( keys %profile ) {
+        if ( $profile{$key} && $profile{$key} =~ /[0-9a-zA-Z]/ ) {
+            $friend->$key( $profile{$key} );
+        }
     }
 
     $self->{'last_lookup_id'} = $friend_id;
@@ -360,18 +443,9 @@ sub update_friend {
     # cache profile in "friends" table
     $self->cache_friend( $friend_id );
     
-    # map friend to account in "friend_to_account" table
-    my $account = $self->{'FriendToAccount'}->find_or_create(
-        {   friend_id  => $friend_id,
-            account_id => $account_id,
-        }
+    return $self->_add_friend_to_account(
+        { friend_id => $friend_id, account_id => $account_id }
     );
-    
-    if ( $account->friend_since eq '0000-00-00 00:00:00') {
-        $account->friend_since( $self->date_stamp );
-    }
-    
-    return $account->update;
 
 }
 
@@ -379,9 +453,9 @@ sub update_friend {
 
 update_all_friends is really just a wrapper around update_friend  This
 method fetches a complete list of your friends currently listed at
-MySpace and makes sure that all myspace users that are friends of your
+Myspace and makes sure that all myspace users that are friends of your
 account are represented in the local "friends" table.  It does not
-delete friends which may have been removed from your MySpace account
+delete friends which may have been removed from your Myspace account
 since your last update.
 
 =cut
@@ -513,6 +587,191 @@ sub is_band_from_cache {
 
 }
 
+=head2 friends_from_profile( { friend_id => $friend_id } )
+
+This is "sort of" a wrapper around WWW::Myspace->friends_from_profile
+The method will first check the database to see if there are any friends
+listed for $friend_id.  If friends exist, they will be returned.
+Otherwise, the method will call WWW::Myspace->friends_from_profile.  It
+will cache then results, perform a database lookup and then return the
+results to the caller.  Aside from speeding up lookups, this allows you
+to do some fancier limiting and sorting when requesting data.  This
+method doesn't take all of the arguments which the Myspace module takes,
+so please read the docs
+carefully.
+
+Required Parameters
+
+=over 4
+
+=item * C<< friend_id => $friend_id >>
+A valid Myspace friend id
+
+=back
+
+Optional Parameters
+
+=over 4
+
+=item * C<< refresh => [0|1] >>
+
+Skip the database access and force the method to do a new lookup on the
+Myspace site.  This is useful if you want to add any new friend ids
+which may have been added since you last ran this method.  Because the
+data that Myspace.com returns can't be trusted, friends missing from a
+previous list will *not* be deleted from the cache.
+
+=item * C<< limit => $value >>
+
+Limit the number of friends returned to some positive integer.  By
+default, no LIMIT is applied to queries.
+
+=item * C<< offset => $value >>
+
+Used for OFFSET argument in a query.  Must be used in tandem with the limit parameter.  Offset will set the amount of entries which should be skipped before returning values.  For example:
+
+    # Only return 500 results, beginning after the first 10
+    my @friend_ids = $data->friends_from_profile( { 
+        friend_id   => $my_friend_id,
+        limit       => 500,
+        offset      => 10,
+    } );
+
+=item * C<< order_column => [friend_id | friend_since] >>
+
+The column by which to order returned results.  Defaults to "friend_id".
+
+=item * C<< order_direction => [ASC | DESC] >>
+
+The direction by which to sort results. ASC (ascending) or DESC
+(descending).  Defaults to ASC.
+
+=back
+
+So, for example, if you're starting from scratch and you want to start
+with a complete list of your own friends in the database, you can do
+something like this:
+
+    $data->set_account ( $account, $password );
+    my @friend_ids = $data->friends_from_profile( { 
+        friend_id => $my_friend_id 
+    } );
+
+This will cache all of your friends by their id numbers.  Because of
+speed concerns, it will not cache any other info about them.  If you
+want more info on each friend, just add the following call:
+
+    foreach my $friend_id ( @friend_ids ) {
+        $data->cache_friend( $friend_id );
+    }
+
+Here's how you might call this method using all available parameters:
+
+    my @friends = $data->friends_from_profile( { 
+        friend_id       =>  $friend_id, 
+        refresh         =>  0, 
+        limit           =>  100,
+        offset          =>  50,
+        order_direction =>  'DESC',
+        order_column    =>  'friend_id',
+    } );
+
+
+=cut
+
+sub friends_from_profile {
+
+    my $arg_ref = shift;
+    
+    my %args    = %{$arg_ref};    
+    my @params  = %args;
+    
+    my %params  = validate( @params,
+    {
+        friend_id => {
+            type        => SCALAR, 
+            optional    => 0, 
+        }, 
+
+        refresh  => {
+            type        => SCALAR, 
+            default     => 0, 
+            optional    => 1, 
+        }, 
+        
+        limit => {
+            type        => SCALAR, 
+            default     => 0, 
+            optional    => 1, 
+        },
+
+        offset => {
+            type        => SCALAR, 
+            default     => 0, 
+            optional    => 1, 
+            depends => [ 'limit' ],
+        },
+                
+        order_column => {
+            type        => SCALAR,
+            default     => 'friend_id',
+            optional    => 1, 
+        },
+                
+        order_direction => {
+            type        => SCALAR,
+            default     => 'ASC',
+            optional    => 1,
+        },
+        
+    } );
+    
+    if ( $params{'offset'} && !$params{'limit'} ) {
+        croak "You must supply a 'limit' param if you supply 'offset'";
+    }
+    
+    my $friend_id = $params{'friend_id'};
+
+    # first check if the id exists in the accounts table
+    my $account = $self->{'Accounts'}->find_or_create( 
+        my_friend_id => $friend_id, 
+    );
+
+    my $account_id = $account->account_id;
+    $params{'account_id'} = $account_id;
+    
+
+    my @friend_ids = ( );
+
+    unless ( $arg_ref->{'refresh'} ) {
+    
+        @friend_ids = $self->_friends_from_profile( \%params );
+        return @friend_ids if @friend_ids;
+
+    }
+    
+    # if nothing has been cached, we need to fetch the stuff "old school"    
+    my @lookup_ids = $self->{'myspace'}->friends_from_profile( 
+        id          => $friend_id,
+        max_count   => $arg_ref->{'limit'},
+    );
+        
+    foreach my $id ( @lookup_ids ) {
+    
+        my $friend = $self->_find_or_create_friend( $id );
+    
+        my $friend_to_account = $self->_add_friend_to_account(
+            { friend_id => $id, account_id => $account_id }
+        ); 
+    
+    }
+    
+    @friend_ids = $self->_friends_from_profile( \%params );
+    return @friend_ids;
+
+}
+
+
 =head2 get_last_lookup_id ( )
 
 Returns the friend id of the last id for which a Myspace.pm 
@@ -620,6 +879,129 @@ sub _die_pretty {
      die Dumper(\$self);
 }
 
+=head2 _add_friend_to_account ( { friend_id => $friend_id, account_id => $account_id } )
+
+Internal method.  Maps a friend to an account id in the db.
+
+=cut 
+
+sub _add_friend_to_account {
+
+    my $param_ref = shift;
+    
+    croak 'friend_id required' unless $param_ref->{'friend_id'};
+    croak 'account_id required' unless $param_ref->{'account_id'};
+
+    # map friend to account in "friend_to_account" table
+    my $account = $self->{'FriendToAccount'}->find_or_create(
+        {   friend_id  => $param_ref->{'friend_id'},
+            account_id => $param_ref->{'account_id'},
+        }
+    );
+    
+    if ( $account->friend_since eq '0000-00-00 00:00:00') {
+        $account->friend_since( $self->date_stamp );
+    }
+    
+    return $account->update;
+
+}
+
+=head2 _find_or_create_friend( $friend_id )
+
+Internal method.  Adds friend id to db, but does not associate friend
+with any account.
+
+=cut 
+
+sub _find_or_create_friend {
+
+    my $id = shift;
+    
+    my $friend = $self->{'Friends'}->find_or_create( 
+        { friend_id => $id, }
+    );
+    
+    return $friend;
+
+}
+
+=head2 _friends_from_profile( $friend_id )
+
+Internal method.  Checks db for cached friends.
+
+=cut 
+
+sub _friends_from_profile {
+
+    my $param_ref   = shift;
+    my %params      = %{$param_ref};
+    my @friend_ids  = ( );
+    my $order_col   = "$params{'order_column'} $params{'order_direction'}";
+    
+    my $search_params = {
+        limit_dialect   =>  $self->{'FriendToAccount'},
+        order_by        =>  $order_col,
+    };
+
+    foreach my $param ( 'limit', 'offset' ) {
+        if ( $params{ $param } ) {
+            $search_params->{ $param } = $params{ $param };
+        }
+    }
+    
+    my $iterator = $self->{'FriendToAccount'}->search_where( 
+        {   account_id => $params{'account_id'}   },
+        $search_params,
+    );
+        
+    while ( my $friend = $iterator->next) {
+    
+        push ( @friend_ids, $friend->friend_id );
+                
+    }
+    
+    return @friend_ids;
+
+}
+
+=head2 _regex_city ( $content )
+
+Internal method.  Regex to find City/Region data.
+
+=cut 
+
+sub _regex_city {
+
+    my $content    = shift;
+    my $region  = undef;
+    
+    my @city    = split(/,/, $content);
+    my $city    = shift @city;
+    
+    if ( @city ) {
+        $region = join(",", @city);
+    }
+
+    return ($city, $region);
+}
+
+=head2 _regex_date ( $content )
+
+Internal method.  Regex to return last login time.
+
+=cut 
+
+sub _regex_date {
+
+    my $content = shift;
+    
+    if ( $content =~ m/(\d\d)\/(\d\d)\/(\d\d\d\d)/ms ) {
+        return $3.'-'.$2.'-'.$1;
+    }
+
+}
+
 =head1 DATABASE SCHEMA
 
 You'll find the database schema in a file called mysql.txt in the top
@@ -642,12 +1024,11 @@ Olaf Alders, C<< <olaf at wundersolutions.com> >>
 
 =head1 BUGS
 
-Please report any bugs or feature requests to
-C<bug-www-myspace at rt.cpan.org>, or through the web interface at
-L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=WWW-Myspace>.
-I will be notified, and then you'll automatically be notified of
-progress on
-your bug as I make changes.
+Please report any bugs or feature requests to C<bug-www-myspace at
+rt.cpan.org>, or through the web interface at
+L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=WWW-Myspace>. I will be
+notified, and then you'll automatically be notified of progress on your
+bug as I make changes.
 
 =head1 NOTES
 

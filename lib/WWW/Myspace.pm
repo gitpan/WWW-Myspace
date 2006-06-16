@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 178 2006-06-01 01:57:36Z grantg $
+# $Id: Myspace.pm 197 2006-06-16 03:36:21Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -34,11 +34,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.47
+Version 0.48
 
 =cut
 
-our $VERSION = '0.47';
+our $VERSION = '0.48';
 
 =head1 SYNOPSIS
 
@@ -157,6 +157,10 @@ our $MAIL_PRIVATE_ERROR = "You can't send a message to [^<]+ because you must be
 
 # If a person has set an away message, what regexp should we look for?
 our $MAIL_AWAY_ERROR = "You can't send a message to [^<]+ because [^<]+ has set [^<]+ status to away";
+
+# What RE shows up if a friendID is invalid?
+our $INVALID_ID = '<b>Invalid Friend ID.\s*<br>\s*This user has either '.
+    'cancelled their membership,? or their account has been deleted\.';
 
 # What regexp should we look for for Myspace's frequent "technical error"
 # messages?
@@ -968,6 +972,102 @@ sub get_profile {
 
 }
 
+=head2 get_comments( $friend_id )
+
+Returns a list of hashrefs, like "inbox", of all comments
+left for the profile indicated by $friend_id.
+
+ Each list element contains:
+ { 
+   sender => $friend_id, # friendID of the person who sent the comment
+   date => $date_time,   # As formatted on MySpace
+   comment => $string    # HTML of the comment.
+ }
+
+Comments are returned in the order in which they appear on myspace
+(currently most recent first).
+
+Dies if called when not logged in.
+
+=cut
+
+sub get_comments {
+
+    my ( $friend_id ) = @_;
+
+    $self->_die_unless_logged_in( 'get_comments' );
+
+    my $page="";
+    my $page_no = 0;
+    my @comments = ();
+    my ( $key, $numless );
+    my %lpd = (
+        '01fuseaction' => '',
+        '02friendID' => '',
+        '03page' => 0,
+        '04finalpage' => '',
+        '05prevPage' => '',
+        '06PREVPageLASTONERETURENED' => '',
+        '07PREVPageFirstONERETURENED' => '',
+        '08Mytoken' => ''
+       );
+
+    # Loop until we get an empty page or there isn't a "next" link.
+    while ( 1 ) {
+
+        # Get the page
+        my $url="http://comments.myspace.com/index.cfm?";
+        if ( $page_no ) {
+            $lpd{'03page'}=$page_no;
+            foreach $key ( sort( keys( %lpd ) ) ) {
+                $numless = $key; $numless =~ s/^..//;
+                $url .= "&${numless}=". $lpd{ $key };
+            }
+        } else {
+            $url .= "fuseaction=user.viewComments&friendID=". $friend_id;
+        }
+
+#        warn "Getting $url\n";
+        $page = $self->get_page( $url );
+
+        # Get the message data.
+
+#        warn "Getting comments from page $page_no\n";
+        push @comments, $self->_get_comments_from_page( $page->content );
+
+#        warn $page->content;
+        last unless ( $self->_next_button( $page->content ) );
+        
+        # Next!
+        $page_no++;
+        # Read the page data and remember it.
+        foreach $key ( keys( %lpd ) ) {
+            $numless=$key ; $numless =~ s/^..//;
+            $page->content =~ /<\s*input\s+type="?hidden"?\s+name="?${numless}"?\s+value="?([^">]*)"?\s*>/i;
+            $lpd{ $key } = $1;
+        }
+        
+    }
+
+    return \@comments;
+
+    
+}
+
+# Take a page, return a list of comment data
+sub _get_comments_from_page {
+
+    my ( $page ) = @_;
+    my @comments = ();
+    while ( $page =~
+            s/.*?UserID=([^;]+);.*?<span class="blacktext10">\s*([^<]+)\s*<\/span>\s*<br>\s*<br>\s*(.*?)<\/td>\s*<\/tr>//sm ) {
+        push @comments, { sender => $1, date => $2, comment => $3 }
+    }
+    
+    return @comments;
+}
+
+
 sub ____FIND_PEOPLE____ {}
 
 =head1 FIND PEOPLE
@@ -1272,6 +1372,10 @@ sub get_friends {
         # Grep the friend IDs out
         @friends_on_page = $self->get_friends_on_page( $friends_page->content );
         ( $DEBUG ) && print "Done with page $page\n";
+        # Check for duplicates
+        if ( $friend_ids{ $friends_on_page[1] } ) {
+            warn "Duplicate friendID $friends_on_page[1] found on page $page\n";
+        }
 
 #       warn "Got ". @friends_on_page . " friends\n";
 
@@ -1336,6 +1440,11 @@ sub get_friends {
         if ( $error_offset > $error_allowed ) {
             warn "WARNING: get_friends returned $friend_count friends, ".
             "but should have returned around " . $myspace_friend_count . ".";
+        }
+        
+        # If we stopped before the last page, throw an error
+        if ( $page < $self->{_friend_pages} ) {
+            $self->error( "get_friends stopped before reaching last page, friend list is incomplete" );
         }
     }
 
@@ -1649,6 +1758,7 @@ page. It returns a status string as follows:
  FF  =>  'Failed, you must be someone\'s friend to post a comment about them.'
  FN  =>  'Failed, network error (couldn\'t get the page, etc).'
  FC  =>  'Failed, CAPTCHA response requested.'
+ FI  =>  'Failed, Invalid friendID.',
  F   =>  'Failed, verification string not found on page after posting.'
 
 Warning: It is possible for the status code to return a false
@@ -1699,6 +1809,7 @@ sub post_comment {
         FF  =>  'Failed, you must be someone\'s friend to post a comment about them.',
         FN  =>  'Failed, network error (couldn\'t get the page, etc).',
         FC  =>  'Failed, CAPTCHA response requested.',
+        FI  =>  'Failed, Invalid FriendID.',
         F   =>  'Failed, verification string not found on page after posting.',
 
     );
@@ -1727,7 +1838,8 @@ sub post_comment {
         $submitted = 
             $self->submit_form( "${VIEW_COMMENT_FORM}${friend_id}", 1,
                             "", { 'f_comments' => "$message" },
-                            "f_comments|($CAPTCHA)|($NOT_FRIEND_ERROR)",
+                            "f_comments|($CAPTCHA)|($NOT_FRIEND_ERROR)|".
+                            "$INVALID_ID",
                             'f_comments'
                         );
         
@@ -1744,6 +1856,11 @@ sub post_comment {
             # Check for the "not your friend" error
             if ( $self->current_page->content =~ /$NOT_FRIEND_ERROR/ ) {
                 return "FF";
+            }
+            
+            # Check for Invalid ID error
+            if ( $self->current_page->content =~ /$INVALID_ID/ ) {
+                return "FI";
             }
     
             # Otherwise, confirm it.
@@ -2210,6 +2327,7 @@ the end of the message.
  FA  =>  Failed, this person\s status is set to "away".
  FE  =>  Failed, you have exceeded your daily usage.
  FC  =>  Failed, CAPTCHA response requested.
+ FI  =>  Failed, Invalid friend ID.
  F   =>  Failed, verification string not found on page after posting.
 
 If called in list context, returns the status code and text description.
@@ -2239,6 +2357,7 @@ sub send_message {
         FA  =>  'Failed, this person\s status is set to "away".',
         FE  =>  'Failed, you have exceeded your daily usage.',
         FC  =>  'Failed, CAPTCHA response requested.',
+        FI  =>  'Failed, Invalid FriendID.',
         F   =>  'Failed, verification string not found on page after posting.',
 
     );
@@ -2252,7 +2371,8 @@ sub send_message {
 
     # Try to get the message form
     $res = $self->get_page( "${SEND_MESSAGE_FORM}${friend_id}",
-        'Mail Center\s*<br>\s*Send a Message|'.$MAIL_PRIVATE_ERROR.'|'.$MAIL_AWAY_ERROR );
+        'Mail Center\s*<br>\s*Send a Message|'.$MAIL_PRIVATE_ERROR.'|'.
+        $MAIL_AWAY_ERROR.'|'.$INVALID_ID );
 
     # Check for network error
     if ( $self->error ) {
@@ -2266,6 +2386,8 @@ sub send_message {
         return "FF";
     } elsif ( $page =~ /${MAIL_AWAY_ERROR}/i ) {
         return "FA";
+    } elsif ( $page =~ /${INVALID_ID}/i ) {
+        return "FI";
     }
 
     # Convert newlines (\n) into socket-ready CRLF ASCII characters.
@@ -3723,6 +3845,20 @@ my sub save_friend_info {
     $self->{_user_name} = $1;
     warn "Didn't get user_name" unless ( $self->{_user_name} );
     
+    # Number of pages
+    $self->current_page->content =~ /of(&nbsp;|\s)+<a href="javascript:NextPage\('|([0-9]+)'\)/i;
+    $self->{_friend_pages} = $2;
+    # If there's only 1 page the RE will break, and testing for the alternate
+    # is dangerous, so if there are less than 40 friends, just set it to
+    # 1 page.
+    if ( ( $self->{_friend_count} && ( $self->{_friend_count} < 40 ) ) &&
+         ( ! $self->{_friend_pages} ) ) {
+        $self->{_friend_pages} = 1;
+    }
+    warn "Didn't get friend_pages" unless ( $self->{_friend_pages} );
+#    warn "friend_pages: " . $self->{_friend_pages};
+    
+    
 #   warn "Stored friend count " . $self->{_friend_count} . ", ".
 #       "user name " . $self->{_user_name} . ".\n";
     
@@ -3787,7 +3923,7 @@ sub _previous_button {
         $content = $self->current_page->content;
     }
 
-    $content =~ /">Next<\/a>( |&nbsp;)\&gt;/i;
+    $content =~ /">Next<\/a>(\s|&nbsp;)+\&gt;/i;
 
 }
 
@@ -4051,6 +4187,8 @@ Review and possibly rework code to properly use (, abuse, or replace)
 WWW::Mechanize.
 
  See: - delete_friends - "proper" forced handling of a passed form.
+
+Add tests for get_comments.
 
 =head1 CONTRIBUTING
 

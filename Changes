@@ -1,5 +1,48 @@
 Revision history for WWW::Myspace
 
+0.48    2006-06-15
+        - Added get_comments method.  Returns a list of comments left
+          for the specified profile.
+        - Added get_comments sample script (mainly to test get_comments
+          method).
+        - approve_friends now "die"s if called with an invalid argument
+          instead of displaying an error about calling an undefined
+          subroutine "fail".
+        - Message.pm now checks for consecutive failures and returns
+          "FAILURES" if the message fails due to network error (FN)
+          or unknown error (F) more than 50 times in a row.  This works
+          around an issue discovered in version 0.47 in which a change in
+          Myspace could cause messages to fail, which could cause Message.pm
+          to continue trying to post to every friend on its list.
+        - get_friends now sets $myspace->error if it can't read all of
+          the friend pages.  That is, if there are 205 pages and it, for
+          some reason, stops at page 197 and it's not reported as an
+          error by the "get_page" method, get_friends will set error
+          stating that the friends list is incomplete.  I'd do this
+          with the "friend_count" warning, but I can't because Myspace's
+          friend count is so inaccurate.
+        - Added friends_from_profile, _add_friend_to_account, 
+          _find_or_create_friend to Data.pm (friend lists can now be cached 
+          in Data.pm)
+        - Added get_data_object to FriendAdder.pm
+        - Altered properties in db to allow for caching friend lists
+          of any friend_id on Myspace
+        - send_message and post_comment will now return "FI" if the
+          friend they're sending to has been deleted (that is, the
+          "invalid friend ID" error is encountered).
+        - Message.pm, Comment.pm, and FriendAdder.pm count "FI" posts as
+          items to exclude on subsequent runs.
+        - In Comment.pm: Updated docs for post_comments and post_all,
+          updated copyright, added SEE ALSO section and note about
+          comment_myspace script in SYNOPSIS.
+        - Updated synopsys in comment_myspace docs.
+        - Added "-q" option to add_friends script.  Runs in "quiet" mode
+          (Sets "interactive" to 0 in FriendAdder). 
+        - Expanded cache_friend to cache much more info like last_login,
+          country, region, city, tagline, member_since, age, sex
+        - get_friends does a basic duplicates check and displays
+          a warning if it finds one.
+
 0.47    2006-05-31
         - send_message REs updated due to change in MySpace site.
         

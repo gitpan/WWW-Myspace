@@ -13,11 +13,11 @@ comment_myspace - Leave a comment for your Myspace friends
 
 =head1 VERSION
 
-Version 0.02
+Version 0.03
 
 =cut
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 =head1 SYNOPSIS
 
@@ -26,7 +26,10 @@ our $VERSION = '0.02';
      [friendID ...]
 
 Simple script to leave a comment for each of our friends using the
-WWW::Myspace::Comment Perl module. "perldoc WWW::Myspace::Comment" for
+WWW::Myspace::Comment Perl module.  By default, it will leave a maximum
+of 50 comments (see the -n option below), then exit displaying
+a message containing the result code returned from the post_comments
+method (DONE, COUNTER, or CAPTCHA). "perldoc WWW::Myspace::Comment" for
 more info.
 
 =over

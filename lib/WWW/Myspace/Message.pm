@@ -1,4 +1,4 @@
-# $Id: Message.pm 147 2006-04-26 06:37:36Z grantg $
+# $Id: Message.pm 186 2006-06-06 07:34:52Z grantg $
 
 package WWW::Myspace::Message;
 
@@ -13,11 +13,11 @@ WWW::Myspace::Message - Auto-message your MySpace friends from Perl scripts
 
 =head1 VERSION
 
-Version 0.11
+Version 0.13
 
 =cut
 
-our $VERSION = '0.11';
+our $VERSION = '0.13';
 
 =head1 SYNOPSIS
 
@@ -388,6 +388,7 @@ send_message returns a status string indicating why it stopped:
  CAPTCHA if a CAPTCHA image code was requested.
  USAGE if we got a message saying we've exceeded our daily usage.
  COUNTER if it posted max_count comments and stopped.
+ FAILURES if it keeps getting errors (more than 50 in a row).
  DONE if it posted everywhere it could.
 
 =cut
@@ -401,6 +402,7 @@ sub send_message {
 	my $subject = $self->subject;
 	my $message = $self->message;
 	my @friend_ids = $self->friend_ids;
+	my $failures = 0;
 	$self->_read_exclusions unless ( defined $self->{messaged} );
 
 	return "DONE" unless ( ( $message ) && ( @friend_ids ) );
@@ -425,8 +427,10 @@ sub send_message {
 						print "Succeeded";
 						if ( $self->html ) { print "<br>" }
 						print "\n";
+						$failures=0;
 					} else {
 						print "Failed";
+						$failures++ if ( $result =~ /^FN?$/ );
 						if ( $result eq "FC" ) {
 							print ", CAPTCHA response requested."
 						} elsif ( $result eq "FN" ) {
@@ -452,6 +456,12 @@ sub send_message {
 					
 					return "CAPTCHA" if ( $result eq "FC" );
 					return "USAGE" if ( $result eq "FE" );
+				}
+				
+				# If we fail more than 50 times in a row, stop.
+				if ( $failures > 50 ) {
+					print "Too many consecutive failures, stopping.\n";
+					return "FAILURES";
 				}
 		} else {
 #			if ( $self->noisy ) { print "Excluding $id\n" }
@@ -615,9 +625,9 @@ sub _read_exclusions {
 		chomp $id;
 		( $id, $status ) = split( ":", $id );
 		
-		# If they're logged as successfully posted, private, or away,
-		# add them to the exclusions list.
-		if ( $status =~ /^P|^FF|^FA/i ) {
+		# If they're logged as successfully posted, private, away, or
+		# invalid, add them to the exclusions list.
+		if ( $status =~ /^P|^FF|^FA|^FI/i ) {
 			$messaged{"$id"} = $status
 		}
 	}

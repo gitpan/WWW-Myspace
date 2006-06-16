@@ -1,4 +1,4 @@
-# $Id: Comment.pm 166 2006-05-09 02:45:40Z grantg $
+# $Id: Comment.pm 192 2006-06-08 19:20:59Z grantg $
 
 package WWW::Myspace::Comment;
 
@@ -12,11 +12,11 @@ WWW::Myspace::Comment - Auto-comment your MySpace friends from Perl scripts
 
 =head1 VERSION
 
-Version 0.14
+Version 0.15
 
 =cut
 
-our $VERSION = '0.14';
+our $VERSION = '0.15';
 
 =head1 SYNOPSIS
 
@@ -39,6 +39,8 @@ mostly designed to preserve posts (see note below).
 
 See the documentation for the post_comments method below
 for an example script to comment all friends using a loop.
+
+Also see the comment_myspace script that is installed with the distribution.
 
 =cut
 
@@ -352,8 +354,9 @@ friends, and then reset the exlusions file.
 
  # Post our comment until we're done - may take several days if we're
  # popular.
- while ( $response ne "DONE" ) {
+ while ( 1 ) {
 	$response = $comment->post_comments( "Hi!" );
+	last if ( $response eq "DONE" );
 	
 	if ( $response eq "CAPTCHA" ) {
 	
@@ -399,6 +402,7 @@ friend's pages.
 		# already have a comment on their page (i.e. if it's been
 		# pushed off).
 		$comment->reset_exclusions;
+		last;
 	}
 		
 	# (If response is CAPTCHA or COUNTER, we wait then continue
@@ -407,7 +411,7 @@ friend's pages.
 	sleep 24*60*60; #Sleep for a day, or run using cron
  }
 
-
+ # (Also see post_all below, which implements this loop).
 
 =cut
 
@@ -533,10 +537,14 @@ sub post_comments {
 
 This convenience method implements the while loop script example in the
 post_comments section above. If the response is "DONE", it exits. Otherwise, it
-sleeps for the number of seconds set in "delay_time" and calls send again.
-It repeats this until it receives "DONE" from the send method.
-send_all does NOT reset the exclusions file. If delay_time is 0, it
+sleeps for the number of seconds set in "delay_time" and calls post_comments
+again. It repeats this until it receives "DONE" from the post_comments
+method. post_all does NOT reset the exclusions file. If delay_time is 0, it
 returns instead of sleeping.
+
+Returns the response code it gets from post_comments, which will always
+be "DONE" unless delay_time is set to 0, in which case it could be any
+of the codes returned by post_comments.
 
 EXAMPLE
  use WWW::Myspace;
@@ -545,12 +553,14 @@ EXAMPLE
  my $comment = new WWW::Myspace;
  my $comment = new WWW::Myspace::Comment( $myspace );
 
+ # Send the message
  $comment->message("This is a great message wraught with meaning.");
  $comment->friend_ids( $myspace->get_friends );
  $comment->post_all;
 
  # Or
- 
+
+ # Send the message
  $comment->post_all( "This is a great message", $myspace->get_friends );
 
 =cut
@@ -730,9 +740,9 @@ sub _read_exclusions {
 		chomp $id;
 		( $id, $status ) = split( ":", $id );
 		
-		# If they're logged as successfully posted, (not failed),
+		# If they're logged as successfully posted or as invalid,
 		# Add them to the exclusions list.
-		if ( $status =~ /^P/i ) {
+		if ( $status =~ /^P|^FI/i ) {
 			$commented{"$id"} = $status unless
 					( ( $options eq "PA" ) && ( $status ne "PA" ) );
 		}
@@ -745,6 +755,11 @@ sub _read_exclusions {
 }
 
 =pod
+
+=head1 SEE ALSO
+
+perldoc comment_myspace - The comment_myspace script is installed with the
+WWW::Myspace distribution and uses this module.
 
 =head1 AUTHOR
 
@@ -760,14 +775,9 @@ your bug as I make changes.
 
 =head1 KNOWN ISSUES
 
-- WWW::Myspace::Comment will (very) occasionally die with the following
-  error: Can't call WWW::Myspace::post_comment in boolean context at
-  /Library/Perl/5.8.6/WWW/Myspace/Comment.pm line 448
-  (Hopefully fixed in WWW::Myspace version 0.45).
-
 =head1 NOTES
 
-CAPTCHA: WWW::Myspace allows 51 to 55 posts before requiring a CAPTCHA response,
+CAPTCHA: WWW::Myspace allows 50 to 55 posts before requiring a CAPTCHA response,
 then allows 3 before requiring it again. Not sure what the timeout
 is on this, but running 50 a day seems to work.
 
@@ -782,8 +792,6 @@ checking each page we're going to post on to see if we're already there
 and skipping it if we are.
 
 =head1 TO DO
-
-  - Add a method to set where the exclusions file is stored.
 
   - Provide a CGI interface so band members can
     coordinate and type in the CAPTCHA code. Interface
@@ -825,7 +833,7 @@ L<http://search.cpan.org/dist/WWW-Myspace>
 
 =head1 COPYRIGHT & LICENSE
 
-Copyright 2005 Grant Grueninger, all rights reserved.
+Copyright 2005, 2006 Grant Grueninger, all rights reserved.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.

@@ -15,11 +15,11 @@ approve_friends - Approve new friends and post a comment to them
 
 =head1 VERSION
 
-Version 0.08
+Version 0.09
 
 =cut
 
-our $VERSION='0.08';
+our $VERSION='0.09';
 
 =head1 SYNOPSIS
 
@@ -206,8 +206,7 @@ sub parse_args {
 		} elsif ( $arg eq "-b" ) {
 			$args->{'bypass'} = 1;
 		} else {
-			print "Invalid argument: $arg\n";
-			&fail()
+			die "Invalid argument: $arg\n";
 		}
 
 	}

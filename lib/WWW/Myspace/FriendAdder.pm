@@ -17,11 +17,11 @@ account
 
 =head1 VERSION
 
-Version 0.07
+Version 0.08
 
 =cut
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 
 =head1 SYNOPSIS
 
@@ -275,23 +275,7 @@ sub send_friend_requests {
     
     # experimental database support
     if ( $self->{'db'} && !$self->{'loader'} ) {
-                
-        my $data = WWW::Myspace::Data->new( 
-            $self->{myspace}, 
-            { 
-                db        => $self->{'db'}, 
-                time_zone => $self->{'time_zone'}, 
-            }
-        );
-        
-        $self->{'data'} = $data;
-        
-        # check to see if we can access the db
-        $self->{'loader'} = $data->loader();
-    
-        unless ( $self->{'loader'} ) {
-            croak ( "no database access" );
-        }
+        $self->get_data_object();                
     }
     
     my $my_friend_id = $self->{'myspace'}->my_friend_id;
@@ -324,7 +308,10 @@ sub send_friend_requests {
                 my $logged = WWW::Myspace::Data::PostLog->search_where(
                     account_id => [ $account_id ],
                     friend_id => [ $friend_id ],
-                    result_code => [ 'P', 'FA', 'FB', 'FF', 'FP' ],
+                    result_code => [ 
+                        'P',    'FA',   'FB', 
+                        'FF',   'FP',   'FI', 
+                    ],
                 );
                 
                 unless ( $logged ) {
@@ -364,8 +351,8 @@ sub send_friend_requests {
     
         $self->_report("$total_time seconds to exclude duplicates.\n");
         $self->_report("$future ids supplied by you.\n");
-        $self->_report("$unique unique ids.\n");
         $self->_report("$shared friends excluded.\n");
+        $self->_report("$unique unique ids.\n");
             
         @potential_friends = @unique_ids;
 
@@ -640,6 +627,47 @@ sub return_params {
 
 }
 
+=head2 get_data_object( )
+
+Returns a valid WWW::Myspace::Data object if one can be initialized by
+the WWW::Myspace::FriendAdder object.  This method will croak if no
+object can be created. This is a handy shortcut if you're using
+WWW::Myspace::Data in conjunction with FriendAdder.pm but don't want  to
+go to the trouble of creating the WWW::Myspace::Data object yourself.
+
+    my $data = $adder->get_data_object();
+    if ( $data ) {
+        my @friends = $data->friends_from_profile(...);
+    }
+
+=cut
+
+sub get_data_object {
+
+    unless ( $self->{'data'} ) { 
+    
+        my $data = WWW::Myspace::Data->new( 
+            $self->{myspace}, 
+            { 
+                db        => $self->{'db'}, 
+                time_zone => $self->{'time_zone'}, 
+            }
+        );
+        
+        $self->{'data'} = $data;
+        
+        # check to see if we can access the db
+        $self->{'loader'} = $data->loader();
+    
+        unless ( $self->{'loader'} ) {
+            croak ( "no database access" );
+        }
+    
+    }
+        
+    return $self->{'data'};
+    
+}
 
 =head2 _report( )
 
