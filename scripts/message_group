@@ -38,7 +38,7 @@ might like your music because they like that band.
  account: myaccount@myspace.com
  password: mypassword
  subject: Hi there!
- cache_file: mycache
+ cache_file: /path/to/mycache
  message: |
    This is a message.
    It is, and must be, indented by two spaces.

@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 197 2006-06-16 03:36:21Z grantg $
+# $Id: Myspace.pm 201 2006-06-22 23:28:16Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -34,11 +34,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.48
+Version 0.49
 
 =cut
 
-our $VERSION = '0.48';
+our $VERSION = '0.49';
 
 =head1 SYNOPSIS
 
@@ -1372,42 +1372,55 @@ sub get_friends {
         # Grep the friend IDs out
         @friends_on_page = $self->get_friends_on_page( $friends_page->content );
         ( $DEBUG ) && print "Done with page $page\n";
-        # Check for duplicates
-        if ( $friend_ids{ $friends_on_page[1] } ) {
-            warn "Duplicate friendID $friends_on_page[1] found on page $page\n";
-        }
 
-#       warn "Got ". @friends_on_page . " friends\n";
-
-        # Check the page
-        if ( ( $self->{_friend_count} > 40 ) &&
+        # If it's our, or another's profile, warn if there are too few friends.
+        if ( ( $source =~ /^(profile)?$/ ) &&
+             ( $self->{_friend_count} > 40 ) &&
              ( $self->_next_button( $friends_page->content ) ) &&
              ( @friends_on_page < 35 )
            ) {
             warn "Got only " . @friends_on_page . " friends on page $page.\n";
         }
 
-        # Add them to the list
-        # (This prevents duplicates for inbox, comments, etc)
+        # Validate and add them to the list
+        # (for inbox, removes duplicates)
         foreach $id ( @friends_on_page ) {
             unless ( $options{'exclude'}->{ $id } ) {
-                $friend_ids{"$id"}={ 'page_no' => $page };
-                $friend_ids{"$id"}->{page_no}++ unless ( ( $source eq "" ) ||
+                # Unless we're checking the inbox, we shouldn't have a
+                # duplicate friendID, so error if we do (usually indicates
+                # a myspace change that's breaking our URL).
+                if ( ( $source ne 'inbox' ) && $friend_ids{"$id"} ) {
+                    $self->error("Duplicate friend_id $id found on page $page");
+                    last;
+                } else {
+                    # Store the page we found it on.
+                    $friend_ids{"$id"}={ 'page_no' => $page };
+                    # Profiles start at page 1, inbox and group at page 0
+                    # (but appear to the user as page 1), so add the offset
+                    # for them if the source is not a profile.
+                    $friend_ids{"$id"}->{page_no}++ unless ( ( $source eq "" ) ||
                                     ( $source eq "profile" ) );
+                }
             }
         }
 
-        # See if we're done.
+        # See if we're done:
+        # If there's an error
+        last if ( $self->error );
+        # Of there's no next button
         last unless ( $self->_next_button( $friends_page->content ) );
+        # If we've gotten as many pages as they want
         last if ( ( $options{'end_page'} ) && ( $page >= $options{'end_page'} ) );
+        # If we've gotten as many friendIDs as they want
         last if ( ( $options{'max_count'} ) &&
                   ( keys( %friend_ids ) >= $options{'max_count'} )
                 );
-
-        # Warn if we got a page with no friendIDs on it.
+        # If we're debugging and we've gotten more than 5 pages.
+        last if ( ( $page > 5 ) && ( $DEBUG ) );
+        # If we got a page with no friendIDs on it (and we're not done for
+        # some other reason).
         unless ( @friends_on_page ) {
             $self->error("Page $page had no friends");
-            warn $self->error;
             last;
         }
 
@@ -1415,7 +1428,6 @@ sub get_friends {
         $self->{_last_friend_page} = $page;
         $page++;
         
-        last if ( ( $page > 5 ) && ( $DEBUG ) );
     }
 
     # Returning an incomplete list of our friends can be dangerous
@@ -1425,14 +1437,12 @@ sub get_friends {
     # actually right.....)
     
     if ( ( ( $source eq "" ) || ( $source eq "profile" ) ) && ( $self->{_friend_count} ) ) {
-        my $myspace_friend_count;
-#        if ( $source ) {
-            $myspace_friend_count = $self->{_friend_count};
-#        } else {
-#            $myspace_friend_count = $self->friend_count;
-#        }
+        my $myspace_friend_count = $self->{_friend_count};
         my @friends = keys( %friend_ids );
         my $friend_count = @friends;
+        if ( $options{'exclude'} ) {   # Add any excluded friends back in
+            $friend_count += keys( %{ $options{'exclude'} } )
+        }
         my $error_allowed = $myspace_friend_count * .10;
         my $error_offset = abs ( $myspace_friend_count - $friend_count );
         if ( $error_allowed < 10 ) { $error_allowed = 10 };
@@ -1444,7 +1454,8 @@ sub get_friends {
         
         # If we stopped before the last page, throw an error
         if ( $page < $self->{_friend_pages} ) {
-            $self->error( "get_friends stopped before reaching last page, friend list is incomplete" );
+            $self->error( "get_friends stopped before reaching last page, ".
+                          "friend list is incomplete" );
         }
     }
 
@@ -1473,7 +1484,7 @@ sub get_friends {
 
 =head2 friends_from_profile( %options )
 
-Returns a list of the friends of the profile(s)s specified by the "id" option.
+Returns a list of the friends of the profile(s) specified by the "id" option.
 id can be a friendID or a reference to an array of friendIDs.
 If passed a list of friend IDs, scans each profile and returns a sorted,
 unique list of friendIDs.  Yes, that means if you pass 5 friendIDs and
@@ -1495,31 +1506,30 @@ Also accepts the same options as the get_friends method
                 max_count => 500
             );
 
- # a further example
- # before you do anything with these
- # ids, make sure you don't already
- # have them as friends:
- use List::Compare;
+ # A further example:
+ # Before you do anything with these ids, make sure you don't already
+ # have them as friends (uses the "exclude" option in get_friends,
+ # which is very efficient as friends are excluded as they're read
+ # instead of afterwards):
  my @current_friends = $myspace->get_friends;
- my @potential_friends = $myspace->friends_from_profile( 12345, 54366 );
- my $lc = List::Compare->new(
-    { lists =>
-      [\@current_friends, \@potential_friends],
-      accelerated => 1
-    } );
- my @unique_ids = $lc->get_complement;
+ die $self->error if $self->error;
+ my @potential_friends = $myspace->friends_from_profile(
+    id => [ 12345, 54366 ],
+    exclude => \@current_friends
+ );
 
 =cut
 
 sub friends_from_profile {
+
     my ( @profiles ) = @_;
     my ( %options );
     
     # Check for old format ( @friend_ids ) or new ( id => \@friend_ids )
-    if ( $profiles[0] !~ /[0-9]+/ ) {
-        ( %options ) = ( @profiles );
+    if ( $profiles[0] =~ /^[0-9]+$/ ) {
+        %options = ( id => \@profiles );
     } else {
-        %options = ( id => \@profiles )
+        ( %options ) = ( @profiles );
     }
     my @friends = ();
     my $id;
@@ -1532,8 +1542,9 @@ sub friends_from_profile {
         ( @profiles ) = ( $options{'id'} );
     }
 
-    # Delete the id option
+    # Delete the id and source options.
     delete $options{'id'};
+    delete $options{'source'} if ( $options{'source'} );
     
     # Get the friendIDs
     foreach $id ( @profiles ) {
@@ -1543,9 +1554,10 @@ sub friends_from_profile {
                    id => $id,
                    %options )
              );
+        last if ( $self->error );
     }
-    
-    # Sort and return
+
+    # Sort and return (also removes duplicates from multiple profiles)
     foreach $id ( @friends ) {
         $friend_ids{"$id"}=1;
     }
@@ -1697,7 +1709,8 @@ sub search_music {
     my ( $sc ) = @_;
     
     # Page verification RE
-    my $re = 'Music.*?&raquo;</font>.*?<font color="#003399">Search Results';
+    my $re = 'Music.*?&raquo;</font>.*?<font color="#003399">Search Results'.
+             '.*<\/html>';
 
     # First fill in the search form with their criteria.
     $self->submit_form(
@@ -2528,12 +2541,12 @@ sub delete_message {
 
 #---------------------------------------------------------------------
 
-=head2 approve_friend_requests( [message] )
+=head2 approve_friend_requests( [ "message" ] )
 
 Looks for any new friend requests and approves them.
 Returns a list of friendIDs that were approved.
 If "message" is given, it will be posted as a comment to the
-new friend. If called when you're not logged in, approve_friend_requests
+new friends. If called when you're not logged in, approve_friend_requests
 will croak.
 
 If approve_friend_requests runs into a CAPTCHA response when posting
@@ -2543,7 +2556,7 @@ So you can say:
 
  if ( $myspace->captcha ) { print "oh no!\n" }
 
-approve_friend_requests will approve all friends wether or not it can
+approve_friend_requests will approve all friends whether or not it can
 comment them as it approves first, then comments the list of approved
 friends.
 
@@ -3812,7 +3825,7 @@ sub _get_friend_page {
 
     # Get the page
     ( $DEBUG ) && print "  Getting URL: $url\n";
-    $res = $self->get_page( $url );
+    $res = $self->get_page( $url, $verify_re );
     if ( $res->content =~ /This\s+profile\s+is\s+set\s+to\s+private.\s+This\s+user\s+must\s+add\s+<br\/>\s*you\s+as\s+a\s+friend\s+to\s+see\s+his\/her\s+profile./ ) {
         $self->error("User profile is set to private.");
     }
