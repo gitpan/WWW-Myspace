@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 201 2006-06-22 23:28:16Z grantg $
+# $Id: Myspace.pm 209 2006-07-06 08:12:27Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -34,11 +34,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.49
+Version 0.50
 
 =cut
 
-our $VERSION = '0.49';
+our $VERSION = '0.50';
 
 =head1 SYNOPSIS
 
@@ -207,7 +207,7 @@ our $FRIEND_REQUEST = "requestGUID.value='([^\']+)'";
 # What's the URL to the friend requests page?
 our $FRIEND_REQUEST_URL = "http://mail.myspace.com/index.cfm?fuseaction=mail.friendRequests";
 
-# Where do we post freind requests?
+# Where do we post friend requests?
 our $FRIEND_REQUEST_POST = "http://mail.myspace.com/index.cfm?fuseaction=mail.processFriendRequests";
 
 # What's the URL for a friend request button (to send a friend request)?
@@ -910,6 +910,32 @@ sub friend_url {
     }
 }
 
+=head2 friend_id ( friend_url )
+
+Returns the friend_id corresponding to a given custom URL.
+(This is basically the reverse of friend_url).
+
+ # Print the friendID of Amber G: myspace.com/iamamberg
+ print $myspace->friend_id("iamamberg");
+
+ > 37033247
+
+=cut
+
+sub friend_id { 
+	my ($friend_id) = @_;
+	#Get page corresponding to the given custom URL
+	my $page=$self->get_page( $BASE_URL.$friend_id );
+	#Look for a RE that's near the top of the page that contains friendid
+	if ($page->content =~ /fuseaction=user.viewPicture&amp;friendID=([0-9]+)/ ) {
+		return $1;
+	}
+	else {
+		return "";
+	}
+	
+}
+
 =head2 friend_count
 
 Returns the logged in user's friend count as displayed on the
@@ -1474,6 +1500,7 @@ sub get_friends {
     # Return our findings
     return 
         LIST { sort( keys( %friend_ids ) ) }
+        SCALAR { \%friend_ids }
         HASHREF { \%friend_ids }
     ;
 

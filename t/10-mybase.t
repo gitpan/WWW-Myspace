@@ -2,10 +2,10 @@
 
 use Test::More tests => 3; 
 #use Test::More 'no_plan';
+use lib 't';
+use TestConfig;
 use Data::Dumper;
 use WWW::Myspace::MyBase;
-
-use lib 't';
 
 # create an object without params
 use WWW::Myspace::FriendAdder;
@@ -20,7 +20,6 @@ my %config = (
 $adder = WWW::Myspace::FriendAdder->new( \%config );
 isa_ok($adder, 'WWW::Myspace::FriendAdder');
 
-use TestConfig;
 login_myspace or die "Login Failed - can't run tests";
 
 # create valid myspqce object

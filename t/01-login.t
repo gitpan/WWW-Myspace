@@ -1,6 +1,6 @@
 #!perl -T
 
-use Test::More tests => 16;
+use Test::More tests => 19;
 #use Test::More 'no_plan';
 
 use lib 't';
@@ -131,3 +131,13 @@ is( $myspace->is_band( 30204716 ), 1,
 	"is_band identifies band profile correctly" );
 is( $myspace->is_band( $CONFIG->{'acct2'}->{'friend_id'} ), 0,
 	"is_band identifies 3rd party non-band profile correctly" );
+
+# Test friend_id method
+# 1. Check friend_id is returned when passed a link directly to the profile (eg. myspace.com/<friend_id>)
+is ($myspace->friend_id("48439059"), 48439059, "Get correct friend_id when passsed myspace.com/<friend_id>");
+
+# 2. check friend_id is returned by url
+is  ($myspace->friend_id("tomkerswill"), 7875748,"Get correct friend_id when passed custom URL.");
+
+# 3. check nothing is returned when passed just homepage
+is ( $myspace->friend_id(""), "","Get when URL doesn't correspond to a profile");

@@ -1,5 +1,18 @@
 Revision history for WWW::Myspace
 
+0.50    2006-07-06
+        - get_comments sample script now accepts a profile to scan for
+          comments and an optional friendID to use as a filter (i.e. to
+          show only the comments they left).
+		- Created friend_id, to return a user's friend id when passed
+		  their custom URL.
+		- Changed return code for get_friends so that calling in any
+		  scalar context will return a hashref.  This fixes a bug
+		  which would produce an error stating that get_friends cannot
+		  be called in a boolean context if the method was called in
+		  any means not explicitly a list or a hash dereference.  That is:
+		  "$myhashref = $myspace->get_friends" wouldn't work. Now it will.
+
 0.49	2006-06-15
 		- Added cool_new_people to sample_scripts.
 		- Corrected cache_file example in Message.pm docs. Must be
