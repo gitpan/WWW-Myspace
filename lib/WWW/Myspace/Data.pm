@@ -9,7 +9,8 @@ use Class::DBI::AbstractSearch;
 use Config::General;
 use Data::Dumper;
 use DateTime;
-use Params::Validate qw(:types validate);
+use DateTime::Format::MySQL;
+use Params::Validate qw(:types validate validate_pos);
 use Scalar::Util qw(reftype);
 
 =head1 NAME
@@ -18,11 +19,11 @@ WWW::Myspace::Data - WWW::Myspace database interaction
 
 =head1 VERSION
 
-Version 0.05
+Version 0.06
 
 =cut
 
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 =head1 SYNOPSIS
 
@@ -209,7 +210,7 @@ to call set_account again, provided you always use the same Myspace
 account and you don't change your password information.
 
 This mutator will also allow you to switch accounts within the same
-object. So, if you can switch from user A to user B, without creating a
+object. So, you can switch from user A to user B, without creating a
 new object. In order to prevent you from shooting yourself in the foot,
 set_account() will die if it is unable to log in to Myspace with the
 username/password you provide.
@@ -430,22 +431,73 @@ updated.  (Returns Class::DBI return value for the update).
     
     $data->update_friend( $friend_id );
     
+Optional Parameters
+
+Optionally, using a hash reference as your second parameter, you may supply update_friend with "freshness" parameters, to ensure that updates are only performed on friend ids which have not been updated since some arbitrary time.  You would define expired data in the following way:
+
+my %freshness = (
+    days => 7,
+    hours => 12,
+);
+
+$data->update_friend( $friend_id, { freshness => \%freshness } );
+
+This would only update friend_ids which were updated more than 7.5 days ago.  Available parameters are:
+
+=over 4
+
+=item * C<< years => $value >>
+
+=item * C<< months => $value >>
+
+=item * C<< days => $value >>
+
+=item * C<< hours => $value >>
+
+=item * C<< seconds => $value >>
+
+=back
+
+Each value should be an integer.  If you do not supply freshness criteria the default behaviour will be to update the friend regardless of last update time.
+
 =cut
 
 sub update_friend {
     
     croak "no db connection" unless ( $self->loader );
+    
+    validate_pos( @_, { type => SCALAR }, { type => HASHREF | UNDEF, optional => 1 } );
 
-    my $friend_id  = shift;
-    my $myspace    = $self->{'myspace'};
-    my $account_id = $self->get_account( );
+    my $friend_id   = shift;
+    my $arg_ref     = shift;
+    my $myspace     = $self->{'myspace'};
+    my $account_id  = $self->get_account( );
     
-    # cache profile in "friends" table
-    $self->cache_friend( $friend_id );
+    my $friend = $self->_find_or_create_friend( $friend_id );
     
-    return $self->_add_friend_to_account(
+    $self->_add_friend_to_account(
         { friend_id => $friend_id, account_id => $account_id }
     );
+        
+    # if last_update is true, we may not need to update this record
+    if ( $friend->last_update && $arg_ref->{'freshness'} ) {
+    
+        my $dt_update = DateTime::Format::MySQL->parse_datetime( 
+            $friend->last_update 
+        );
+
+        my $fresh = $self->_is_fresh( 
+            $dt_update, 
+            $self->_fresh_after( $arg_ref->{'freshness'} )
+        );
+        
+        # return without updating if data is fresh
+        return 0 if $fresh > -1;
+        
+    }
+    
+    # cache profile in "friends" table
+    return $self->cache_friend( $friend_id );
 
 }
 
@@ -458,14 +510,23 @@ account are represented in the local "friends" table.  It does not
 delete friends which may have been removed from your Myspace account
 since your last update.
 
+Just like update_friend, this method also takes "freshness" arguments.  
+
+    $data->update_all_friend( { freshness => \%freshness } )
+
+For more info on freshness parameters, see update_friend()
+
 =cut
 
 sub update_all_friends {
     
+    validate_pos( @_, { type => HASHREF, optional => 1 } );
+    my $fresh_ref = shift;
+    
     my @friends = $self->{'myspace'}->get_friends;
     
     foreach my $friend_id ( @friends ) {
-        $self->update_friend( $friend_id );
+        $self->update_friend( $friend_id, $fresh_ref );
     }
 
 }
@@ -556,6 +617,7 @@ sub is_band {
 Checks the database to see if the friend id is a band profile. Returns
 undef if the id could not be found or band info is not cached for this
 id.
+
 =cut
 
 sub is_band_from_cache {
@@ -593,19 +655,19 @@ This is "sort of" a wrapper around WWW::Myspace->friends_from_profile
 The method will first check the database to see if there are any friends
 listed for $friend_id.  If friends exist, they will be returned.
 Otherwise, the method will call WWW::Myspace->friends_from_profile.  It
-will cache then results, perform a database lookup and then return the
+will cache the results, perform a database lookup and then return the
 results to the caller.  Aside from speeding up lookups, this allows you
 to do some fancier limiting and sorting when requesting data.  This
-method doesn't take all of the arguments which the Myspace module takes,
-so please read the docs
-carefully.
+method doesn't take all of the arguments that the Myspace module takes,
+so please read the docs carefully.
 
 Required Parameters
 
 =over 4
 
 =item * C<< friend_id => $friend_id >>
-A valid Myspace friend id
+
+A valid Myspace friend id.
 
 =back
 
@@ -964,6 +1026,56 @@ sub _friends_from_profile {
     return @friend_ids;
 
 }
+=head2 _fresh_after ( { days => $value } )
+
+Internal method.  Returns a DateTime object for time/data comparisons. 
+See update_friend for arguments that _fresh_after takes.
+
+=cut 
+
+sub _fresh_after {
+
+    my $arg_ref     = shift;
+    
+    my %args        = %{$arg_ref};
+    my @params      = %args;
+    
+    my %params  = validate( @params, {
+        years       => { default => 0 },
+        months      => { default => 0 },
+        days        => { default => 0 },
+        hours       => { default => 0 },
+        minutes     => { default => 0 },
+        seconds     => { default => 0 },
+    });
+    
+    my $dt = DateTime->now;
+    $dt->set_time_zone( $self->{'time_zone'} ) if ($self->{'time_zone'});
+    
+    # get fresh-by date
+    $dt->subtract( %params );
+    
+    return $dt;
+
+}
+
+=head_2 _is_fresh( $last_update_time, $fresh_after_time )
+
+Internal method.  Returns true if data is still "fresh", meaning that
+the cached information does not need an update.
+
+=cut
+
+sub _is_fresh {
+
+    # compare the dates
+    # data is fresh if $dt_update is greater than $dt
+    # that scenario retuns a 1
+    validate_pos( @_, { isa => 'DateTime' }, { isa => 'DateTime' } );
+    
+    return DateTime->compare( @_ );
+
+}
 
 =head2 _regex_city ( $content )
 
@@ -973,7 +1085,7 @@ Internal method.  Regex to find City/Region data.
 
 sub _regex_city {
 
-    my $content    = shift;
+    my $content = shift;
     my $region  = undef;
     
     my @city    = split(/,/, $content);

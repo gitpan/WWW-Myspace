@@ -51,4 +51,6 @@ sample_scripts/send_all
 sample_scripts/send_message
 sample_scripts/test_message
 sample_scripts/todo
+sample_scripts/last_login
+sample_scripts/friends_in_group
 META.yml                                 Module meta-data (added by MakeMaker)

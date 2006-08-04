@@ -140,4 +140,13 @@ is ($myspace->friend_id("48439059"), 48439059, "Get correct friend_id when passs
 is  ($myspace->friend_id("tomkerswill"), 7875748,"Get correct friend_id when passed custom URL.");
 
 # 3. check nothing is returned when passed just homepage
-is ( $myspace->friend_id(""), "","Get when URL doesn't correspond to a profile");
+#is ( $myspace->friend_id(""), "","Get when URL doesn't correspond to a profile");
+
+# Test last_login
+if ( $CONFIG->{login} ) {
+	cmp_ok ( $myspace->last_login( $CONFIG->{'acct2'}->{'friend_id'} ), ">",
+	         time - 86400, "last_login date is today" );
+} else {
+	ok ( $myspace->last_login( $CONFIG->{'acct2'}->{'friend_id'} ),
+	     "last_login returns a value" );
+}

@@ -33,7 +33,9 @@ WriteMakefile(
         'Scalar::Util'          => 0, # FriendAdder.pm
         'Class::DBI'            => 0, # Data.pm
         'Class::DBI::Loader'    => 0, # Data.pm
-        'WWW::Mechanize'        => 0,
+        'DateTime::Format::MySQL'   => 0, # Data.pm
+        'WWW::Mechanize'        => 0, # Myspace.pm
+        'Time::Local'			=> 0, # Myspace.pm - last_login method
     },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean               => { FILES => 'WWW-Myspace-*' },

@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 209 2006-07-06 08:12:27Z grantg $
+# $Id: Myspace.pm 219 2006-08-04 00:13:11Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -27,6 +27,7 @@ use Contextual::Return;
 use Locale::SubCountry;
 use WWW::Mechanize;
 use File::Spec::Functions;
+use Time::Local;
 
 =head1 NAME
 
@@ -34,11 +35,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.50
+Version 0.51
 
 =cut
 
-our $VERSION = '0.50';
+our $VERSION = '0.51';
 
 =head1 SYNOPSIS
 
@@ -854,11 +855,19 @@ sub user_name {
 
 }
 
-=head2 friend_user_name( friend_id )
+=head2 friend_user_name( [friend_id] )
 
 Returns the profile name of the friend specified by friend_id.
 This is the name that shows up at the top of their profile page
-above their picture. (Note, DON'T go using this to sign comments
+above their picture. 
+
+If no friend_id is specified, this method scans the current page
+so you can do:
+
+ $myspace->get_profile( $friend_id );
+ print $myspace->friend_user_name;
+
+(Note, DON'T go using this to sign comments
 because most users use funky names and it'll just look cheesy.
 If you really want to personalize things, write a table mapping
 friend IDs to first names - you'll have to enter them yourself).
@@ -867,7 +876,13 @@ friend IDs to first names - you'll have to enter them yourself).
 
 sub friend_user_name {
 
-    my $page = $self->get_profile( @_ );
+    my $page;
+    
+    if ( @_ ) {
+        $page = $self->get_profile( @_ );
+    } else {
+        $page = $self->current_page;
+    }
 
     if ( $page->content =~ /index\.cfm\?fuseaction=user\&circuitaction\=viewProfile_commentForm\&friendID\=[0-9]+\&name\=([^\&]+)\&/ ) {
         my $line = $1;
@@ -879,7 +894,7 @@ sub friend_user_name {
     }
 }
 
-=head2 friend_url( friend_id )
+=head2 friend_url( [friend_id] )
 
 Returns the custom URL of friend_id's profile page. If they haven't
 specified one, it returns an empty string.
@@ -897,11 +912,23 @@ specified one, it returns an empty string.
      }
  }
 
+If no friend_id is specified, this method scans the current page
+so you can do:
+
+ $myspace->get_profile( $friend_id );
+ print $myspace->friend_url;
+
 =cut
 
 sub friend_url {
 
-    my $page = $self->get_profile( @_ );
+    my $page;
+    
+    if ( @_ ) {
+        $page = $self->get_profile( @_ );
+    } else {
+        $page = $self->current_page;
+    }
 
     if ( $page->content =~ /\<title\>[\s]*www.myspace\.com\/([\S]*)[\s]*\<\/title\>/ ) {
         return $1;
@@ -920,12 +947,30 @@ Returns the friend_id corresponding to a given custom URL.
 
  > 37033247
 
+If no friend_url is specified, this method scans the current page
+so you can do:
+
+ $myspace->get_profile( $friend_id );
+ print $myspace->friend_url;
+
 =cut
 
 sub friend_id { 
-	my ($friend_id) = @_;
-	#Get page corresponding to the given custom URL
-	my $page=$self->get_page( $BASE_URL.$friend_id );
+
+	my ($friend_url) = @_;
+    my $page;
+
+    if ( $friend_url ) {
+        # If they gave a full URL chop off all but the last part.
+    	$friend_url =~ s/^.*\///;
+    	
+    	#Get page corresponding to the given custom URL
+        $page = $self->get_page( $BASE_URL.$friend_url );
+
+    } else {
+        $page = $self->current_page;
+    }
+
 	#Look for a RE that's near the top of the page that contains friendid
 	if ($page->content =~ /fuseaction=user.viewPicture&amp;friendID=([0-9]+)/ ) {
 		return $1;
@@ -967,6 +1012,46 @@ sub friend_count {
     
     return $self->{friend_count};
 
+}
+
+=head2 last_login( [friend_id] )
+
+Returns the last login date from the specified profile in Perl "time"
+format.
+
+If no friend_id is specified, this method scans the current page
+so you can do:
+
+ $myspace->get_profile( $friend_id );
+ ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =
+    localtime( $myspace->last_login );
+ 
+ # or
+ 
+ if ( $myspace->last_login( $friend_id ) < today - 3600 * 60 ) {
+    print "They haven't logged in in 60 days!"
+ }
+
+=cut
+
+sub last_login {
+
+    my $page;
+    
+    if ( @_ ) {
+        $page = $self->get_profile( @_ );
+    } else {
+        $page = $self->current_page;
+    }
+
+    if ( $page->content =~ /Last Login:(\s|&nbsp;)+([0-9]+)\/([0-9]+)\/([0-9]+)\s*<br>/ ) {
+        # Convert to Perl's time format.
+        my $time = timelocal( 0, 0, 0, $3, $2, $4 );
+        # Return it.
+        return $time;
+    } else {
+        return "";
+    }
 }
 
 #---------------------------------------------------------------------
@@ -2404,8 +2489,13 @@ sub send_message {
 
     # Add the button if they wanted it.
     if ( ( defined $atf ) && ( $atf ) ) {
-        $message .= '<p><a href="' . $ADD_FRIEND_URL .
-            $self->my_friend_id . '"><img src="http://i.myspace.com'.
+        $message .= '<p><a href="' . $ADD_FRIEND_URL;
+        if ( $atf > 1 ) {
+            $message .= $atf;
+        } else {
+            $message .= $self->my_friend_id;
+        }
+        $message .= '"><img src="http://i.myspace.com'.
             '/site/images/addFriendIcon.gif" alt="Add as friend"></a>\n';
     }
 
@@ -3936,7 +4026,7 @@ sub _next_button {
         $content = $self->current_page->content;
     }
 
-    $content =~ /">Next<\/a>( |&nbsp;)\&gt;/i;
+    $content =~ /">\s*Next\s*<\/a>(\s|&nbsp;)+\&gt;/i;
 
 }
 
@@ -3963,7 +4053,7 @@ sub _previous_button {
         $content = $self->current_page->content;
     }
 
-    $content =~ /">Next<\/a>(\s|&nbsp;)+\&gt;/i;
+    $content =~ /&lt;\s*<a [^>]+>\s*Previous\s*<\/a>/i;
 
 }
 

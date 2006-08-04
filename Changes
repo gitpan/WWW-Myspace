@@ -1,5 +1,45 @@
 Revision history for WWW::Myspace
 
+0.51    2006-08-03
+        - If a value greater than 1 is passed to send_message as the
+          "Add To Friends" flag, the value will be used as the friendID
+          for the button's link.  This allows you to set a friendID that
+          is different from the account from which you're sending the message.
+        - Added message_delay and random_delay accessor methods to
+          Message.pm.  These allow the user to set a delay between messages
+          sent.
+        - Added _is_fresh and _fresh_after to Data.pm
+        - Added ability to set "freshness" parameters to update_friend and
+          update_all_friends in Data.pm
+        - Added DateTime::Format::MySQL to Makefile.PL
+        - Added tests for _is_fresh and _fresh_after to 09-data.t 
+        - Added Params::Validate routines to update_friend and update_all_friends
+        - Added account disable/deletion warning to Message.pm.
+        - friend_user_name will now return the user name from the last page
+          retreived ("$myspace->current_page") if no friend_id is specified.
+        - friend_url will now return the friend URL from the last page
+          retreived ("$myspace->current_page") if no friend_id is specified.
+        - Fixed probable bug in friend_id method. It "shouldn't" have worked.
+        - If "friend_id" method is called without a friend URL it will scan
+          the last page retreived ("$myspace->current_page") for the friendID.
+        - Added new "last_login" method which returns the Last Login date
+          of the specified profile (or the last page retreived) in "time"
+          format.
+        - Added test for last_login to 01-login.t
+        - Removed test for friend_id method that checks for null value
+          when no URL is passed (since this behavior has changed).
+        - Added Time::Local prequisite to Makefile.PL
+        - Fixed RE for _next_button and _previous button methods to be
+          more robust.  This also fixes friends_in_group, which was broken
+          by a change in Myspace formatting so that it would only return the
+          first page of the group's friends.
+        - Message.pm now checks the Last Login date of the friend before
+          messaging.  If the account hasn't been logged into in the last
+          60 days, Message will log "FL" and skip the friend.  The friend
+          will be skipped on future runs also.
+        - Fixed a couple typos in Data.pm's POD.
+        - Added last_login and friends_in_group sample scripts.
+
 0.50    2006-07-06
         - get_comments sample script now accepts a profile to scan for
           comments and an optional friendID to use as a filter (i.e. to

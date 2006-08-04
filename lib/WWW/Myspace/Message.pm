@@ -1,4 +1,4 @@
-# $Id: Message.pm 186 2006-06-06 07:34:52Z grantg $
+# $Id: Message.pm 219 2006-08-04 00:13:11Z grantg $
 
 package WWW::Myspace::Message;
 
@@ -17,7 +17,19 @@ Version 0.13
 
 =cut
 
-our $VERSION = '0.13';
+our $VERSION = '0.14';
+
+=head1 WARNING
+
+If you created your myspace account in or after June 2006 (approximately),
+and you use a "bot" (including this module) to send messages, your message
+sending ability will be disabled and your account may be deleted. This
+is due to security features myspace has implemented to prevent spam
+abuse by people using multiple accounts. This does not seem to affect older
+accounts, so if you've had your account since at least early 2006 you
+should be fine.
+
+We don't know yet if this affects commenting or friend adding.
 
 =head1 SYNOPSIS
 
@@ -124,7 +136,8 @@ Of course if it finished and you restarted it, it'd re-message everyone.
 
 our @PERSISTENT_FIELDS = (
 	'subject', 'message', 'friend_ids', 'cache_file', 'max_count',
-	'noisy', 'html', 'delay_time', 'add_to_friends'
+	'noisy', 'html', 'delay_time', 'add_to_friends', 'message_delay',
+	'random_delay'
 	);
 
 =head1 ACCESSOR METHODS
@@ -261,6 +274,24 @@ want to run a script daily from a crontab for example.
 
 field delay_time => 24*60*60;
 
+=head2 message_delay
+
+Sets the delay between message sends.  Defaults to 0, but you
+probably want to set this to something like 10.
+
+=cut
+
+field message_delay => 0;
+
+=head2 random_delay
+
+If set to 1, delays randomly between 3 seconds and the value of
+message_delay + 3. Defaults to 0.
+
+=cut
+
+field random_delay => 0;
+
 =head2 paired_arguments
 
 This method is used internally to define the -s and -m flags.
@@ -383,6 +414,13 @@ It will post until it has posted "max_count"
 successful posts, or until it receives a CAPTCHA request ("please
 enter the characters in the image above").
 
+As of version 0.14, send_message will check the Last Login date
+of the friend_id to which it's sending each message (using Myspace.pm's
+"last_login" method).  If the Last Login is older than 60 days ago,
+the friendID will be skipped and "FL" will be logged.  The friendID
+will be exluded from future runs to prevent future runs from re-checking
+a huge list of probably dead accounts.
+
 send_message returns a status string indicating why it stopped:
 
  CAPTCHA if a CAPTCHA image code was requested.
@@ -412,10 +450,19 @@ sub send_message {
 		# If they're not on the exclude list, send the message.
 		unless ( $self->messaged->{"$id"} ) {
 
-				if ( $self->html ) { print "<P>" }
-				if ( $self->noisy ) { print $counter+1 . ": Sending to $id: " };
-				$result = $myspace->send_message( $id, $subject, $message,
-					$self->add_to_friends );
+				# Check for dead accounts
+				if ( ( $myspace->last_login( $id ) &&
+					   ( $myspace->last_login > time - 60*86400 )
+					 )
+				   ) {
+					if ( $self->html ) { print "<P>" }
+					if ( $self->noisy ) { print $counter+1 . ": Sending to $id: " };
+					$result = $myspace->send_message( $id, $subject, $message,
+						$self->add_to_friends );
+				} else {
+					# Inactive account - hasn't logged in in 60 days.
+					$result = "FL";
+				}
 				$counter++ if ( $result =~ /^P/ );
 
 				# Log our attempt and the result
@@ -439,6 +486,9 @@ sub send_message {
 							print ", Profile set to private."
 						} elsif ( $result eq "FA" ) {
 							print ", User is away."
+						} elsif ( $result eq "FL" ) {
+							print ", inactive account. User hasn't ".
+								  "logged in in 60 days."
 						}
 						if ( $self->html ) { print "<br>" }
 						print "\n";
@@ -472,6 +522,8 @@ sub send_message {
 							  ( $counter >= $self->max_count )
 							);
 
+		# Delay if we're supposed to
+		$self->_delay;
 	}
 
 	return "DONE";	
@@ -625,9 +677,9 @@ sub _read_exclusions {
 		chomp $id;
 		( $id, $status ) = split( ":", $id );
 		
-		# If they're logged as successfully posted, private, away, or
-		# invalid, add them to the exclusions list.
-		if ( $status =~ /^P|^FF|^FA|^FI/i ) {
+		# If they're logged as successfully posted, private, away,
+		# invalid, or unused, add them to the exclusions list.
+		if ( $status =~ /^P|^FF|^FA|^FI|^FL/i ) {
 			$messaged{"$id"} = $status
 		}
 	}
@@ -699,6 +751,21 @@ sub load {
 	
 }
 
+# _delay
+# Sleep according to the values set in $self->message_delay and
+# $self->random_delay.
+
+sub _delay {
+
+	my $delay_time = 0;
+	if ( $self->random_delay ) {
+		$delay_time = int( rand( $self->message_delay + 3 ) );
+	} else {
+		$delay_time = $self->message_delay;
+	}
+	
+	sleep $delay_time;
+}
 
 =head1 AUTHOR
 
