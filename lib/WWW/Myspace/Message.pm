@@ -1,4 +1,4 @@
-# $Id: Message.pm 219 2006-08-04 00:13:11Z grantg $
+# $Id: Message.pm 226 2006-08-05 02:53:48Z grantg $
 
 package WWW::Myspace::Message;
 
@@ -13,11 +13,11 @@ WWW::Myspace::Message - Auto-message your MySpace friends from Perl scripts
 
 =head1 VERSION
 
-Version 0.13
+Version 0.15
 
 =cut
 
-our $VERSION = '0.14';
+our $VERSION = '0.15';
 
 =head1 WARNING
 
@@ -183,6 +183,12 @@ sub body {
 
 If called with 1 true value, HTML code for an "Add to friends"
 button will be added to the end of the message.
+
+IMPORTANT NOTE: As of August, 2006 Myspace turns this code into a
+"view profile" code, which currently redirects until the browser locks up or
+reports an error.  So, setting this to 1 will now display a
+"View My Profile" link at the end of the message instead of an
+"Add to friends" button.
 
 =cut
 
@@ -450,13 +456,13 @@ sub send_message {
 		# If they're not on the exclude list, send the message.
 		unless ( $self->messaged->{"$id"} ) {
 
+				if ( $self->html ) { print "<P>" }
+				if ( $self->noisy ) { print $counter+1 . ": Sending to $id: " };
 				# Check for dead accounts
 				if ( ( $myspace->last_login( $id ) &&
 					   ( $myspace->last_login > time - 60*86400 )
 					 )
 				   ) {
-					if ( $self->html ) { print "<P>" }
-					if ( $self->noisy ) { print $counter+1 . ": Sending to $id: " };
 					$result = $myspace->send_message( $id, $subject, $message,
 						$self->add_to_friends );
 				} else {

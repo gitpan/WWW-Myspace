@@ -1,5 +1,36 @@
 Revision history for WWW::Myspace
 
+0.52	2006-08-08
+		- Message.pm now displays "Sending to friendID" as expected when
+		  displaying an inactive account failure instad of just displaying
+		  the warning message.
+		- Fixed a condition that would cause Myspace.pm to die if last_login
+		  was called on a profile whose last login was in december.
+		- last_login now returns the correct date instead of being
+		  a month late.  Corrected last_login sample script to match.
+		- "ADD TO FRIENDS" CODE IN SEND_MESSAGE IS NOW A "VIEW MY PROFILE"
+		  LINK DUE TO MYSPACE BREAKING THE "ADD TO FRIENDS" CODE.
+		- Added warning re: broken "Add to friends" code to send_message
+		  docs in Myspace.pm and to "add_to_friends" method docs in Message.pm.
+		- Enhanced RE check in post_comment to hopefully make it even more
+		  robust.
+		- Fixed bugs in post_comment so that FF and FI return codes should
+		  now work instead of "die"ing (note that currently though an invalid
+		  ID will return a "must be someone's friend" error or a general
+		  error).
+		- Fixed bug in submit_form that, when posting to form number 1,
+		  would cause Myspace.pm to die if no forms were on the page
+		  instead of returning an error.
+		- Added post_comment sample script
+	    - Updated RE in send_message to match myspace change.
+	    - Updated RE for Subject field in read_message due to myspace change
+	      that caused it to display the date.
+	    - Added "if" statement to have subject be left out of hash if
+	      the RE can't be matched.
+	    - Added read_message and send_friend_request sample scripts.
+
+	    PREVIOUS VERSIONS WILL FAIL WHEN SENDING MESSAGES
+
 0.51    2006-08-03
         - If a value greater than 1 is passed to send_message as the
           "Add To Friends" flag, the value will be used as the friendID

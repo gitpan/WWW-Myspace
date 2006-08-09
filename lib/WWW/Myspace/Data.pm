@@ -1059,7 +1059,7 @@ sub _fresh_after {
 
 }
 
-=head_2 _is_fresh( $last_update_time, $fresh_after_time )
+=head2 _is_fresh( $last_update_time, $fresh_after_time )
 
 Internal method.  Returns true if data is still "fresh", meaning that
 the cached information does not need an update.

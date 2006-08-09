@@ -18,7 +18,6 @@ print "Last Login in \"time\" format: " . $myspace->last_login( @ARGV ) . "\n";
 my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday) =
   localtime( $myspace->last_login );
 
-print "Last Login: " . $mon . "/" . $mday . "/";
-print  $year + 1900;
-print  "\n";
+print "Last Login: " . ( $mon + 1 ) . "/" . $mday . "/" .
+	  ( $year + 1900 ) . "\n";
 

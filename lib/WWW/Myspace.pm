@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 219 2006-08-04 00:13:11Z grantg $
+# $Id: Myspace.pm 230 2006-08-09 00:08:51Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -35,11 +35,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.51
+Version 0.52
 
 =cut
 
-our $VERSION = '0.51';
+our $VERSION = '0.52';
 
 =head1 SYNOPSIS
 
@@ -121,7 +121,7 @@ our $VERIFY_GET_PROFILE='<span class="nametext">[^\<]*<\/span>';
 # (This is only checked after VERIFY_COMMENT_POST has been checked).
 our $COMMENT_APPROVAL_MSG="This user requires all comments to be approved before being posted";
 
-our $NOT_FRIEND_ERROR="Error: You must be someone's friend to make comments about them.";
+our $NOT_FRIEND_ERROR="Error\: You must be someone\'s friend to make comments about them\.";
 
 # What should we look for to see if we are being asked for a CAPTCHA code?
 # We'll extract the URL to return from the area in parenthesis.
@@ -160,7 +160,7 @@ our $MAIL_PRIVATE_ERROR = "You can't send a message to [^<]+ because you must be
 our $MAIL_AWAY_ERROR = "You can't send a message to [^<]+ because [^<]+ has set [^<]+ status to away";
 
 # What RE shows up if a friendID is invalid?
-our $INVALID_ID = '<b>Invalid Friend ID.\s*<br>\s*This user has either '.
+our $INVALID_ID = '<b>Invalid Friend ID\.\s*<br>\s*This user has either '.
     'cancelled their membership,? or their account has been deleted\.';
 
 # What regexp should we look for for Myspace's frequent "technical error"
@@ -1036,7 +1036,7 @@ so you can do:
 
 sub last_login {
 
-    my $page;
+    my ( $page, $time );
     
     if ( @_ ) {
         $page = $self->get_profile( @_ );
@@ -1046,7 +1046,7 @@ sub last_login {
 
     if ( $page->content =~ /Last Login:(\s|&nbsp;)+([0-9]+)\/([0-9]+)\/([0-9]+)\s*<br>/ ) {
         # Convert to Perl's time format.
-        my $time = timelocal( 0, 0, 0, $3, $2, $4 );
+        eval { $time="" ; $time = timelocal( 0, 0, 0, $3, $2 - 1, $4 ); };
         # Return it.
         return $time;
     } else {
@@ -1963,9 +1963,9 @@ sub post_comment {
         $submitted = 
             $self->submit_form( "${VIEW_COMMENT_FORM}${friend_id}", 1,
                             "", { 'f_comments' => "$message" },
-                            "f_comments|($CAPTCHA)|($NOT_FRIEND_ERROR)|".
-                            "$INVALID_ID",
-                            'f_comments'
+                            "f_comments.*<\/form|($CAPTCHA)|($NOT_FRIEND_ERROR)|".
+                            "($INVALID_ID)",
+                            'f_comments.*<\/form'
                         );
         
         # If we posted ok, confirm the comment
@@ -1978,21 +1978,12 @@ sub post_comment {
                 return "FC";
             }
             
-            # Check for the "not your friend" error
-            if ( $self->current_page->content =~ /$NOT_FRIEND_ERROR/ ) {
-                return "FF";
-            }
-            
-            # Check for Invalid ID error
-            if ( $self->current_page->content =~ /$INVALID_ID/ ) {
-                return "FI";
-            }
-    
             # Otherwise, confirm it.
             ( $DEBUG ) && print "Confirming comment...\n";
             $submitted = $self->submit_form( '', 1, "",
                     {} );
         }
+
     } else {
         # Post the confirmation
         $submitted = $self->submit_form( '', 1, '',
@@ -2004,7 +1995,11 @@ sub post_comment {
     $page =~ s/[ \t\n\r]+/ /g;
 
     # Set the status code to return.
-    if (! $submitted ) {
+    if ( $page =~ /$NOT_FRIEND_ERROR/ ) {
+        $status="FF";
+    } elsif ( $page =~ /$INVALID_ID/ ) {
+        $status="FI";
+    } elsif (! $submitted ) {
         $status="FN";
     } elsif ( $page =~ /$VERIFY_COMMENT_POST/ ) {
         $status="P";
@@ -2289,7 +2284,7 @@ sub read_message {
     return \%message unless $res->is_success;
 
     # If we were passed a bad message ID, we'll have the inbox again
-    if ( $res->content =~ /<td><font size="2"><b>Mail Center<br>Inbox<\/b><\/font>/ ) {
+    if ( $res->content =~ /<td>\s*<font size="2">\s*<b>\s*Mail Center\s*<br( \/)?>\s*Inbox\s*<\/b>\s*<\/font>/ ) {
         warn "Invalid Message ID\n";
         return \%message;
     }
@@ -2312,8 +2307,9 @@ sub read_message {
     $message{'date'} = $1;
     
     # Subject:
-    $page =~ /Subject:.*?>([^ <][^<]+)</;
-    $message{'subject'} = $1;
+    if ( $page =~ />Subject<.*?>([^ <][^<]+)<\// ) {
+        $message{'subject'} = $1;
+    }
 
     # Body:
     # (This takes the lines between the span with the special CSS class that
@@ -2440,6 +2436,12 @@ Send a message to the user identified by $friend_id. If $add_friend_button
 is a true value, HTML code for the "Add to friends" button will be added at
 the end of the message.
 
+IMPORTANT NOTE: As of August, 2006 Myspace turns the "Add to friends" code
+into a "view profile" code, which currently redirects until the browser
+locks up or reports an error.  So, setting $add_friend_button will now
+display a "View My Profile" link at the end of the message instead of an
+"Add to friends" button.
+
  $status = $myspace->send_message( 6221, 'Hi Tom!', 'Just saying hi!', 0 );
  if ( $status eq "P" ) { print "Sent!\n" } else { print "Oops\n" }
 
@@ -2489,19 +2491,22 @@ sub send_message {
 
     # Add the button if they wanted it.
     if ( ( defined $atf ) && ( $atf ) ) {
-        $message .= '<p><a href="' . $ADD_FRIEND_URL;
+        $message .= '<p><a href="http://profile.myspace.com/index.cfm?'.
+            'fuseaction=user.viewprofile&'.
+            'friendID=';
         if ( $atf > 1 ) {
             $message .= $atf;
         } else {
             $message .= $self->my_friend_id;
         }
-        $message .= '"><img src="http://i.myspace.com'.
-            '/site/images/addFriendIcon.gif" alt="Add as friend"></a>\n';
+#        $message .= '"><img src="http://i.myspace.com'.
+#            '/site/images/addFriendIcon.gif" alt="Add as friend"></a>\n';
+        $message .= '">View My Profile</a>\n';
     }
 
     # Try to get the message form
     $res = $self->get_page( "${SEND_MESSAGE_FORM}${friend_id}",
-        'Mail Center\s*<br>\s*Send a Message|'.$MAIL_PRIVATE_ERROR.'|'.
+        'Mail\s+Center\s*<br( \/)?>\s*Send\s+a\s+Message|'.$MAIL_PRIVATE_ERROR.'|'.
         $MAIL_AWAY_ERROR.'|'.$INVALID_ID );
 
     # Check for network error
@@ -2983,8 +2988,9 @@ sub send_friend_request {
     # You might want to change this whole section to:
     # do { $res = $self->get_page ... ;
     # $attempts++; } until ( ( $attempts > 20 ) || ( $page =~ /<input type="submit" ...) );
-    elsif ( $page !~ /<input[^>]+type="submit"[^>]+value="Add to Friends"[^>]*>/i ) {
+    elsif ( $page !~ /<input\s+type="submit"\s+value="Add to Friends"[^>]*>/i ) {
         $return_code ='F';
+        warn "No Add to Friends button on form!\n";
     }
     
     unless ( $return_code ) {
@@ -3014,6 +3020,7 @@ sub send_friend_request {
 
     # If we still don't have a return code, something went wrong
     unless ($return_code) {
+        warn "No return code\n";
         $return_code = 'F';
     }
  
@@ -3532,7 +3539,7 @@ sub submit_form {
     # Select the form they wanted, or return failure if we can't.
     my @forms = HTML::Form->parse( $res );
     if ( $options->{'form_no'} ) {
-        unless ( @forms >= $options->{'form_no'} ) {
+        unless ( @forms > $options->{'form_no'} ) {
             $self->error( "Form not on page in submit_form!" );
             return 0;
         }
@@ -4266,7 +4273,7 @@ the page content so I can account for it.
 
 post_comment dies if it is told to post to a friendID that
 is not a friend of the logged-in user. (MySpace displays
-an error instead of a form). (may be fixed, 0.39).
+an error instead of a form). (probably fixed, 0.52).
 
 =item -
 
