@@ -1,4 +1,4 @@
-# $Id: Message.pm 226 2006-08-05 02:53:48Z grantg $
+# $Id: Message.pm 240 2006-08-25 22:20:15Z grantg $
 
 package WWW::Myspace::Message;
 
@@ -137,7 +137,7 @@ Of course if it finished and you restarted it, it'd re-message everyone.
 our @PERSISTENT_FIELDS = (
 	'subject', 'message', 'friend_ids', 'cache_file', 'max_count',
 	'noisy', 'html', 'delay_time', 'add_to_friends', 'message_delay',
-	'random_delay'
+	'random_delay', 'skip_re'
 	);
 
 =head1 ACCESSOR METHODS
@@ -193,6 +193,20 @@ reports an error.  So, setting this to 1 will now display a
 =cut
 
 field add_to_friends => '0';
+
+=head2 skip_re
+
+ $message->skip_re( 'i hate everybody!* ?(<br>)?' );
+
+If set, is passed to the send_message method in Myspace.pm causing
+profiles that match the RE to be skipped.  This failure is logged
+so the profile will not be attempted again, to prevent a huge list
+of failed profiles from forming and being retried over and over if
+you're running the script daily.
+
+=cut
+
+field 'skip_re';
 
 =head2 friend_ids
 
@@ -463,10 +477,14 @@ sub send_message {
 					   ( $myspace->last_login > time - 60*86400 )
 					 )
 				   ) {
-					$result = $myspace->send_message( $id, $subject, $message,
-						$self->add_to_friends );
+				    $result = $myspace->send_message(
+				    	friend_id => $id,
+				    	subject => $subject,
+				    	message => $message,
+				    	atf => $self->add_to_friends,
+				    	skip_re => $self->skip_re
+				    );
 				} else {
-					# Inactive account - hasn't logged in in 60 days.
 					$result = "FL";
 				}
 				$counter++ if ( $result =~ /^P/ );

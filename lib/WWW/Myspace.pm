@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 230 2006-08-09 00:08:51Z grantg $
+# $Id: Myspace.pm 243 2006-09-01 10:15:55Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -35,11 +35,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.52
+Version 0.53
 
 =cut
 
-our $VERSION = '0.52';
+our $VERSION = '0.53';
 
 =head1 SYNOPSIS
 
@@ -154,10 +154,10 @@ our $VERIFY_MESSAGE_SENT = "Your Message Has Been Sent\!";
 # If a person's profile is set to "private" we'll get an error when we
 # pull up the form to mail them. What regexp do we read to identify that
 # page?
-our $MAIL_PRIVATE_ERROR = "You can't send a message to [^<]+ because you must be [^<]+'s friend";
+our $MAIL_PRIVATE_ERROR = "You can't send a message to [^<]* ?because you must be [^<]*'s ?friend";
 
 # If a person has set an away message, what regexp should we look for?
-our $MAIL_AWAY_ERROR = "You can't send a message to [^<]+ because [^<]+ has set [^<]+ status to away";
+our $MAIL_AWAY_ERROR = "You can't send a message to [^<]* ?because [^<]* ?has set [^<]* ?status to away";
 
 # What RE shows up if a friendID is invalid?
 our $INVALID_ID = '<b>Invalid Friend ID\.\s*<br>\s*This user has either '.
@@ -239,6 +239,7 @@ appropriate accessor method below.
  cache_dir => '/path/to/dir',
  cache_file => 'filename', # $cache_dir/$cache_file
  auto_login => 1  # 1 or 0, default is 1.
+ human => 1  # Go slow.  Saves bandwidth.
 
 =cut
 
@@ -246,9 +247,10 @@ appropriate accessor method below.
 const default_options => {
     account_name => 0,
     password => 0,
-    cache_dir => 0,  # Default set by field method
-    cache_file => 0, # Default set by field method
-    auto_login => 0, # Default set by field method
+    cache_dir => 0,  # Default set by field method below
+    cache_file => 0, # Default set by field method below
+    auto_login => 0, # Default set by field method below
+    human => 0,      # Default set by field method below
 };
 
 # Options they can pass by position.
@@ -344,6 +346,19 @@ Defaults to 1 for backwards compatibility.
 =cut
 
 field 'auto_login' => 1;
+
+=head2 human
+
+When set to a true value (which is the default), adds delays to
+make the module act more like a human.  This is both to offset
+"faux security" measures, and to conserve bandwidth.  If you're
+dumb enough to try to use multiple accounts to spam users who don't
+want to hear what you have to say, you should turn this off
+because it'll make your spamming go faster.
+
+=cut
+
+field 'human' => 1;
 
 #---------------------------------------------------------------------
 # new method
@@ -504,7 +519,7 @@ sub site_login {
 
     # We probably have an ad or somesuch (started 1/7/2006)
     # so explicitly request our Home.
-    $self->get_page( $HOME_PAGE );
+    $self->get_page( $self->mech->find_link( url_abs_regex => qr/fuseaction=user/i )->url );
 
     # Verify we're logged in
     if ( $self->current_page->content =~ /$VERIFY_HOME_PAGE/si ) {
@@ -545,7 +560,7 @@ sub _try_login {
 
     # Check for success
     if ( $submitted ) {
-        ( $DEBUG ) && print $self->current_page->content;
+#        ( $DEBUG ) && print $self->current_page->content;
 
         # Check for invalid login page, which means we either have
         # an invalid login/password, or myspace is messing up again.
@@ -605,7 +620,10 @@ sub _init_account {
 sub _new_mech {
 
     # Set up our web browser (WWW::Mechanize object)
-    $self->mech( new WWW::Mechanize( onerror => undef ) );
+    $self->mech( new WWW::Mechanize(
+                 onerror => undef,
+                 agent => 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)'
+               ) );
 
     # We need to follow redirects for POST too.
     push @{ $self->mech->requests_redirectable }, 'POST';
@@ -802,17 +820,17 @@ sub is_band {
             return -1;
         }
     } else {
-        # Band profiles don't have bulletin spaces (yet). I don't
-        # like counting on this, but I can't really think of anything
-        # better to look for right now.
+        # Check for the "upcoming shows" header. This might very well
+        # appear on other types of profiles (i.e. comedy), but it
+        # distinguishes performers from personal profiles pretty well.
         # Note that this requires is_band to be called for the first time
         # just after loading the login profile page. site_login calls
         # this method to take care of that problem.
         unless ( defined $self->{is_band} ) {
-            if ( $self->current_page->content =~ />\s*My Bulletin Space\s*</i ) {
-                $self->{is_band} = 0;
-            } else {
+            if ( $self->current_page->content =~ /<h*?>\s*Upcoming Shows\s*<\/h/i ) {
                 $self->{is_band} = 1;
+            } else {
+                $self->{is_band} = 0;
             }
         }
 
@@ -1907,6 +1925,17 @@ EXAMPLE:
     );
     print "Status of post: $desc\n";
 
+post_comment loads $friend_id's profile page, clicks the "Add Comment"
+link, fills in, posts, and confirms a comment. If $friend_id is a
+non-true value (i.e. "0" or ''), post_comment will search for and click
+an "Add Comment" link on the last page loaded.  This lets you do
+this without double-loading the profile page wasting time and bandwidth:
+
+ $myspace->get_profile( $friend_id );
+ if ( $myspace->current_page->content =~ /something special/ ) {
+     $myspace->post_comment( 0, "Your page is special!" );
+ }
+
 If called when you're not logged in, post_comment croaks to make you
 look stupid.
 
@@ -1939,30 +1968,25 @@ sub post_comment {
 
     );
 
-#   my ( $dbh, $ua, $login, $message, $friend_id ) = @_;
-
-#   my $approval_req = 0;
-#   
-#   # Get their name if we know it
-#   my $friend_name = $self->get_friend_name( $friend_id );
-#
-#   # Add a greeting if we know their name
-#   # (NOTE: This should be a search&replace in a seperate $message)
-#   if ( $friend_name ) {
-#       $message = "Hi $friend_name!\n\n" . $message;
-#   }
-
     unless ( $captcha_response ) {
         # Convert newlines (\n) into socket-ready CRLF ASCII characters.
         # This also takes care of possible literal "\n"s that come
         # from command-line arguments.
         $message =~ s/(\n|\\n)/\015\012/gs;
-    
+        
+        # If we have a friendID, load the profile
+        if ( $friend_id ) {
+            $self->get_profile( $friend_id );
+            return "FN" if $self->error;
+        }
+
         # Submit the comment to $friend_id's page
         ( $DEBUG ) && print "Getting comment form..\n";
         $submitted = 
-            $self->submit_form( "${VIEW_COMMENT_FORM}${friend_id}", 1,
-                            "", { 'f_comments' => "$message" },
+            $self->submit_form(
+                            $self->mech->find_link(
+                                text_regex => qr/^add\s+comment$/i )->url,
+                            1, "", { 'f_comments' => "$message" },
                             "f_comments.*<\/form|($CAPTCHA)|($NOT_FRIEND_ERROR)|".
                             "($INVALID_ID)",
                             'f_comments.*<\/form'
@@ -2432,17 +2456,60 @@ sub reply_message {
 
 =head2 send_message( $friend_id, $subject, $message, $add_friend_button )
 
-Send a message to the user identified by $friend_id. If $add_friend_button
-is a true value, HTML code for the "Add to friends" button will be added at
-the end of the message.
+=head2 send_message( %options )
 
-IMPORTANT NOTE: As of August, 2006 Myspace turns the "Add to friends" code
-into a "view profile" code, which currently redirects until the browser
-locks up or reports an error.  So, setting $add_friend_button will now
-display a "View My Profile" link at the end of the message instead of an
-"Add to friends" button.
+ Options are friend_id, subject, message, atf.
 
- $status = $myspace->send_message( 6221, 'Hi Tom!', 'Just saying hi!', 0 );
+ Example:
+ $status = $myspace->send_message(
+     friend_id => 12345,
+     subject => 'Hi there',
+     message => 'This is the bestest message ever!',
+     atf => 0,
+     skip_re => 'i hate everyone', # Skip negative people
+ );
+
+The %options hash is the "correct" method of passing arguments as of
+version 0.53.  The parameter based method is here for backwards-compatibility.
+
+send_message sends a message to the user identified by "friend_id".
+If "atf" is a true value, HTML code for a "View My Profile" link will
+be added at the end of the message. (This was an Add To Friends button
+until Myspace started munging that code).
+If "skip_re" is defined, friend_id's profile will be matched against
+the RE.  Whitespace will be compressed and the match will NOT be
+case-sensitive.
+
+ So you can do this:
+ skip_re => 'i hate everyone!* ?(<br>)?'
+ 
+ And it will match:
+ I Hate EVERYONE!!!!
+ I hate everyone<br>
+ I Hate EvEryone!!! <BR>
+ etc.
+
+If "friend_id" is an untrue value (i.e. 0 or ''),
+send_message will look for a Send Message button (identified by
+a "fuseaction=mail.message" URL if you're curious) on the current page.
+This lets you do this efficiently:
+
+ # Send a message only if the profile has "fancy regex" on their page
+ $myspace->get_profile( $friend_id );
+ if ( $myspace->current_page =~ /fancy regex/ ) {
+    $myspace->send_message(
+        subject => "Hello",
+        message => "I'm messaging you"
+    );
+ }
+
+ $status = $myspace->send_message(
+     friend_id => 6221,
+     subject => 'Hi Tom!',
+     message => 'Just saying hi!',
+     atf => 0
+ );
+
  if ( $status eq "P" ) { print "Sent!\n" } else { print "Oops\n" }
 
  Returns a status code:
@@ -2450,8 +2517,9 @@ display a "View My Profile" link at the end of the message instead of an
  P   =>  Passed! Verification string received.
  FF  =>  Failed, profile set to private. You must be their
          friend to message them.
- FN  =>  Failed, network error (couldn\'t get the page, etc).
- FA  =>  Failed, this person\s status is set to "away".
+ FN  =>  Failed, network error (couldn't get the page, etc).
+ FA  =>  Failed, this person's status is set to "away".
+ FS  =>  Failed, skipped. Profile doesn't match RE.
  FE  =>  Failed, you have exceeded your daily usage.
  FC  =>  Failed, CAPTCHA response requested.
  FI  =>  Failed, Invalid friend ID.
@@ -2471,7 +2539,20 @@ distribution.
 
 sub send_message {
 
-    my ( $friend_id, $subject, $message, $atf ) = @_;
+    # Backwards compatibility
+    my ( %options ) = ();
+    if ( $_[0] =~ /^[0-9]+$/ ) {
+        my ( $friend_id, $subject, $message, $atf ) = @_;
+        %options = (
+            friend_id => $friend_id,
+            subject => $subject,
+            message => $message,
+            atf => $atf
+        );
+    } else {
+        ( %options ) = @_;
+    }
+
     my ( $submitted, $res, $page, $status );
 
     $self->_die_unless_logged_in( 'send_message' );
@@ -2482,6 +2563,7 @@ sub send_message {
         FF  =>  'Failed, profile set to private. You must be their friend to message them.',
         FN  =>  'Failed, network error (couldn\'t get the page, etc).',
         FA  =>  'Failed, this person\s status is set to "away".',
+        FS  =>  'Failed, skipped. Profile doesn\'t match RE.',
         FE  =>  'Failed, you have exceeded your daily usage.',
         FC  =>  'Failed, CAPTCHA response requested.',
         FI  =>  'Failed, Invalid FriendID.',
@@ -2490,24 +2572,46 @@ sub send_message {
     );
 
     # Add the button if they wanted it.
-    if ( ( defined $atf ) && ( $atf ) ) {
-        $message .= '<p><a href="http://profile.myspace.com/index.cfm?'.
+    if ( ( defined $options{'atf'} ) && ( $options{'atf'} ) ) {
+        $options{'message'} .= '<p><a href="http://profile.myspace.com/index.cfm?'.
             'fuseaction=user.viewprofile&'.
             'friendID=';
-        if ( $atf > 1 ) {
-            $message .= $atf;
+        if ( $options{'atf'} > 1 ) {
+            $options{'message'} .= $options{'atf'};
         } else {
-            $message .= $self->my_friend_id;
+            $options{'message'} .= $self->my_friend_id;
         }
-#        $message .= '"><img src="http://i.myspace.com'.
+#        $options{'message'} .= '"><img src="http://i.myspace.com'.
 #            '/site/images/addFriendIcon.gif" alt="Add as friend"></a>\n';
-        $message .= '">View My Profile</a>\n';
+        $options{'message'} .= '">View My Profile</a>\n';
+    }
+
+    # If we were given a friend ID, get the profile
+    if ( $options{'friend_id'} ) {
+        $res = $self->get_profile( $options{'friend_id'} );
+        ( $DEBUG ) && print "Got profile:\n" . $res->content . "\n";
+        
+        if ( $options{'skip_re'} ) {
+            $page =~ $res->content;
+            $page =~ s/[ \t\n\r]+/ /g;
+            if ( $options{'skip_re'} =~ /$options{'skip_re'}/i ) {
+                return "FS";
+            }
+        }
+
     }
 
     # Try to get the message form
-    $res = $self->get_page( "${SEND_MESSAGE_FORM}${friend_id}",
-        'Mail\s+Center\s*<br( \/)?>\s*Send\s+a\s+Message|'.$MAIL_PRIVATE_ERROR.'|'.
+    $res = $self->mech->find_link( url_abs_regex => qr/fuseaction=mail.message/i );
+    ( $DEBUG ) && print "Found Send Message link: " . $res->url . "\n";
+    
+    if ( $res ) {
+        $res = $self->get_page( $res->url,
+        'Mail\s+Center.*Send\s+a\s+Message|'.$MAIL_PRIVATE_ERROR.'|'.
         $MAIL_AWAY_ERROR.'|'.$INVALID_ID );
+    } else {
+        $self->error( "Can't find fuseaction=mail.message on profile page" );
+    }
 
     # Check for network error
     if ( $self->error ) {
@@ -2523,6 +2627,8 @@ sub send_message {
         return "FA";
     } elsif ( $page =~ /${INVALID_ID}/i ) {
         return "FI";
+    } elsif ( $page =~ /$CAPTCHA/ ) {
+        return "FC";
     }
 
     # Convert newlines (\n) into socket-ready CRLF ASCII characters.
@@ -2530,15 +2636,27 @@ sub send_message {
     # from command-line arguments.
     # (Note that \n does seem to work, but this "should" be safer, especially
     # against myspace changes and platform differences).
-    $message =~ s/(\n|\\n)/\015\012/gs;
+    $options{'message'} =~ s/(\n|\\n)/\015\012/gs;
     
     # Submit the message
-    $submitted = $self->submit_form( $res,
+    if ( $page =~ /ctl00\$ctl00\$Main\$Main\$sendMessageControl\$subjectTextBox/ ) {
+        # New mail form...
+        $submitted = $self->submit_form( '',
                         1, "",
-                        { 'subject' => "$subject",
-                          'mailbody' => "$message"
+                        { 'ctl00$ctl00$Main$Main$sendMessageControl$subjectTextBox' => "$options{'subject'}",
+                          'ctl00$ctl00$Main$Main$sendMessageControl$bodyTextBox' => "$options{'message'}"
                         }
                       );
+    } else {
+        # Old mail form... Seriously, don't get me started...
+        $submitted = $self->submit_form( '',
+                        1, "",
+                        { 'subject' => "$options{'subject'}",
+                          'mailbody' => "$options{'message'}"
+                        }
+                      );
+    }
+
     
     $page = $self->current_page->content;
     $page =~ s/[ \t\n\r]+/ /g;
@@ -2546,12 +2664,12 @@ sub send_message {
     # Return the result
     if (! $submitted ) {
         $status = "FN";
+    } elsif ( $page =~ /$CAPTCHA/ ) {
+        return "FC";  # They keep changing which page this appears on.
     } elsif ( $page =~ /$VERIFY_MESSAGE_SENT/ ) {
         $status = "P";
     } elsif ( $page =~ /$EXCEED_USAGE/i ) {
         $status = "FE";
-    } elsif ( $page =~ /$CAPTCHA/ ) {
-        $status = "FC";
     } else {
         $status = "F";
     }
@@ -3229,6 +3347,7 @@ sub get_page {
     # We both set "current_page" and return the value.
 #    $self->_cache_page( $url, $res ) unless $self->error;
     $self->{current_page} = $res;
+    sleep ( int( rand( 5 ) ) + 6 ) if $self->human;
     return ( $res );
 
 }

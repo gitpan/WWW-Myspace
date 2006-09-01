@@ -62,7 +62,7 @@ SKIP: {
 	ok( $found_message, 'Found sent message');
 	
 	SKIP: {
-		skip "Found message failed", 10 unless $found_message;
+		skip "Found message failed", 9 unless $found_message;
 	
 	#	diag( 'Found message_id: ' . $msg{message_id} );
 		

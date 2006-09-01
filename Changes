@@ -1,5 +1,39 @@
 Revision history for WWW::Myspace
 
+0.53	2006-09-01
+		- Changed RE to identify "away" and "private" mail send errors to
+		  allow for profiles with no user names (or myspace database errors).
+		  The error would cause this message to appear for private profiles:
+		  "You can't send a message to because you must be 's friend to
+		  send them a message."
+		- Modified send_message to get the profile, find and click the
+		  Send Message link, and compensate for the two different mail
+		  forms Myspace now has as they transition to the new messaging
+		  servers.  Note that this both acts more naturally and may be more
+		  stable, and enables use of the new servers, or the old one that
+		  some accounts still apparently use.
+		  Note that the new servers do issue CAPTCHA responses for mail. Not
+		  sure of the limits yet.
+		- Added "human" option which slows down gets and such.
+		  IMPORTANT: THIS IS SET TO 1 (TRUE) BY DEFAULT. THIS WILL SLOW
+		  DOWN YOUR SCRIPT. BUT BE SURE YOU READ THE ACCESSOR'S DOCUMENTATION
+		  IF YOU WANT TO TURN IT OFF - MYSPACE MAY DISABLE YOUR ACCOUNT.
+		  Currently adds a 6-11 second delay after each get, but should get
+		  fancier later.
+		- FriendChanges.pm: Now dies if error is set after get_friends is
+		  called.
+		- FriendAdder.pm:  Added last_login parameter using the myspace 
+		  method of the same name.
+		- send_message now takes named parameters.
+		- Addad "skip_re" option to send_message. Allows you to skip
+		  a profile if it matches the RE you specify.
+		- Added skip_re handling to Message.pm.
+		- post_comment now acts more human also.
+		- is_band now looks for the "Upcoming Shows" box instead of
+		  "My Bulletin Space" when determining if the logged in account
+		  is a band or not.
+		- Changed mech agent to identify itself as IE 6.
+
 0.52	2006-08-08
 		- Message.pm now displays "Sending to friendID" as expected when
 		  displaying an inactive account failure instad of just displaying

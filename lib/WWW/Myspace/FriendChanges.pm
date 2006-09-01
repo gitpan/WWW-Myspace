@@ -11,11 +11,11 @@ WWW::Myspace::FriendChanges - Track additions/deletions to your friends list
 
 =head1 VERSION
 
-Version 0.03
+Version 0.04
 
 =cut
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 =head1 SYNOPSIS
 
@@ -100,6 +100,7 @@ sub _current_friends {
 	my %friends = ();
 
 	my @friends = $self->{myspace}->get_friends;
+	die $self->{myspace}->error . "\n" if ( $self->{myspace}->error );
 
 	foreach my $id ( @friends ) {
 		$friends{"$id"}++;

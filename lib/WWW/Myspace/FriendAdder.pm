@@ -21,7 +21,7 @@ Version 0.08
 
 =cut
 
-our $VERSION = '0.08';
+our $VERSION = '0.09';
 
 =head1 SYNOPSIS
 
@@ -61,6 +61,7 @@ my %default_params = (
     exclude_my_friends  => { default => 0 },
     exclude_logged_adds => { default => 0 },
     interactive         => { default => 1 }, # try to be silent
+    last_login          => { default => 0 },
     max_count           => { default => 50 },
     message_on_captcha  => { default => 0 },
     myspace             => 0,
@@ -161,6 +162,21 @@ friends. Default is off.
 
 This module is at its most powerful when you are able to interact with
 it.  If you don't feel like interacting, set this to 0.  Default is on.
+
+=item * C<< last_login => days >>
+
+It doesn't always make sense to send an add request to someone who
+hasn't logged in to their account in ages.  last_login is a value, in
+days, which will force FriendAdder to skip anyone who hasn't logged in
+over the last last_login days.  So, passing last_login => 60 will mean
+that you don't waste add requests on folks who haven't logged in over
+the last 2 months.  They've probably moved on to something better by
+now...
+
+This parameter defaults to 0, which is off.  Keep in mind that if you're
+using Data.pm this could add the overhead of an extra page load for each
+attempted friend request.  If you want to keep your Myspace calls to a
+minimum, you'll want to keep this disabled.
 
 =item * C<< max_count => $value >>
 
@@ -405,10 +421,6 @@ sub send_friend_requests {
                 
                     my $last_id = $self->{'data'}->get_last_lookup_id;
                     
-                    #if ( $last_id ) {
-                    #    $self->_report(" last id $last_id ");
-                    #}
-                    
                     if ( $last_id && $last_id == $id ) {
                         $self->_sleep_now();
                     }
@@ -422,6 +434,17 @@ sub send_friend_requests {
                 ++$skipped;
                 next;
             }
+        }
+        
+        if ( $self->{'last_login'} && 
+             $self->myspace->last_login( $id ) &&
+             $self->myspace->last_login < time - $self->{'last_login'} * 86400 ) {
+             
+             my $days = int( (time() - $self->myspace->last_login) / 86400);
+             $self->_report("$count)\t$id\tSkipping ");
+             $self->_report("\tLast login $days days ago.");
+             $self->_sleep_now();
+             next;
         }
         
         # send requests individually
