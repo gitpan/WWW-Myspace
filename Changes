@@ -1,5 +1,11 @@
 Revision history for WWW::Myspace
 
+0.54    2006-09-04
+        - Corrected new method docs: replaced "username" parameter in
+          examples with "account_name".
+        - Fixed send_message to properly return "FC" instead of "F" when
+          captcha input requested.
+
 0.53	2006-09-01
 		- Changed RE to identify "away" and "private" mail send errors to
 		  allow for profiles with no user names (or myspace database errors).

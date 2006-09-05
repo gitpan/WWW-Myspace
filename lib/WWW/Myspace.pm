@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 243 2006-09-01 10:15:55Z grantg $
+# $Id: Myspace.pm 246 2006-09-05 09:36:12Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -35,11 +35,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.53
+Version 0.54
 
 =cut
 
-our $VERSION = '0.53';
+our $VERSION = '0.54';
 
 =head1 SYNOPSIS
 
@@ -125,7 +125,7 @@ our $NOT_FRIEND_ERROR="Error\: You must be someone\'s friend to make comments ab
 
 # What should we look for to see if we are being asked for a CAPTCHA code?
 # We'll extract the URL to return from the area in parenthesis.
-our $CAPTCHA='<img src="(http:\/\/security.myspace.com\/CAPTCHA\/CAPTCHA\.aspx\?SecurityToken=[^"]+)"';
+our $CAPTCHA='<img.*?src="(http:\/\/security.myspace.com\/CAPTCHA\/CAPTCHA\.aspx\?SecurityToken=[^"]+)"';
 
 # What's the URL to the comment form? We'll append the user's friend ID to
 # the end of this string.
@@ -397,14 +397,14 @@ sorry), which basically just means you can call new in many ways:
         
         # Pass options as a hashref
         my $myspace = new WWW::Myspace( {
-            username => 'my@email.com',
+            account_name => 'my@email.com',
             password => 'mypass',
             cache_file => 'passcache',
         } );
         
         # Hash
         my $myspace = new WWW::Myspace(
-            username => 'my@email.com',
+            account_name => 'my@email.com',
             password => 'mypass',
             cache_file => 'passcache',
             auto_login => 0,
@@ -2627,7 +2627,7 @@ sub send_message {
         return "FA";
     } elsif ( $page =~ /${INVALID_ID}/i ) {
         return "FI";
-    } elsif ( $page =~ /$CAPTCHA/ ) {
+    } elsif ( $page =~ /$CAPTCHA/i ) {
         return "FC";
     }
 
@@ -2664,8 +2664,8 @@ sub send_message {
     # Return the result
     if (! $submitted ) {
         $status = "FN";
-    } elsif ( $page =~ /$CAPTCHA/ ) {
-        return "FC";  # They keep changing which page this appears on.
+    } elsif ( $page =~ /$CAPTCHA/i ) {
+        $status = "FC";  # They keep changing which page this appears on.
     } elsif ( $page =~ /$VERIFY_MESSAGE_SENT/ ) {
         $status = "P";
     } elsif ( $page =~ /$EXCEED_USAGE/i ) {
@@ -4418,6 +4418,11 @@ it encounters the "You must be logged-in" page.  This is a "feature"
 used to check for invalid username/password, but should probably
 check a couple times to make sure it isn't a Myspace problem.
 
+=item -
+
+send_message returns only status codes in many circumstances regardless
+of calling context.
+
 =back
 
 =head1 TODO
@@ -4445,6 +4450,10 @@ WWW::Mechanize.
  See: - delete_friends - "proper" forced handling of a passed form.
 
 Add tests for get_comments.
+
+Move approve_friends to the new server.
+
+Move send_friend_request to the new server.
 
 =head1 CONTRIBUTING
 
