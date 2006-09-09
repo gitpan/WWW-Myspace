@@ -117,7 +117,7 @@ SKIP: {
 	cmp_ok( $friends[0], "==", $CONFIG->{'acct2'}->{'friend_id'},
 		"Friends to message" );
 	
-	cmp_ok( $message->max_count, '==', 300, "max_count default is 300" );
+	cmp_ok( $message->max_count, '==', 100, "max_count default is 100" );
 	
 	$message->max_count( 49 );
 	

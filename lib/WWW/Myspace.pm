@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 246 2006-09-05 09:36:12Z grantg $
+# $Id: Myspace.pm 255 2006-09-09 01:53:51Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -35,11 +35,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.54
+Version 0.55
 
 =cut
 
-our $VERSION = '0.54';
+our $VERSION = '0.55';
 
 =head1 SYNOPSIS
 
@@ -190,6 +190,8 @@ our @ERROR_REGEXPS = (
     'We\'re doing some maintenance on the mail for certain users\. '.
     'You can take this opportunity to leave your friend a swell comment '.
     'while we work on it\. :\)',
+    
+    '<H3>Error Occurred While Processing Request<\/H3>',
 
 );
 
@@ -201,12 +203,6 @@ our $EXCEED_USAGE = "User has exceeded their daily use?age";
 # What RE should we look for to tell if we're on the "You must be logged
 # in to do that!" page? XXX - CONFIRM THIS!
 our $NOT_LOGGED_IN = 'You Must Be Logged-In to do That!.*?<input.*?name="email"';
-
-# What regexp should we use to find the "requestGUID" for a friend request?
-our $FRIEND_REQUEST = "requestGUID.value='([^\']+)'";
-
-# What's the URL to the friend requests page?
-our $FRIEND_REQUEST_URL = "http://mail.myspace.com/index.cfm?fuseaction=mail.friendRequests";
 
 # Where do we post friend requests?
 our $FRIEND_REQUEST_POST = "http://mail.myspace.com/index.cfm?fuseaction=mail.processFriendRequests";
@@ -622,7 +618,9 @@ sub _new_mech {
     # Set up our web browser (WWW::Mechanize object)
     $self->mech( new WWW::Mechanize(
                  onerror => undef,
-                 agent => 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)'
+                 agent => 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)',
+                 stack_depth => 1,
+                 quiet => 1,
                ) );
 
     # We need to follow redirects for POST too.
@@ -1200,6 +1198,300 @@ sub _get_comments_from_page {
 sub ____FIND_PEOPLE____ {}
 
 =head1 FIND PEOPLE
+
+=head2 browse
+
+Call browse with a hashref of your search criteria and it
+returns a list of friendIDs that match your criteria.
+
+This is a complex form. Don't trust the defaults you see in your web browser.
+Easiest thing to do is paste this into your script and change the
+values you want. (This example script looks up the specified criteria
+and dumps a list of friendIDs in YAML).
+
+ use WWW::Myspace;
+ use YAML;
+ 
+ my $myspace = new WWW::Myspace( human => 0, auto_login => 0 );
+ 
+  my @friends = $myspace->browse( {
+    'ctl00$Main$Scope' => 'scopeFullNetwork', # or 'scopeMyFriends'
+    
+    'ctl00$Main$Gender' => 'genderWomen', # or 'genderMen', 'genderBoth'
+    'ctl00$Main$minAge' => 18,
+    'ctl00$Main$maxAge' => 35,
+
+    # Marital Status
+    'ctl00$Main$statusSingle' => 'on',
+    'ctl00$Main$statusInRelationship' => 'off',
+    'ctl00$Main$statusSwinger' => 'off',
+    'ctl00$Main$statusMarried' => 'off',
+    'ctl00$Main$statusDivorced' => 'off',
+
+    # Here for
+    'ctl00$Main$motiveDating' => 'on',
+    'ctl00$Main$motiveNetworking' => 'off',
+    'ctl00$Main$motiveRelationships' => 'on',
+    
+    # Location (there are MANY country values. Check the browse page
+    # source (see below)).
+    'ctl00$Main$country' => 'US',
+    'ctl00$Main$zipRadius' => 20,
+    'ctl00$Main$zipCode' => 91604,
+    'ctl00$Main$region' => 'Any',
+
+    # Photos
+    'ctl00$Main$showHasPhotoOnly' => 'on',
+    'ctl00$Main$showNamePhotoOnly' => 'on', # Leave this on for speed.
+
+    # Ethnicity
+    'ctl00$Main$asian' => 'on',
+    'ctl00$Main$white' => 'on',
+    'ctl00$Main$black' => 'off',
+    'ctl00$Main$eastIndian' => 'off',
+    'ctl00$Main$latino' => 'off',
+    'ctl00$Main$midEastern' => 'off',
+    'ctl00$Main$nativeAmer' => 'off',
+    'ctl00$Main$ethnOther' => 'off',
+    'ctl00$Main$pacIslander' => 'off',
+
+    # Body Type
+    'ctl00$Main$slimSlender' => 'on',
+    'ctl00$Main$average' => 'off',
+    'ctl00$Main$moreToLove' => 'off',
+
+    'ctl00$Main$athletic' => 'on',
+    'ctl00$Main$littleExtra' => 'off',
+    'ctl00$Main$bodyBuilder' => 'off',
+
+    # Height
+    'ctl00$Main$Height' => 'heightBetween', # or 'heightNoPreference'
+    'ctl00$Main$minFoot' => 5,
+    'ctl00$Main$minInch' => 0,
+    'ctl00$Main$maxFoot' => 6,
+    'ctl00$Main$maxInch' => 0,
+    
+    # Background & Lifestyle
+    'ctl00$Main$Smoker' => 'smokerBoth', # or 'smokerNo', 'smokerYes'
+    'ctl00$Main$Drinker' => 'drinkerBoth', # or 'drinkerNo', 'drinkerYes'
+
+    'ctl00$Main$straight' => 'on',
+    'ctl00$Main$bi' => 'on',
+    'ctl00$Main$gay' => 'off',
+    'ctl00$Main$notSure' => 'off',
+
+    # Education (note: all off means no preference)
+    'ctl00$Main$highSchool' => 'off',
+    'ctl00$Main$inCollege' => 'off',
+    'ctl00$Main$gradSchool' => 'off',
+    'ctl00$Main$someCollege' => 'off',
+    'ctl00$Main$collegeGrad' => 'off',
+    'ctl00$Main$postGrad' => 'off',
+
+    # Religion
+    'ctl00$Main$religion' => 'NoPreference',
+     # Possible Values Are:
+     # NoPreference
+     # Agnostic
+     # Atheist
+     # Buddhist
+     # Catholic
+     # ChristianOther
+     # Hindu
+     # Jewish
+     # Mormon
+     # Muslim
+     # Other
+     # Protestant
+     # Scientologist
+     # Taoist
+     # Wiccan
+
+    # Income
+    'ctl00$Main$income' => 'NoPreference',
+     # Possible Values Are:
+     # NoPreference
+     # LessThan30000
+     # From30000To45000
+     # From45000To60000
+     # From60000To75000
+     # From75000To100000
+     # From100000To150000
+     # From150000To250000
+     # From250000ToHigher
+
+    # Children
+    'ctl00$Main$children' => 'NoPreference',
+     # Possible Values Are:
+     # NoPreference
+     # IDontWantKids
+     # Someday
+     # Undecided
+     # LoveKidsButNotForMe
+     # Proud parent
+
+    # Sort By (last login is good to weed out dead accounts)
+    'ctl00$Main$SortBy' => 'sortByLastLogin',
+     # Possible Values Are:
+     # sortByLastLogin
+     # sortByNewToMySpace
+     # sortByDistance
+
+    } );
+    
+ print Dump( @friends );
+
+I'm not sure how I'm going to make the criteria passing easier.
+I'm also concerned about your script breaking if they change the
+browse form variable names. So maybe I'll add a mapping later.
+
+The values above are current, and you can copy/paste that code, change
+the values, and browse away.
+
+If you need to look at values (i.e. something's not working or you need
+to change "Location" fields):
+
+Go to the browse page:
+
+ http://browseusers.myspace.com/browse/Browse.aspx
+
+Switch to Advanced mode and enter your search criteria.
+
+View Source in your web browser and find "<form".  The second form should
+be named "aspnetForm".
+
+Look through the input tags on the form (hint: find "<input"),
+entering name and value pairs as above for your search criteria.
+Many/most of them are in the example above, but myspace does weird things
+like differentiate checkboxes solely by their name instead of name and
+value (i.e. you'd expect multiple inputs with
+name="ct100$Main$SexualPreference" , and value="straight",
+value="bi", etc, but instead there are inputs with
+name="ct100$Main$straight" and name="ct100$Main$bi" and no value attribute
+at all).
+
+Note: to "check" a checkbox with no "value" attribute, use 'on' to turn
+it on, 'off' to turn it off.  If you don't specify a field/checkbox in in
+your search criteria, you'll get the default value, which is hard to
+determine with this weird form (and is quite possibly NOT the default value
+you'll see if you open the page in your web browser).
+
+=cut
+
+sub browse {
+
+    my ( $criteria ) = @_;
+    my @friends = ();
+
+    # Safety check
+    croak 'Criteria must be a hash reference\n' unless ref $criteria;
+
+    my $re = "Browse Users";
+
+    # Switch to advanced view
+    $self->submit_form( {
+        'page' => $BROWSE_PAGE,
+        'form_name' => 'aspnetForm',
+        'no_click' => 1,
+        'fields_ref' => {
+                            '__EVENTTARGET' => 'ctl00$Main$advancedView',
+                        },
+        're1' => $re,
+        're2' => $re,
+    } ) or return;
+
+    # Enter the search criteria and click Update
+    $self->submit_form( {
+        'form_name' => 'aspnetForm',
+        'action' => $self->_browse_action( 'Update' ),
+        'fields_ref' => { %{$criteria}, '__EVENTTARGET' => 'ctl00$Main$update' },
+        're1' => $re,
+        're2' => $re,
+    } ) or return;
+    
+    $self->mech->form_name( "aspnetForm" )->dump;
+
+    # Loop through the resulting pages getting friendIDs.
+    my $page = 1;
+    until ( ( $self->error ) ||
+              ( ! $self->_next_button )
+            ) {
+        
+        # Get the friends from the current page
+        push @friends, $self->get_friends_on_page( $self->current_page->content );
+        
+        # Click "Next"
+        $page++;
+        $self->_browse_next( $page, $re );
+        warn "Page: $page, friends: " . @friends . "\n";
+    }
+
+    # Sort and remove duplicates
+    my %friends = ();
+    foreach my $id ( @friends ) {
+        $friends{ $id } = 1;
+    }
+
+    return ( sort( keys( %friends ) ) );
+}
+
+=head2 _browse_next( $page )
+
+The browse form's Next button calls a JavaScript function that sets
+"action" and "page" in the browse form and "clicks" submit.  So we
+do the same here.  Called by browse to simulate clicking "next".
+
+=cut
+
+sub _browse_next {
+
+    my ( $page, $re ) = @_;
+
+    # Get the javascript-set action for the next button post
+    my $action = $self->_browse_action( "GotoPage" );
+    return 0 unless $action;
+    
+    # Submit the form.
+    my $submitted = $self->submit_form( {
+        'form_name' => "aspnetForm",
+        'action' => $action,
+        'no_click' => 1,
+        'fields_ref' => { page => $page },
+        're1' => $re,
+        're2' => $re,
+#       'base' => "http://browseusers.myspace.com/",
+    } );
+
+    return $submitted;
+
+}
+
+=head2 _browse_action( $function_name )
+
+Gets the action set by the specificied function on the Browse page.
+
+=cut
+
+sub _browse_action {
+
+    my ( $function ) = @_;
+
+    # Look for the action (we need MyToken)
+    $self->current_page->content =~
+        /function ${function}.*?theForm\.action = "Browse\.aspx(\?MyToken=[^"]+)"/is;
+
+#   my $action = "http://browseusers.myspace.com/browse" . $1;
+    my $args = $1;
+
+    unless ( $args ) {
+        $self->error("Couldn't find Javascript GotoPage function to set action");
+        return "";
+    }
+    
+    my $action = "http://browseusers.myspace.com/browse/Browse.aspx" . $args;
+    return $action;
+
+}
 
 =head2 cool_new_people( $country_code )
 
@@ -1909,7 +2201,8 @@ Warning: It is possible for the status code to return a false
 to load.
 
 If called in scalar context, it returns the status code.  If called in
-list context, returns the status code and the description.
+list context, returns the status code and the description (bug note:
+FC and FN return only the status code regardless of context).
 
 EXAMPLE:
     use WWW::Myspace;
@@ -2846,24 +3139,35 @@ sub approve_friend_requests
 
     $self->_die_unless_logged_in( 'approve_friend_requests' );
 
-    # Get the first page of friend requests
-    while ( 1 ) {
-        
-        # Get the page
-        $page = $self->get_page( $FRIEND_REQUEST_URL,
-            'Friend Request Manager' )->content;
+    # Go Home
+    $self->_go_home;
+    return 0 if $self->error;
 
-        # Get the GUID codes from the page
-        @guids = $self->_get_friend_requests( $page );
-        
-        # Quit if there aren't any.
-        last unless ( @guids );
+    # Click the friend requests link
+    $self->get_page(
+        $self->mech->find_link(
+            url_regex => qr/fuseaction=mail\.friendRequests/i
+        )->url,
+        'Friend Request Manager'
+    );
+    return 0 if $self->error;
 
+    # As long as there are friend requests on the page,
+    # select all of them and click "Approve Selected Friends"
+    my $f;
+    while ( @guids = $self->_get_friend_requests ) {
+        
         # Get the friendIDs from the page
-        @friends = ( @friends, $self->get_friends_on_page( $page ) );
+        @friends = ( @friends, $self->get_friends_on_page );
 
-        # Post approval for any we found
-        $self->_post_friend_requests( @guids );
+        # Check the checkboxes and submit the form
+        $self->submit_form( {
+            form_name => 'aspnetForm',
+            fields_ref => {
+                'ctl00$ctl00$Main$Main$incomingRequests$requestRepeater$ctl00$selectRequest' =>
+                \@guids },
+            re2 => 'Friend Request Manager'
+        } );
 
     }
 
@@ -2892,51 +3196,36 @@ sub approve_friend_requests
 
 sub _get_friend_requests
 {
-    my ( $page ) = @_;
+    my $page = $self->current_page->content;
 
     my %guids = ();
     my $line = "";
 
     # Get the GUID codes from it.   
-    while ( $page =~ s/$FRIEND_REQUEST//im ) {
+    while ( $page =~ s/ctl00\$ctl00\$Main\$Main\$incomingRequests\$requestRepeater\$ctl00\$selectRequest.*? value="(.*?)"//im ) {
         $guids{"$1"}++;
     }
     
     return keys( %guids );
 }
 
-#---------------------------------------------------------------------
-# _post_friend_requests( @guids )
-# Post each GUID (friend request code)
-
-sub _post_friend_requests
-{
-    my ( @guids ) = @_;
-    my ( $submitted, $guid, $res, $pass );
-
-    # For each request post the approval form.
-    $pass=1;
-    foreach $guid ( @guids ) {
-
-#       print "Approving guid: " . $guid . "\n";
-        
-        # Post it.
-        $res=$self->{mech}->post( $FRIEND_REQUEST_POST,
-                    { requestType => 'SINGLE',
-                      requestGUID => $guid,
-                      actionType  => 0,
-                      approve => ' Approve '
-                    } );
-
-        unless ( $res->is_success ) {
-            $pass=0;
-#           print $res->status_line . "\n";
-        }
-    }
-
-    return $pass;
-
-}
+##---------------------------------------------------------------------
+## _post_friend_requests( $form )
+## Post the filled in friend approval form.
+#
+#sub _post_friend_requests
+#{
+#
+#    my ( $f ) = @_;
+#
+#    $self->submit_form( {
+#        form => $f,
+#        button => 'ctl00$ctl00$Main$Main$incomingRequests$ApproveSelectedRequestsButton',
+#        re2 => 'Friend Request Manager',
+#        'die' => 1
+#    } );
+#
+#}
 
 #---------------------------------------------------------------------
 # send_friend_request
@@ -3270,6 +3559,88 @@ sub delete_friend {
 
 }
 
+=head2 send_event_invitation( $event_id, [ @friend_ids ] )
+
+Send an event invitation to each friend in @friend_ids.  You need
+to add the event in Myspace first, then run a script that calls
+this method feeding it the event ID, which you can get from the URL of
+the page that lets you invite friends.  If no friend IDs are passed,
+send_event_invitation calls the get_friends method and sends to all
+of your friends.
+
+The method returns a reference to 2 arrays, "passed", and "failed".
+Because it wil probably take a long time to run, it also prints a
+running report of the friends its inviting with "Passed" or "Failed":
+
+ Inviting 12345: Passed
+ Inviting 12346: Failed
+
+Known issue: If you already have people in your invitation list and
+this method attempts to add those friends again, it will cause substantial
+delays (up to a minute or two per friend ID).  This is because submit_form
+will receive an error message and will retry the post 5 times for each
+friend.
+
+ Example:
+ 
+ my ( $passed, $failed ) =
+     $myspace->send_event_invitation( $event_id, @friend_ids );
+ die $myspace->error if $myspace->error;
+ 
+ print "Sent to:\n";
+ foreach $id ( @{ $passed } ) {
+     print $id . "\n";
+ }
+ 
+ print "Failed to send to:\n";
+  foreach $id ( @{ $failed } ) {
+     print $id . "\n";
+ }
+
+See also the send_event_invitations sample script in the sample_scripts
+directory included with this distribution.
+
+=cut
+
+sub send_event_invitation {
+
+    my ( $event_id, @friend_ids ) = @_;
+
+    $self->_die_unless_logged_in( 'send_event_invitation' );
+
+    # Default to all our friends
+    unless ( @friend_ids ) { @friend_ids = $self->get_friends }
+
+    # Get the page
+    my $res = $self->get_page(
+        "http://events.myspace.com/index.cfm?fuseaction=events.invitees&eventID=".
+        $event_id );
+    return( [], \@friend_ids ) if $self->error;
+
+    # For each friendID, fill in the form and submit it.  Hey, this is
+    # their idea, not mine...
+    my @passed = ();
+    my @failed = ();
+    foreach my $id ( @friend_ids ) {
+        print "Inviting $id: ";
+        if ( $self->submit_form( {
+                page => $res,
+                form_name => 'createEvent',
+                fields_ref => { 'hiddenFriends', $id }
+            } ) ) {
+            push( @passed, $id );
+            print "Passed\n";
+        } else {
+            push( @failed, $id );
+            print "Failed\n";
+        }
+
+    }
+
+    return ( \@passed, \@failed );
+
+}
+
 #---------------------------------------------------------------------
 # get_friend_name( $friend_id )
 # Return the first name of $friend_id, if we have it.
@@ -3534,7 +3905,10 @@ methods).  Be aware that I might make this method private at some point.
  $myspace->submit_form( {
     page => "http://some.url.org/formpage.html",
     form_no => 1,
-    form_name => "myform",  # Use this OR form_no...
+    form_name => "myform",  # Use this OR form_no OR form
+    form => $form, # HTML::Form object with a ready-to-post form.
+                   # (page, form_no, form_name, fields_ref and action will
+                   # be ignored).
     button => "mybutton",
     no_click => 0,  # 0 or 1.
     fields_ref => { field => 'value', field2 => 'value' },
@@ -3566,6 +3940,11 @@ For the first form, use "form_no => 0".
 submit_form simply uses "form_name" to iterate through the forms
 and sets "form_no" for you.
 
+"form" can be used if you have a customized form you want to submit.
+Pass an HTML::Form object and set "button", "no_click", and "re2"
+as desired, and you can use submit_form's tenacious submission routine
+with your own values.
+
 "button" is the name of the button to submit. This will frequently
 be "submit", but if they've named the button something clever like
 "Submit22" (as MySpace did in their login form), then you may have to
@@ -3579,6 +3958,8 @@ form submits Myspace does on the browse pages.
 
 "fields_ref" is a reference to a hash that contains field names
 and values you want to fill in on the form.
+For checkboxes with no "value" attribute, specify a value of "on"
+to check it, "off" to uncheck it.
 
 "re1" is an optional Regular Expression that will be used to make
 sure the proper form page has been loaded. The page content will
@@ -3641,62 +4022,71 @@ sub submit_form {
         };
     }
 
-    # Get the page
-    ( $DEBUG ) && print "Getting $url...\n";
-    if ( ref( $options->{'page'} ) eq "HTTP::Response" ) {
-        # They gave us a page already
-        $res = $options->{'page'};
-    } elsif ( ! $options->{'page'} ) {
-        $res = $self->current_page;
+    # If they gave us a form, use it.  Otherwise, get it and fill it in.
+    my $f = "";
+    if ( $options->{'form'} ) {
+        $f = $options->{'form'};
     } else {
         # Get the page
-        $res = $self->get_page( $options->{'page'}, $options->{'re1'} );
-        # If we couldn't get the page, return failure.
-        return 0 if $self->error;
-    }
-
-    # Select the form they wanted, or return failure if we can't.
-    my @forms = HTML::Form->parse( $res );
-    if ( $options->{'form_no'} ) {
-        unless ( @forms > $options->{'form_no'} ) {
-            $self->error( "Form not on page in submit_form!" );
-            return 0;
-        }
-    }
-    if ( $options->{'form_name'} ) {
-        $form_no = 0;
-        foreach my $form ( @forms ) {
-            if ( ( $form->attr( 'name' ) ) && ( $form->attr( 'name' ) eq $options->{'form_name'} ) ) {
-                $options->{'form_no'} = $form_no;
-                last;
-            }
-            $form_no++;
-        }
-    }
-
-    my $f = $forms[ $options->{'form_no'} ];
-
-    # Set the action if they gave us one
-    if ( $options->{'action'} ) { $f->action( $options->{'action'} ) }
-    
-    # Fill in the fields
-    ( $DEBUG ) && print "Filling in form number " . $options->{'form_no'} . ".\n";
-    ( $DEBUG ) && print $f->dump;
-
-    # Loop through the fields in the form and set them.
-    foreach my $field ( keys %{ $options->{'fields_ref'} } ) {
-        # If the field "exists" on the form, just fill it in,
-        # otherwise, add it as a hidden field.
-        if ( $f->find_input( $field ) ) {
-            if ( $f->find_input( $field )->readonly ) {
-                $f->find_input( $field )->readonly(0)
-            }
-            $f->param( $field, $options->{'fields_ref'}->{ $field } );
+        ( $DEBUG ) && print "Getting $url...\n";
+        if ( ref( $options->{'page'} ) eq "HTTP::Response" ) {
+            # They gave us a page already
+            $res = $options->{'page'};
+        } elsif ( ! $options->{'page'} ) {
+            $res = $self->current_page;
         } else {
-            $f = $self->_add_to_form( $f, $field, $options->{'fields_ref'}->{ $field } );
+            # Get the page
+            $res = $self->get_page( $options->{'page'}, $options->{'re1'} );
+            # If we couldn't get the page, return failure.
+            return 0 if $self->error;
+        }
+    
+        # Select the form they wanted, or return failure if we can't.
+        my @forms = HTML::Form->parse( $res );
+        if ( $options->{'form_no'} ) {
+            unless ( @forms > $options->{'form_no'} ) {
+                $self->error( "Form not on page in submit_form!" );
+                return 0;
+            }
+        }
+        if ( $options->{'form_name'} ) {
+            $form_no = 0;
+            foreach my $form ( @forms ) {
+                if ( ( $form->attr( 'name' ) ) && ( $form->attr( 'name' ) eq $options->{'form_name'} ) ) {
+                    $options->{'form_no'} = $form_no;
+                    last;
+                }
+                $form_no++;
+            }
+        }
+    
+        $f = $forms[ $options->{'form_no'} ];
+    
+        # Set the action if they gave us one
+        if ( $options->{'action'} ) { $f->action( $options->{'action'} ) }
+        
+        # Fill in the fields
+        ( $DEBUG ) && print "Filling in form number " . $options->{'form_no'} . ".\n";
+        ( $DEBUG ) && print $f->dump;
+    
+        # Loop through the fields in the form and set them.
+        foreach my $field ( keys %{ $options->{'fields_ref'} } ) {
+            # If the field "exists" on the form, just fill it in,
+            # otherwise, add it as a hidden field.
+            if ( $f->find_input( $field ) ) {
+                if ( $f->find_input( $field )->readonly ) {
+                    $f->find_input( $field )->readonly(0)
+                }
+                $f->param( $field, $options->{'fields_ref'}->{ $field } );
+            } else {
+                $f = $self->_add_to_form( $f, $field, $options->{'fields_ref'}->{ $field } );
+            }
         }
     }
-    
+
+    if ( $options->{'die'} ) { print $f->dump; die }
+
+    # Submit the form.  Try up to $attempts times.
     my $attempts = 5;
     my $trying_again = 0;
     do
@@ -3742,7 +4132,7 @@ Internal method to add a hidden field to a form. HTML::Form thinks we
 don't want to change hidden fields, and if a hidden field has no value,
 it won't even create an input object for it.  If that's way over your
 head don't worry, it just means we're fixing things with this method,
-ad submit_form will call this method for you if you pass it a field that
+and submit_form will call this method for you if you pass it a field that
 doesn't show up on the form.
 
 Returns a form object that is the old form with the new field in it.
@@ -4193,6 +4583,39 @@ my sub count_keys {
 
 }
 
+=head2 _go_home
+
+Internal method to go to the home page.  Checks to see if we're already
+there.  If not, tries to click the Home button on the page.  If there
+isn't one, loads the page explicitly.
+
+=cut
+
+sub _go_home {
+
+    # Are we there?
+    if ( $self->mech->uri =~ /[\?&;]fuseaction=user([&;]|$)/i ) {
+#        warn "I think I'm on the homepage\n";
+#        warn $self->mech->uri . "\n";
+        return;
+    }
+    
+    # No, try to click home
+    my $home_link = "";
+    if ( $home_link = $self->mech->find_link( url_regex => qr/fuseaction=user/i ) ) {
+#        warn "_go_home going to " . $home_link->url . "\n";
+        $self->get_page( $home_link->url );
+        return;
+    }
+    
+    # Still here?  Load the page explicitly
+    $self->get_page( $HOME_PAGE );
+#    warn "I think I loaded $HOME_PAGE\n";
+    
+    return;
+
+}
+
 sub ____IN_PROGRESS____ {}
 
 =head1 IN PROGRESS
@@ -4200,155 +4623,6 @@ sub ____IN_PROGRESS____ {}
 Methods that aren't quite working yet.
 
 =cut
-
-=head2 browse
-
-XXX - NOT YET FUNCTIONAL
-
-XXX - More debugging needs to be done to ensure accurate
-results, and tests need to be added to the test suite for it.
-
-And now back to your normal docs:
-
-Call browse with a hashref of your search criteria and it
-returns a list of friendIDs that match your criteria.
-
- my @friends = $myspace->browse( {
-                   'zipCode' => '91000',
-                   'zipRadius' => '20',
-                   'Gender' => 'genderWomen', # Pick one of these
-                   'Gender' => 'genderMen',
-                   'Gender' => 'genderBoth'
-                 } );
-
-I'm not sure how I'm going to make the criteria passing easier.
-I'm also concerned about your script breaking if they change the
-browse form variable names. So maybe I'll add a mapping later.
-
-For now, you have to look at the code for the browse page:
-
- http://browseusers.myspace.com/browse/Browse.aspx
-
-Switch to Advanced more and get the form variables and possible values
-from there.
-
-Note that depending on any defaults is dangerous, as this is a strange
-form indeed.
-
-=cut
-
-sub browse {
-
-    my ( $criteria ) = @_;
-    my @friends = ();
-
-    # Safety check
-    croak 'Criteria must be a hash reference\n' unless ref $criteria;
-
-    my $re = "Browse Users";
-
-    # Switch to advanced view
-    $self->submit_form( {
-        'page' => $BROWSE_PAGE,
-        'form_name' => 'aspnetForm',
-        'no_click' => 1,
-        'fields_ref' => {
-                            '__EVENTTARGET' => 'ctl00$Main$advancedView',
-                        },
-        're1' => $re,
-        're2' => $re,
-    } ) or return;
-
-    # Enter the search criteria and click Update
-    $self->submit_form( {
-        'form_name' => 'aspnetForm',
-        'action' => $self->_browse_action( 'Update' ),
-        'fields_ref' => { %{$criteria}, '__EVENTTARGET' => 'ctl00$Main$update' },
-        're1' => $re,
-        're2' => $re,
-    } ) or return;
-
-    # Loop through the resulting pages getting friendIDs.
-    my $page = 1;
-    until ( ( $self->error ) ||
-              ( ! $self->_next_button )
-            ) {
-        
-        # Get the friends from the current page
-        push @friends, $self->get_friends_on_page( $self->current_page->content );
-        
-        # Click "Next"
-        $page++;
-        $self->_browse_next( $page, $re );
-    }
-
-    # Sort and remove duplicates
-    my %friends = ();
-    foreach my $id ( @friends ) {
-        $friends{ $id } = 1;
-    }
-
-    return ( sort( keys( %friends ) ) );
-}
-
-=head2 _browse_next( $page )
-
-The browse form's Next button calls a JavaScript function that sets
-"action" and "page" in the browse form and "clicks" submit.  So we
-do the same here.  Called by browse to simulate clicking "next".
-
-=cut
-
-sub _browse_next {
-
-    my ( $page, $re ) = @_;
-
-    # Get the javascript-set action for the next button post
-    my $action = $self->_browse_action( "GotoPage" );
-    return 0 unless $action;
-    
-    # Submit the form.
-    my $submitted = $self->submit_form( {
-        'form_name' => "aspnetForm",
-        'action' => $action,
-        'no_click' => 1,
-        'fields_ref' => { page => $page },
-        're1' => $re,
-        're2' => $re,
-#       'base' => "http://browseusers.myspace.com/",
-    } );
-
-    return $submitted;
-
-}
-
-=head2 _browse_action( $function_name )
-
-Gets the action set by the specificied function on the Browse page.
-
-=cut
-
-sub _browse_action {
-
-    my ( $function ) = @_;
-
-    # Look for the action (we need MyToken)
-    $self->current_page->content =~
-        /function ${function}.*?theForm\.action = "Browse\.aspx(\?MyToken=[^"]+)"/is;
-
-#   my $action = "http://browseusers.myspace.com/browse" . $1;
-    my $args = $1;
-
-    unless ( $args ) {
-        $self->error("Couldn't find Javascript GotoPage function to set action");
-        return "";
-    }
-    
-    my $action = "http://browseusers.myspace.com/browse/Browse.aspx" . $args;
-    return $action;
-
-}
-
 
 1;
 
@@ -4376,7 +4650,11 @@ idea.
 
 =item -
 
-delete_friend will probably only delete the first friendID passed.
+delete_friend is not working.  Needs to be re-written for new URLs.
+
+=item -
+
+send_friend_request needs to be re-written for new servers.
 
 =item -
 
@@ -4422,6 +4700,11 @@ check a couple times to make sure it isn't a Myspace problem.
 
 send_message returns only status codes in many circumstances regardless
 of calling context.
+
+=item -
+
+post_comment returns only status codes for "FN" and "FC" errors
+regardless of calling context.
 
 =back
 

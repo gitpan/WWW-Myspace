@@ -25,5 +25,6 @@ use WWW::Myspace;
 my $myspace = new WWW::Myspace;
 
 my @friends = $myspace->approve_friend_requests;
+die $myspace->error if $myspace->error;
 
 print "Approved " . @friends . " friends: @friends\n";

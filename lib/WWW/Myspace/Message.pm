@@ -1,4 +1,4 @@
-# $Id: Message.pm 240 2006-08-25 22:20:15Z grantg $
+# $Id: Message.pm 247 2006-09-06 00:47:12Z grantg $
 
 package WWW::Myspace::Message;
 
@@ -13,11 +13,11 @@ WWW::Myspace::Message - Auto-message your MySpace friends from Perl scripts
 
 =head1 VERSION
 
-Version 0.15
+Version 0.16
 
 =cut
 
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 
 =head1 WARNING
 
@@ -256,13 +256,13 @@ sub cache_file {
 
 =head2 max_count
 
-Defaults to 300. This sets how many messages we'll post before pausing.
+Defaults to 100. This sets how many messages we'll post before pausing.
 This is mostly to avoid triggering overuse messages. (You're allowed
 about 360 per day (possibly per 12 hours period?)).
 
 =cut
 
-field max_count => 300;
+field max_count => 100;
 
 =head2 noisy
 

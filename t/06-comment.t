@@ -26,6 +26,7 @@ SKIP: {
 	$comment->ignore_duplicates(1);
 	$comment->cache_file( "comexcl" );
 	$comment->delay_time(0);
+	warn "Posting comment with ident $ident\n";
 	my $status = 
 		$comment->post_all( 'Just thought I\'d comment you.\n\n- Perl\n'.${ident},
 		$CONFIG->{'acct2'}->{'friend_id'} );

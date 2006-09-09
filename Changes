@@ -1,5 +1,22 @@
 Revision history for WWW::Myspace
 
+0.55    2006-09-05
+        - Changed default value of max_count from 300 to 100 in Message.pm
+          since captcha kicks in around 102.
+        - Added send_event_invite method.
+        - Added send_event_invite sample script.
+        - Tested browse method, updated docs, moved from
+          IN PROGRESS area to FIND PEOPLE area.
+        - Added "quiet" flag to mech object to stop superfluous warnings.
+        - Set "stack_depth => 1" in mech object to save memory. Previously
+          the module would store all page loads, which could eat up
+          huge amounts of memory when dealing with large friend lists
+          or event invitations.
+        - Re-wrote approve_friend_requests method to use the new servers
+          and act super-human.
+        - Added "form" option to submit_form that allows passing a
+          ready-to-post HTML::Form object.
+
 0.54    2006-09-04
         - Corrected new method docs: replaced "username" parameter in
           examples with "account_name".

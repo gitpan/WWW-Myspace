@@ -29,6 +29,7 @@ SKIP: {
 		# From acct2, delete acct1 as a friend.
 		warn "Deleting acct2 as a friend\n";
 		$myspace1->delete_friend( $CONFIG->{'acct2'}->{'friend_id'} );
+		warn $myspace1->error."\n" if $myspace1->error;
 	
 		# Then send a friend request.
 		# This generates "use of initialized value" warnings from
@@ -36,6 +37,7 @@ SKIP: {
 		warn "Sending friend request from acct2 to acct1\n";
 	#	warn 'Ignore the following "Use of uninitialized value" errors'."\n";
 		$myspace2->send_friend_request( $CONFIG->{'acct1'}->{'friend_id'} );
+		warn $myspace2->error."\n" if $myspace2->error;
 	
 		# Now try to approve friend requests.
 		warn "Approving friend request\n";
