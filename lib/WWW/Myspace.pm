@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 255 2006-09-09 01:53:51Z grantg $
+# $Id: Myspace.pm 256 2006-09-10 06:52:42Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -35,11 +35,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.55
+Version 0.56
 
 =cut
 
-our $VERSION = '0.55';
+our $VERSION = '0.56';
 
 =head1 SYNOPSIS
 
@@ -2188,13 +2188,14 @@ Post $message as a comment for the friend identified by $friend_id.
 The routine confirms success or failure by reading the resulting
 page. It returns a status string as follows:
 
- P   =>  'Passed! Verification string received.'
- PA  =>  'Passed, requires approval.'
- FF  =>  'Failed, you must be someone\'s friend to post a comment about them.'
- FN  =>  'Failed, network error (couldn\'t get the page, etc).'
- FC  =>  'Failed, CAPTCHA response requested.'
- FI  =>  'Failed, Invalid friendID.',
- F   =>  'Failed, verification string not found on page after posting.'
+ P   =>  Passed! Verification string received.
+ PA  =>  Passed, requires approval.
+ FF  =>  Failed, you must be someone's friend to post a comment about them.
+ FN  =>  Failed, network error (couldn't get the page, etc).
+ FC  =>  Failed, CAPTCHA response requested.
+ FI  =>  Failed, Invalid friendID.
+ FL  =>  Failed, Add Comment link not found on profile page.
+ F   =>  Failed, verification string not found on page after posting.
 
 Warning: It is possible for the status code to return a false
 "Failed" if the form post is successful but the resulting page fails
@@ -2241,7 +2242,7 @@ sub post_comment {
 
     my ( $friend_id, $message, $captcha_response ) = @_;
     my $status = ""; # Our return status
-    my ($submitted, $attempts);
+    my ($submitted, $attempts, $link);
 
     $self->_die_unless_logged_in( 'post_comment' );
     
@@ -2257,6 +2258,7 @@ sub post_comment {
         FN  =>  'Failed, network error (couldn\'t get the page, etc).',
         FC  =>  'Failed, CAPTCHA response requested.',
         FI  =>  'Failed, Invalid FriendID.',
+        FL  =>  'Failed, Add Comment link not found on profile page.',
         F   =>  'Failed, verification string not found on page after posting.',
 
     );
@@ -2274,11 +2276,14 @@ sub post_comment {
         }
 
         # Submit the comment to $friend_id's page
+        $link = $self->mech->find_link(
+                                text_regex => qr/^add\s+comment$/i );
+        return "FL" unless $link;
+
         ( $DEBUG ) && print "Getting comment form..\n";
         $submitted = 
             $self->submit_form(
-                            $self->mech->find_link(
-                                text_regex => qr/^add\s+comment$/i )->url,
+                            $link->url,
                             1, "", { 'f_comments' => "$message" },
                             "f_comments.*<\/form|($CAPTCHA)|($NOT_FRIEND_ERROR)|".
                             "($INVALID_ID)",
@@ -4703,7 +4708,7 @@ of calling context.
 
 =item -
 
-post_comment returns only status codes for "FN" and "FC" errors
+post_comment returns only status codes for "FN", "FL", and "FC" errors
 regardless of calling context.
 
 =back

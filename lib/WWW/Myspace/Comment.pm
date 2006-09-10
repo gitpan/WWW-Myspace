@@ -1,4 +1,4 @@
-# $Id: Comment.pm 192 2006-06-08 19:20:59Z grantg $
+# $Id: Comment.pm 256 2006-09-10 06:52:42Z grantg $
 
 package WWW::Myspace::Comment;
 
@@ -12,11 +12,11 @@ WWW::Myspace::Comment - Auto-comment your MySpace friends from Perl scripts
 
 =head1 VERSION
 
-Version 0.15
+Version 0.16
 
 =cut
 
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 
 =head1 SYNOPSIS
 
@@ -501,6 +501,8 @@ sub post_comments {
 						print "Failed";
 						if ( $result eq "FC" ) {
 							print ", CAPTCHA response requested."
+						} elsif ( $result eq "FL" ) {
+							print ", Add Comment link not found on profile page."
 						} elsif ( $result eq "FN" ) {
 							print ", Network error."
 						}

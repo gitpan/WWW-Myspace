@@ -1,5 +1,13 @@
 Revision history for WWW::Myspace
 
+0.56	2006-09-09
+		- Added "FL" response code to post_comment. Returns FL if it
+		  can't find the "Add Comment" link on the profile page.
+		  (0.55 will die if this condition exists).
+		  On a side note, this condition "shouldn't" exist, but does
+		  if Myspace incorrectly says a profile is private even though
+		  they're your friend.  Yes, it happened and so I had to add this.
+
 0.55    2006-09-05
         - Changed default value of max_count from 300 to 100 in Message.pm
           since captcha kicks in around 102.
