@@ -7,3 +7,5 @@ my $myspace = new WWW::Myspace;
 my $result = $myspace->post_comment( @ARGV );
 
 print $result."\n";
+
+die $myspace->error."\n" if $myspace->error;

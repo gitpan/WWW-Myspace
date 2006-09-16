@@ -1,5 +1,19 @@
 Revision history for WWW::Myspace
 
+0.57    2006-09-16
+        - Added FL status code to send_message (can't find Send Message
+          link on profile page).
+        - Fixed condition in send_message that would cause "FN" to be
+          returned instead of "FF" (private profile, must be friend to
+          send message).
+        - Updated "post_comment" for new form field names.
+        - Updated RE in friend_user_name to use "nametext" span tag instead
+          of comment link (name attribute was removed from there).
+        - Added WARNING to Myspace.pm, Comment.pm, and Message.pm
+          regarding account crippling.  WARNING: DO NOT USE THIS
+          MODULE FOR MASS MESSAGING OR MASS COMMENTING.  YOUR
+          ACCOUNT WILL BE CRIPPLED OR DISABLED.  See docs for details.
+
 0.56	2006-09-09
 		- Added "FL" response code to post_comment. Returns FL if it
 		  can't find the "Add Comment" link on the profile page.

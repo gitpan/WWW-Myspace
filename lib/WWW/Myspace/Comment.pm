@@ -1,4 +1,4 @@
-# $Id: Comment.pm 256 2006-09-10 06:52:42Z grantg $
+# $Id: Comment.pm 263 2006-09-16 19:12:52Z grantg $
 
 package WWW::Myspace::Comment;
 
@@ -17,6 +17,28 @@ Version 0.16
 =cut
 
 our $VERSION = '0.16';
+
+=head1 WARNING
+
+WARNING - DO NOT USE THIS MODULE FOR MASS MESSAGING OR COMMENTING.
+
+Myspace will cripple or disable your account:
+
+Older accounts:
+
+Messages will appear in your Sent folder but not in the receiver's
+inbox, although they'll be able to see it if they're paging through from
+another message.
+The receiver will get a "New Comments" notification and be able to see
+your comment, but it won't appear on the profile page.
+
+Newer accounts:
+
+If you created your myspace account in or after June 2006 (approximately),
+and you use a "bot" (including this module) to send messages, your message
+sending ability will be disabled and your account may be deleted. This
+is due to security features myspace has implemented to prevent spam
+abuse by people using multiple accounts.
 
 =head1 SYNOPSIS
 

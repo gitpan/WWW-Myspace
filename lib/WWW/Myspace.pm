@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 256 2006-09-10 06:52:42Z grantg $
+# $Id: Myspace.pm 263 2006-09-16 19:12:52Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -35,11 +35,33 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.56
+Version 0.57
 
 =cut
 
-our $VERSION = '0.56';
+our $VERSION = '0.57';
+
+=head1 WARNING
+
+WARNING - DO NOT USE THIS MODULE FOR MASS MESSAGING OR COMMENTING.
+
+Myspace will cripple or disable your account:
+
+Older accounts:
+
+Messages will appear in your Sent folder but not in the receiver's
+inbox, although they'll be able to see it if they're paging through from
+another message.
+The receiver will get a "New Comments" notification and be able to see
+your comment, but it won't appear on the profile page.
+
+Newer accounts:
+
+If you created your myspace account in or after June 2006 (approximately),
+and you use a "bot" (including this module) to send messages, your message
+sending ability will be disabled and your account may be deleted. This
+is due to security features myspace has implemented to prevent spam
+abuse by people using multiple accounts.
 
 =head1 SYNOPSIS
 
@@ -900,10 +922,10 @@ sub friend_user_name {
         $page = $self->current_page;
     }
 
-    if ( $page->content =~ /index\.cfm\?fuseaction=user\&circuitaction\=viewProfile_commentForm\&friendID\=[0-9]+\&name\=([^\&]+)\&/ ) {
+    if ( $page->content =~ /<span class="nametext">(.*?)<\/span>/ ) {
         my $line = $1;
-        $line =~ s/\+/ /g;
-        $line =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
+#        $line =~ s/\+/ /g;
+#        $line =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
         return $line;
     } else {
         return "";
@@ -2284,10 +2306,11 @@ sub post_comment {
         $submitted = 
             $self->submit_form(
                             $link->url,
-                            1, "", { 'f_comments' => "$message" },
-                            "f_comments.*<\/form|($CAPTCHA)|($NOT_FRIEND_ERROR)|".
+                            1, "", { 'ctl00$Main$postComment$commentTextBox' => "$message" },
+                            'ctl00\$Main\$postComment\$commentTextBox'.
+                            ".*<\/form|($CAPTCHA)|($NOT_FRIEND_ERROR)|".
                             "($INVALID_ID)",
-                            'f_comments.*<\/form'
+                            'ctl00\$Main\$postComment\$ConfirmPostButton.*<\/form'
                         );
         
         # If we posted ok, confirm the comment
@@ -2865,6 +2888,7 @@ sub send_message {
         FE  =>  'Failed, you have exceeded your daily usage.',
         FC  =>  'Failed, CAPTCHA response requested.',
         FI  =>  'Failed, Invalid FriendID.',
+        FL  =>  'Failed, can\'t find Send Message link on profile page.',
         F   =>  'Failed, verification string not found on page after posting.',
 
     );
@@ -2908,7 +2932,7 @@ sub send_message {
         'Mail\s+Center.*Send\s+a\s+Message|'.$MAIL_PRIVATE_ERROR.'|'.
         $MAIL_AWAY_ERROR.'|'.$INVALID_ID );
     } else {
-        $self->error( "Can't find fuseaction=mail.message on profile page" );
+        return "FL"
     }
 
     # Check for network error
