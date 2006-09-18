@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 263 2006-09-16 19:12:52Z grantg $
+# $Id: Myspace.pm 266 2006-09-18 04:43:53Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -35,11 +35,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.57
+Version 0.58
 
 =cut
 
-our $VERSION = '0.57';
+our $VERSION = '0.58';
 
 =head1 WARNING
 
@@ -3667,6 +3667,68 @@ sub send_event_invitation {
     }
 
     return ( \@passed, \@failed );
+
+}
+
+=head2 post_bulletin( %options )
+
+Post a builletin to your friends.
+
+ use WWW::Myspace;
+ 
+ my $myspace = new WWW::Myspace;
+
+ $myspace->post_bulletin(
+     subject => $subject,
+     message => $message
+ );
+
+=cut
+
+sub post_bulletin {
+
+    my %options = @_;
+
+    $self->_die_unless_logged_in( 'post_bulletin' );
+
+    # Go home
+    $self->_go_home;
+    return 0 if $self->error;
+#    warn "Got home page" . "\n" if $options{'testing'};
+    
+    # Click "post bulletin"
+    my $link = $self->mech->find_link(
+                            text_regex => qr/^post\s+bulletin$/i );
+
+    unless ( $link ) {
+        $self->error("Post Bulletin link not found on home page");
+        return 0;
+    }
+#    warn "Found Post Bulletin link: ".$link->url . "\n" if $options{'testing'};
+
+    # Fill in and submit the form
+    my $submitted = $self->submit_form( {
+        page => $link->url,
+        form_name => 'bulletinForm',
+        fields_ref => {
+            subject => $options{'subject'},
+            body => $options{'message'},
+        },
+        re1 => 'name="bulletinForm"',
+        re2 => 'Confirm\s+Bulletin',
+    } );
+
+    return 0 unless $submitted;
+
+    # And now confirm it (unless we're testing).
+    unless ( $options{'testing'} ) {
+#        warn "Submitting Confirmation screen";
+        $submitted = $self->submit_form( {
+            form_name => 'bulletinForm'
+        } );
+    }
+
+    return $submitted;
 
 }
 

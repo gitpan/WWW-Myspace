@@ -1,5 +1,9 @@
 Revision history for WWW::Myspace
 
+0.58    2006-09-17
+        - Added post_bulletin method and 12-bulletin.t test (don't worry,
+          doesn't confirm the bulletin when testing).
+
 0.57    2006-09-16
         - Added FL status code to send_message (can't find Send Message
           link on profile page).
