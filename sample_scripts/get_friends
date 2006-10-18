@@ -13,13 +13,8 @@ use WWW::Myspace;
 my $myspace = new WWW::Myspace;
 unless ( $myspace->logged_in ) { die "Login failed\n" }
 
-my @friends;
+my @friends = $myspace->get_friends( @ARGV );
 
-if ( @ARGV ) {
-  @friends = $myspace->friends_from_profile( @ARGV );
-} else {
-  @friends = $myspace->get_friends;
-}
 warn $myspace->error if ( $myspace->error );
 
 print "Got " . @friends . " friends:\n";

@@ -86,7 +86,7 @@ sub login_myspace {
 # it to run full tests.  Otherwise run the basic tests using the
 # basic config included with the distribution.
 sub _read_config {
-	my $myspace = new WWW::Myspace( auto_login => 0 );
+	my $myspace = new WWW::Myspace( auto_login => 0, human => 0 );
 	my $login = 1;
 	my $config = "";
 	my $configfile = catfile( $myspace->cache_dir, 'test_config.yaml' );

@@ -34,6 +34,7 @@ WriteMakefile(
         'Class::DBI'            => 0, # Data.pm
         'Class::DBI::Loader'    => 0, # Data.pm
         'DateTime::Format::MySQL'   => 0, # Data.pm
+        'Class::Factory::Util'  => 1.3, # Data.pm (prereq of above)
         'WWW::Mechanize'        => 0, # Myspace.pm
         'Time::Local'			=> 0, # Myspace.pm - last_login method
     },

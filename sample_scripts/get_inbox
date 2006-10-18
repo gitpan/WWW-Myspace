@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!/usr/bin/perl -w -I../lib
 # Display the messages in your inbox.  If passed a friendID, display
 # messages from that friend only.
 

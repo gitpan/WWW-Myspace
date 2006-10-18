@@ -11,7 +11,6 @@ lib/WWW/Myspace/FriendChanges.pm
 lib/WWW/Myspace/FriendAdder.pm
 lib/WWW/Myspace/Data.pm
 lib/WWW/Myspace/MyBase.pm
-#lib/WWW/Myspace/Poster.pm  # Not ready yet
 t/00-load.t
 t/01-login.t
 t/02-dual.t
@@ -39,20 +38,27 @@ scripts/add_friends
 sample_scripts/already_commented
 sample_scripts/approve_friends
 sample_scripts/browse
+sample_scripts/check_notifications
 sample_scripts/cleanup_inbox
 sample_scripts/cool_new_people
 sample_scripts/delete_friend
+sample_scripts/delete_message
 sample_scripts/friend_changes
 sample_scripts/get_friend_page
 sample_scripts/get_friends
 sample_scripts/get_inbox
+sample_scripts/get_login_form
 sample_scripts/search_music
 sample_scripts/send_all
+sample_scripts/send_message
+sample_scripts/send_event_invitations
+sample_scripts/send_group_invitations
 sample_scripts/send_message
 sample_scripts/test_message
 sample_scripts/todo
 sample_scripts/last_login
 sample_scripts/friends_in_group
+sample_scripts/post_blog
 sample_scripts/post_comment
 sample_scripts/read_message
 sample_scripts/send_friend_request
