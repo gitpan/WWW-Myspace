@@ -1,5 +1,21 @@
 Revision history for WWW::Myspace
 
+0.60    2006-11-19
+        - Added get_photo_ids method
+        - Added set_default_photo method
+        - Added set_random_photo sample script
+        - _go_home and get_page now return undef if there's an error
+        - Added 14-photos.t test.
+        - Added missing tests 12-bulletin.t and 13-blog.t to distribution.
+        - Added a trace mode by defining a method called "trace_func" which
+          allows detailed user-specifiable tracing of retrieved web pages
+        - Fixed bug in get_comments that could cause a person's image code
+          to be returned as the friendID if the person is online. Reported by
+          Costas Calamvokis.
+        - Updated RE in _get_friend_id to match change in Myspace code. This
+          fixes login errors among other things. (CPAN Ticket 23487 reported by
+          Paul Smith).
+
 0.59    2006-10-18
         - Added mech_params method to provide greater control over
           mech object.

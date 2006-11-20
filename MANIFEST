@@ -23,6 +23,9 @@ t/08-cool_new_people.t
 t/09-data.t
 t/10-mybase.t
 t/11-badlogin.t
+t/12-bulletin.t
+t/13-blog.t
+t/14-photos.t
 t/99-enduser.t
 t/boilerplate.t
 t/pod-coverage.t
@@ -62,4 +65,5 @@ sample_scripts/post_blog
 sample_scripts/post_comment
 sample_scripts/read_message
 sample_scripts/send_friend_request
+sample_scripts/set_random_photo
 META.yml                                 Module meta-data (added by MakeMaker)

@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 293 2006-10-18 17:13:52Z grantg $
+# $Id: Myspace.pm 298 2006-11-20 01:42:05Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -19,6 +19,9 @@ use WWW::Myspace::MyBase -Base;
 # confusion, one of its features is to add "my $self = shift;" to
 # each method definition, so when you see that missing, that's why. ***
 
+# Debugging? (Yes=1, No=0)
+our $DEBUG=0;
+
 ######################################################################
 # Libraries we use
 
@@ -35,11 +38,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.59
+Version 0.60
 
 =cut
 
-our $VERSION = '0.59';
+our $VERSION = '0.60';
 
 =head1 WARNING
 
@@ -255,9 +258,6 @@ our $FRIEND_REQUEST_POST = "http://mail.myspace.com/index.cfm?'.
 our $ADD_FRIEND_URL = 'http://collect.myspace.com/index.cfm?'.
             'fuseaction=invite.addfriend_verify&'.
             'friendID=';
-
-# Debugging? (Yes=1, No=0)
-our $DEBUG=0;
 
 ######################################################################
 # Methods
@@ -1427,12 +1427,123 @@ sub _get_comments_from_page {
 
     my ( $page ) = @_;
     my @comments = ();
+
+    # Get to the comments section to avoid mis-reads
+    if ( $page !~ m/Add Comment<\/a>/gs ) {
+        $self->error("Comment section not found on page");
+        return undef;
+    }
+
+    # Read the comment data and push it into our array.
     while ( $page =~
-            s/.*?UserID=([^;]+);.*?<span class="blacktext10">\s*([^<]+)\s*<\/span>\s*<br>\s*<br>\s*(.*?)<\/td>\s*<\/tr>//smo ) {
+#            s/.*?UserID=([^;]+);.*?<span class="blacktext10">\s*([^<]+)\s*<\/span>\s*<br>\s*<br>\s*(.*?)<\/td>\s*<\/tr>//smo ) {
+            s/.*?UserID=([0-9]+).*?<span class="blacktext10">\s*([^<]+)\s*<\/span>\s*<br>\s*<br>\s*(.*?)<\/td>\s*<\/tr>//smo ) {
         push @comments, { sender => $1, date => $2, comment => $3 }
     }
     
     return @comments;
+}
+
+sub ____EDIT_ACCOUNT____ {}
+
+=head1 EDIT ACCOUNT
+
+=head2 get_photo_ids( %options )
+
+Each of your profile's photos is stored using a unique ID number.
+
+This method returns a list of the IDS of the photos in your profile's photo section.
+
+The only valid option at this time is:
+
+ friend_id => $friend_id
+
+Defaults to your friendID.
+
+Croaks if called when not logged in and no photo_id was passed.
+
+=cut
+
+sub get_photo_ids {
+
+    my ( %options ) = @_;
+
+    $self->_die_unless_logged_in( 'get_photo_ids' ) unless $options{'friend_id'};
+
+    my $friend_id = $options{'friend_id'} ? $options{'friend_id'} : $self->my_friend_id;
+
+    $self->get_page("http://viewmorepics.myspace.com/index.cfm?" .
+                    "fuseaction=user.viewPicture&friendID=" . $friend_id ) or return undef;
+
+    my $last_id = -1;
+    my @photo_ids = ();
+    my $page = $self->current_page->content;
+    while ( $page =~ s/^.*?imageID=([0-9]+)[^0-9]//iso ) {
+        unless ( $1 == $last_id ) {
+            push( @photo_ids, $1 );
+            $last_id = $1;
+        }
+    }
+
+    return ( @photo_ids );
+
+}
+
+=head2 set_default_photo( photo_id => $photo_id )
+
+Sets your profile's default photo to the photo_id specified.
+
+ Example:  Set your default photo to a random photo.
+
+ use WWW::Myspace 0.60;
+ my $myspace = new WWW::Myspace;
+ 
+ my @ids = $myspace->get_photo_ids;
+ $myspace->set_default_photo( $ids[ int( rand( @ids ) ) ] );
+
+=cut
+
+sub set_default_photo {
+
+    my ( %options ) = @_;
+
+    $self->_die_unless_logged_in( 'set_default_photo' );
+
+    $self->_go_home or return undef;
+
+#    warn "Going to Edit photos page\n";
+    $self->follow_link( text_regex => qr/Edit Photos/io ) or return undef;
+
+    # The photo should be on form 2 or later (search form and photo privacy form come
+    # before the first picture).
+#    warn "Getting form number\n";
+    my $form_no = $self->_get_photo_form_no( $options{'photo_id'} ) or return undef;
+#    warn "Found photo in form number $form_no\n";
+
+    # We index from form 0 in submit_form.
+    $self->submit_form( {
+        form_no => $form_no,
+        button => 'setDefault',
+    } );
+
+}
+
+sub _get_photo_form_no {
+
+    my ( $photo_id ) = @_;
+    
+    my ( @forms ) = $self->mech->forms;
+    
+    my $form_no = 0;
+    foreach my $f ( @forms ) {
+        if ( $f->find_input( 'imageID' ) ) {
+            return $form_no if ( $f->value( 'imageID' ) == $photo_id );
+        }
+        $form_no++;
+    }
+
+    $self->error( "No photo with ID $photo_id found on Edit Photos page" );
+    return undef;
 }
 
 sub ____FIND_PEOPLE____ {}
@@ -3840,7 +3951,7 @@ sub delete_friend {
     my ( @del_friends ) = @_;
 
     my ( $form, $tree, $f, $res, $id );
-    my $pass=1;
+    # my $pass=1;  
 
     $self->_die_unless_logged_in( 'delete_friend' );
 
@@ -3893,21 +4004,23 @@ sub delete_friend {
     }
 
     # Submit the form
-    my $attempts = 25;
+    my $attempt = 0; my $max_attempts = 25;
     my $request = $f->click( 'deleteAll' );
     $request->header( 'Referer' => $self->current_page->request->uri );
     do {
         $res = $self->mech->request( $request );
-        $attempts--;
-    } until ( ( $self->_page_ok( $res ) ) || ( $attempts <= 0 ) );
+        $attempt++;
+	$self->_traceme("Delete friend submit attempt $attempt",$res);
+    } until ( ( $self->_page_ok( $res ) ) || ( $attempt > $max_attempts ) );
 
-    unless ( $attempts ) {
-        $pass=0;
-    }
+    # I felt guilty adding a variable even for readability so I removed $pass :)
+    #unless ( $attempt <= $max_attempts) {
+    #    $pass=0;
+    #}
 
     $self->{current_page} = $res;
 
-    return $pass;
+    return ($attempt <= $max_attempts);
 
 }
 
@@ -4245,10 +4358,36 @@ stuff (page retreival, error handling, cache file handling, etc)
 that you probably won't need to use (and probably shouldn't use unless
 you're submitting a code patch :).
 
+=head2 trace_func
+ 
+You may pass this a code reference. If you do, it will be called 
+on EACH successful HTML page retreived this module. The arguments
+passed to this code reference are:
+
+  $trace_func->($where, $page)
+ 
+where $where is a descriptive but curt string explaining where this page was
+gotten and $page is a reference to the actual HTML. Clever Perl programmers
+can use caller() (perldoc -f caller) to find out where in the code that
+this page was accessed.
+
+=cut
+
+field trace_func => undef;
+
+sub _traceme {
+  my ($where,$page) = @_;
+
+  my $t = $self->trace_func(); 
+  return unless (defined($t) && ref($t) eq "CODE");
+  $t->($where,$page);
+}
+
 =head2 get_page( $url, [ $regexp ] )
 
 get_page returns a referece to a HTTP::Response object that contains
-the web page specified by $url.
+the web page specified by $url. If it can't get the page, returns undef and
+sets $myspace->error.
 
 Use this method if you need to get a page that's not available
 via some other method. You could include the URL to a picture
@@ -4260,6 +4399,8 @@ delay between attempts. It checks for invalid HTTP response codes,
 and known Myspace error pages. If called with the optional regexp,
 it will consider the page an error unless the page content matches
 the regexp. This is designed to get past network problems and such.
+
+
 
 EXAMPLE
 
@@ -4278,8 +4419,10 @@ sub get_page {
     # Reset error
     $self->error( 0 );
 
+    ( $DEBUG ) && print "Getting URL: $url\n";
+
     # Try to get the page 20 times.
-    my $attempts = 20;
+    my $attempt = 0; my $max_attempts = 20;
     my $res;
     my %headers = ();
     if ( $follow ) {
@@ -4287,20 +4430,24 @@ sub get_page {
     }
 
     do {
-
         # Try to get the page
 #        unless ( $res = $self->_read_cache( $url ) )
                 $res = $self->mech->get("$url", %headers);
 #        }
-        $attempts--;
+        $attempt++;
+        $self->_traceme("Attempt $attempt",$res);
 
-    } until ( ( $self->_page_ok( $res, $regexp ) ) || ( $attempts <= 0 ) );
+    } until ( ( $self->_page_ok( $res, $regexp ) ) || ( $attempt >= $max_attempts ) );
 
     # We both set "current_page" and return the value.
 #    $self->_cache_page( $url, $res ) unless $self->error;
     $self->{current_page} = $res;
     sleep ( int( rand( 5 ) ) + 6 ) if $self->human;
-    return ( $res );
+    if ( $self->error ) {
+        return undef;
+    } else {
+        return ( $res );
+    }
 
 }
 
@@ -4749,8 +4896,8 @@ sub submit_form {
 
     if ( $options->{'die'} ) { print $f->dump; die }
 
-    # Submit the form.  Try up to $attempts times.
-    my $attempts = 5;
+    # Submit the form.  Try up to $max_attempts times.
+    my $attempt = 0; my $max_attempts = 5;
     my $trying_again = 0;
 
     # Make our request based on our options
@@ -4784,11 +4931,11 @@ sub submit_form {
             return 0;
         }
 
-        $attempts--;
+        $attempt++;
         $trying_again = 1;
-
+	$self->_traceme("Submit form attempt $attempt",$res);
     } until ( ( $self->_page_ok( $res, $options->{'re2'} ) ) ||
-              ( $attempts <= 0 )
+              ( $attempt >= $max_attempts )
             );
 
     # Return the result
@@ -5052,8 +5199,8 @@ sub _get_friend_id {
     
     # Search the code for the link. This is why we like Perl. :)
     my $page_source = $homepage->content;
-    $page_source =~ /index\.cfm\?fuseaction=user\.viewfriends\&friendID=([0-9]+)/o;
-    my $friend_id=$1;
+    $page_source =~ /index\.cfm\?fuseaction=user\.viewprofile\&(amp;)friendid=([0-9]+)/io;
+    my $friend_id=$2;
     ( $DEBUG ) && print "Got friend ID: $friend_id\n";
 
     # Store it
@@ -5283,15 +5430,15 @@ sub _go_home {
 
 	# If we're not logged in, go to the home page
 	unless ( $self->logged_in ) {
-		$self->get_page( $BASE_URL );
-		return;
+		$self->get_page( $BASE_URL ) or return undef;
+		return 1;
 	}
 
     # Are we there?
     if ( $self->mech->uri =~ /[\?&;]fuseaction=user([&;]|$)/io ) {
 #        warn "I think I'm on the homepage\n";
 #        warn $self->mech->uri . "\n";
-        return;
+        return 1;
     }
     
     # No, try to click home
@@ -5301,15 +5448,15 @@ sub _go_home {
                       )
        ) {
 #        warn "_go_home going to " . $home_link->url . "\n";
-        $self->follow_to( $home_link->url );
-        return;
+        $self->follow_to( $home_link->url ) or return undef;
+        return 1;
     }
     
     # Still here?  Load the page explicitly
-    $self->get_page( $HOME_PAGE );
+    $self->get_page( $HOME_PAGE ) or return undef;
 #    warn "I think I loaded $HOME_PAGE\n";
     
-    return;
+    return 1;
 
 }
 
