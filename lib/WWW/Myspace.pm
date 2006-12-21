@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 298 2006-11-20 01:42:05Z grantg $
+# $Id: Myspace.pm 302 2006-12-21 00:14:59Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -42,7 +42,7 @@ Version 0.60
 
 =cut
 
-our $VERSION = '0.60';
+our $VERSION = '0.61';
 
 =head1 WARNING
 
@@ -151,9 +151,10 @@ our $COMMENT_APPROVAL_MSG="This user requires all comments to be approved '.
     'before being posted";
 $COMMENT_APPROVAL_MSG = qr/$COMMENT_APPROVAL_MSG/o;
 
+# What string should we look for if we're trying to post a comment to
+# someone who isn't our friend?
 our $NOT_FRIEND_ERROR="Error: You must be someone\'s friend to make '.
     'comments about them\.";
-$NOT_FRIEND_ERROR = qr/$NOT_FRIEND_ERROR/o;
 
 # What should we look for to see if we are being asked for a CAPTCHA code?
 # We'll extract the URL to return from the area in parenthesis.
@@ -161,7 +162,7 @@ our $CAPTCHA='<img.*?src="(http:\/\/security.myspace.com\/CAPTCHA\/'.
     'CAPTCHA\.aspx\?SecurityToken=[^"]+)"';
 our $CAPTCHAi = qr/$CAPTCHA/io;   # ok, we will store both ways
 our $CAPTCHAs = qr/$CAPTCHA/o;  
-$CAPTCHA = $CAPTCHAi;             # use case insensitive for now
+#$CAPTCHA = $CAPTCHAi;             # use case insensitive for now
 
 # What's the URL to the comment form? We'll append the user's friend ID to
 # the end of this string.
@@ -196,15 +197,14 @@ our $VERIFY_MESSAGE_SENT = qr/Your Message Has Been Sent\!/o;
 # page?
 our $MAIL_PRIVATE_ERROR = "You can't send a message to [^<]* ?because '.
     'you must be [^<]*'s ?friend";
-$MAIL_PRIVATE_ERROR = qr/$MAIL_PRIVATE_ERROR/o;
 
 # If a person has set an away message, what regexp should we look for?
 our $MAIL_AWAY_ERROR = "You can't send a message to [^<]* ?because '.
     '[^<]* ?has set [^<]* ?status to away";
-$MAIL_AWAY_ERROR = qr/$MAIL_AWAY_ERROR/io;
 
 # What RE shows up if a friendID is invalid?
-our $INVALID_ID = qr/<b>Invalid Friend ID\.\s*<br>\s*This user has either cancelled their membership,? or their account has been deleted\./io;
+our $INVALID_ID = '<b>Invalid Friend ID\.\s*<br>\s*This user has either cancelled their '.
+    'membership,? or their account has been deleted\.';
 
 # What regexp should we look for for Myspace's frequent "technical error"
 # messages?
@@ -2754,7 +2754,7 @@ sub post_comment {
         
             # See if there's a CAPTCHA response required, if so,
             # fail appropriately.
-            if ( $self->current_page->content =~ $CAPTCHA ) {
+            if ( $self->current_page->content =~ $CAPTCHAi ) {
                 $self->captcha( "$1" );
                 return "FC";
             }
@@ -2781,7 +2781,7 @@ sub post_comment {
     # Set the status code to return.
     if ( $page =~ $NOT_FRIEND_ERROR ) {
         $status="FF";
-    } elsif ( $page =~ $INVALID_ID ) {
+    } elsif ( $page =~ /$INVALID_ID/i ) {
         $status="FI";
     } elsif (! $submitted ) {
         $status="FN";
@@ -3226,7 +3226,7 @@ sub reply_message {
         return "P";
     } elsif ( $page =~ $EXCEED_USAGE ) {
         return "FE";
-    } elsif ( $page =~ $CAPTCHA ) {
+    } elsif ( $page =~ $CAPTCHAi ) {
         return "FC";
     } else {
         return "F";
@@ -3410,13 +3410,13 @@ sub send_message {
     # Check for known messages that say we can't send it.
     $page = $res->content;
     $page =~ s/[ \t\n\r]+/ /go;
-    if ( $page =~ $MAIL_PRIVATE_ERROR ) {
+    if ( $page =~ /$MAIL_PRIVATE_ERROR/i ) {
         return "FF";
-    } elsif ( $page =~ $MAIL_AWAY_ERROR ) {
+    } elsif ( $page =~ /$MAIL_AWAY_ERROR/i ) {
         return "FA";
-    } elsif ( $page =~ $INVALID_ID ) {
+    } elsif ( $page =~ /$INVALID_ID/i ) {
         return "FI";
-    } elsif ( $page =~ $CAPTCHA ) {
+    } elsif ( $page =~ $CAPTCHAi ) {
         return "FC";
     }
 
@@ -3454,7 +3454,7 @@ sub send_message {
     # Return the result
     if (! $submitted ) {
         $status = "FN";
-    } elsif ( $page =~ $CAPTCHA ) {
+    } elsif ( $page =~ $CAPTCHAi ) {
         $status = "FC";  # They keep changing which page this appears on.
     } elsif ( $page =~ $VERIFY_MESSAGE_SENT ) {
         $status = "P";
@@ -5494,7 +5494,16 @@ idea.
 
 =item -
 
-delete_friend is not working.  Needs to be re-written for new URLs.
+One of the modules upon which WWW::Myspace depends generates the following
+warnings when logging in:
+
+    Day too big - 2932896 > 24855
+    Sec too big - 2932896 > 11647
+    Day too big - 2932896 > 24855
+    Sec too big - 2932896 > 11647
+
+These are harmless but annoying.  See the "date.patch" file included at the
+root level of the distribution if you want to fix them.
 
 =item -
 
