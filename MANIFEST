@@ -4,6 +4,7 @@ MANIFEST
 Makefile.PL
 README
 mysql.txt
+date.patch
 lib/WWW/Myspace.pm
 lib/WWW/Myspace/Comment.pm
 lib/WWW/Myspace/Message.pm

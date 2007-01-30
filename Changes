@@ -1,5 +1,31 @@
 Revision history for WWW::Myspace
 
+0.62    2007-01-30
+        - Added date.patch to MANIFEST so it'll appear in the distribution.
+        - Added "HOW TO SUBMIT A PATCH" instructions to Myspace.pm docs and
+          README file.
+        - Added Crypt::SSLeay as a prerequesite.  This fixes ticket#24224: myspace
+          logins fail if Crypt::SSLeay not installed due to recent myspace switch
+          requiring SSL.
+        - Implemented re-written get_friends method. The new method is simpler
+          and acts like a web browser paging through the friends list using
+          the new form-based navigation system implemented by myspace.
+
+          WARNING: There are a few differences in this method:
+          - It no longer supports the "exclude_friends" option.
+          - It returns the friendIDs in the order in which they appear on the
+            friend list (which is, btw, in order of friendID).
+          - It no longer returns additional information if called in a hashref
+            context.  It can only be called in a list context.
+
+        - Re-wrote get_friends_on_page method.
+        - Disabled get_comments for now.  Displays a warning and returns undef.
+          Method needs to be re-written due to change in myspace code.
+        - Disabled friends_from_group for now. Displays a warning and returns undef.
+          Method needs to be separated from get_friends and re-written as the form
+          used in groups is currently different from that used in profile friends list.
+        - "Skipped" friends_from_group test in 01-login.t
+
 0.61    2006-12-20
         - Added note about:
             Day too big - 2932896 > 24855
@@ -32,7 +58,7 @@ Revision history for WWW::Myspace
           allows detailed user-specifiable tracing of retrieved web pages
         - Fixed bug in get_comments that could cause a person's image code
           to be returned as the friendID if the person is online. Reported by
-          Costas Calamvokis.
+          Costas.
         - Updated RE in _get_friend_id to match change in Myspace code. This
           fixes login errors among other things. (CPAN Ticket 23487 reported by
           Paul Smith).

@@ -6,7 +6,7 @@
 # Example:
 # get_friends
 # 
-# get_friends 12345
+# get_friends source profile id 12345
 
 use WWW::Myspace;
 

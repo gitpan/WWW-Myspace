@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 302 2006-12-21 00:14:59Z grantg $
+# $Id: Myspace.pm 311 2007-01-30 12:15:05Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -42,7 +42,7 @@ Version 0.60
 
 =cut
 
-our $VERSION = '0.61';
+our $VERSION = '0.62';
 
 =head1 WARNING
 
@@ -1361,6 +1361,9 @@ Dies if called when not logged in.
 
 sub get_comments {
 
+    warn "get_comments method currently not operational due to change in myspace code";
+    return undef;
+
     my ( $friend_id ) = @_;
 
     $self->_die_unless_logged_in( 'get_comments' );
@@ -1384,7 +1387,7 @@ sub get_comments {
     while ( 1 ) {
 
         # Get the page
-        my $url="http://comments.myspace.com/index.cfm?";
+        my $url="http://comment.myspace.com/index.cfm?";
         if ( $page_no ) {
             $lpd{'03page'}=$page_no;
             foreach $key ( sort( keys( %lpd ) ) ) {
@@ -2020,6 +2023,9 @@ NOTE: As of version 0.59, "source => inbox" has been removed due to
 a formatting change in Myspace.com.  Use the "friends_who_emailed"
 method instead.
 
+This method is a complete re-write as of version 0.62. Please see the
+Changes file.
+
 Returns, as a list of friendIDs, all of your friends. It does not include
 Tom, because he's everybody's friend and when you're debugging your band
 central CGI page it's probably best to limit your mistakes to
@@ -2032,9 +2038,9 @@ actual friends.
  @friends = $myspace->(
     source => 'group',  # 'profile', 'group', 'inbox', or ''
     id => $group_id,    # friendID or groupID as appropriate
-    end_page => $end_page,  # Stop on this page. All pages if not included.
+    start_page => $start_page  # Start on this page. Starts on page 1 if not included.
+    end_page => $end_page,  # Stop on this page. Goes to last page if not included.
     max_count => 300,   # Number of friends to return
-    exclude => \%exclude_hash,  # Don't include these friendIDs
  );
 
 Accepts the following options:
@@ -2046,6 +2052,7 @@ Accepts the following options:
  id:        The friendID or groupID (depending on "source").
             "id" is only needed for "profile" or "group".
             (See the "friends_in_group" method for more info).
+ start_page: Start on this page.
  end_page:  Stop on this page.
             $myspace->get_friends( end_page => 5 );
             If not specified, gets all pages.
@@ -2054,26 +2061,8 @@ Accepts the following options:
             $myspace->get_friends( max_count => 300 );
             Stops searching and returns when max_count is reached.
             (See note below).
- exclude:   Exclude these friends, passed as a HASHREF
-            containing friendIDs as its keys.
-            If the "value" side of the pair is a true value,
-            the friendID will be excluded.
-            $myspace->get_friends( exclude => { 12345 => 1 };
-            $myspace->get_friends( exclude => \%exclude_friends );
-            
-            You can also pass a reference to an array for convenience,
-            but it will be turned into a hash, so it's a bit slower.
-            $myspace->get_friends( exclude => [ 12345, 123456 ] );
-            $myspace->get_friends( exclude => \@exclude_list );
-
-Combine max_count and exclude for handy functionality:
- # This gets 300 friends, excluding those in the %exclude_friends
- # hash.
- $myspace->get_friends( source => 'group',
-                        id => $group_id,
-                        exclude => \%exclude_friends,
-                        max_count => 300
-                      );
+ exclude:   Ignored as of version 0.62. Previous versions took this
+            as a list of friends to exclude.
 
 If you specify max_count and end_page, get_friends will stop when it
 hits the earliest condition that matches.
@@ -2082,18 +2071,6 @@ max_count may return up to 40 more friends than you specify.  This
 is because it reads each friend page, and returns when it's gathered
 max_count or more friends (and there are 40 per page).
 
-As of version 0.37, get_friends is context sensitive and returns
-additional information about each friend if called in a hashref context.
-Currently the only information is the page number on which the friend
-was found. This is handy if, say, you have a lot of friends and you want
-to add one to your top 8 but you don't know what page they're on.
-
- # Find a friend lost in your friends list
- $lost_friend=12345;
- $friends = $myspace->get_friends;
- print "Found friend $lost_friend on page " .
-    $friends->{"$lost_friend"}->{page_no} . "!\n";
-
 Myspace trivia: The friends on friends lists are sorted by friendID.
 
 Croaks if called with no arguments (i.e. to get your friends) and you're not
@@ -2101,27 +2078,34 @@ logged in.
 
 =cut
 
-# This is a rough draft of a re-write of get_friends that "correctly"
+# This re-write of get_friends "correctly"
 # handles paging through the friends pages the same way a browser does.
 # Current issues are:
 # - "source" handling is sloppy. This should really be separate methods.
 # - Doesn't handle exclusions.
 # - No real error checking.
 #
-# This method accepts the following options:
-# source => "", "profile", "group"
-# id => friend_id or group_id
-# 
-sub _get_friends {
+
+sub get_friends {
 
     my ( %options ) = @_;
-    my ( @friends ) = ();
+    my @friends = ();
+    my $exclude = "";
 
     my $page_no = 1;
 
     # This should be split into "get_my_friends", "get_profile_friends",
     # and "get_group_friends".
-    if ( $options{'source'} eq 'group' ) {
+    if ( ! defined $options{'source'} ) {
+        $self->_go_home;
+        $self->follow_link(
+            text_regex => qr/view all of my friends/io,
+            re => 'View All Friends',
+        );
+    } elsif ( $options{'source'} eq 'group' ) {
+        warn "Can't get friends from group due to change in myspace until method is updated.";
+        return undef;
+        # Note: This needs to be moved to its own method - form is different.
         $self->get_page( 'http://groups.myspace.com/index.cfm?'.
             'fuseaction=groups.viewMembers&groupID=' . $options{id}
         );
@@ -2131,31 +2115,28 @@ sub _get_friends {
     } elsif ( $options{'source'} eq 'profile' ) {
         $self->get_profile( $options{id} );
         $self->follow_link( text_regex => qr/view all of .* friends/io );
-    } else {
-        $self->_go_home;
-        $self->follow_link(
-            text_regex => qr/view all of my friends/io,
-            re => 'View All Friends',
-        );
+        $exclude=$options{id}; # Exclude the owner's ID (bit of a hack).
     }
     return undef if $self->error;
 
     # This should be "_get_friends", called by the above methods.
     while (1) {
-        push ( @friends, $self->get_friends_on_page )
+        push ( @friends, $self->get_friends_on_page( '', $exclude ) )
             unless ( $options{start_page} &&
                      ( $page_no < $options{start_page} )
                    );
 
         last unless $self->_next_button or
-            ( $options{end_page} && ( $page_no >= $options{end_page} ) );
+            ( $options{end_page} && ( $page_no >= $options{end_page} ) ) or
+            ( $options{max_count} && ( $#friends >= $options{max_count} ) );
 
         $page_no++;
-        $self->submit( {
-            form => 'PageForm',
+        $self->submit_form( {
+            form_name => 'aspnetForm',
             no_click => 1,
             re2 => 'View All Friends',
-            fields_ref => { page => $page_no },
+            fields_ref => { '__EVENTTARGET' => 'ctl00$cpMain$pagerTop',
+                            '__EVENTARGUMENT' => $page_no },
         } );
 
     }
@@ -2163,7 +2144,7 @@ sub _get_friends {
     return ( @friends );
 }
 
-sub get_friends {
+sub _get_friends {
 
     my ( %options ) = @_;
 
@@ -4981,7 +4962,7 @@ sub _add_to_form {
 #   one for their image). This is pretty safe against changes to the page.
 # - We filter out 6221, Tom's ID...
 
-=head2 get_friends_on_page( $friends_page );
+=head2 get_friends_on_page( $friends_page, $exclude );
 
 This routine takes the SOURCE CODE of an HTML page and returns
 a list of friendIDs for which there are profile
@@ -4989,19 +4970,31 @@ links on the page. This routine is used internally by "get_friends"
 to scan each of the user's "View my friends" pages.
 
 Notes:
- - It does not return our friendID.
- - friendIDs are filtered so they are unique (i.e. no duplicates).
+ - It does not return the logged_in user's friendID.
  - We filter out 6221, Tom's ID.
+ - friendIDs are returned in the order in which they appear on the change
+   (note that this is new in 0.62 - in previous versions they were returned
+   in an indetermined order)
+ 
+If $friends_page is not specified or is '', the current page will
+be used.
+
+$exclude is the number of a single friendID to exclude.  This is used by
+get_friends to exclude the friendID of the profile whose friends you're
+getting since Myspace displays a link to that person's profile on every
+page of his friend list, which would show up in the list returned by this
+method.
 
 EXAMPLE:
 
-List the friendIDs mentioned on Tom's profile:
+List the friendIDs mentioned on Tom's profile (i.e. his top 8, people who left
+comments, etc):
     
     use WWW::Myspace;
     my $myspace = new WWW::Myspace;
 
     $res = $myspace->get_profile( 6221 );
-    
+
     @friends = $myspace->get_friends_on_page( $res->content );
     print "These people have left comments or have links on Tom's page:\n";
     foreach $id ( @friends ) {
@@ -5012,6 +5005,32 @@ List the friendIDs mentioned on Tom's profile:
 
 sub get_friends_on_page {
 
+    my ( $page, $exclude ) = @_;
+
+    # Default to current page
+    unless ( $page ) { $page = $self->current_page->content }
+
+    my @friend_ids = ();
+
+    while ( $page =~ s/.*?${FRIEND_REGEXP}([0-9]+)//smi ) {
+        unless ( ( ( $self->logged_in ) &&
+                   ( "$1" == $self->my_friend_id )
+                 ) ||
+                 ( "$1" == 6221 ) ||
+                 ( ( $exclude ) && ( "$1" == $exclude ) )||
+                 ( @friend_ids && ( "$1" == $friend_ids[$#friend_ids] ) ) # Duplicate check
+                 ) {
+            push( @friend_ids, $1 );
+        }
+    }
+    
+    return ( @friend_ids );
+
+}
+
+# Original method - delete if all is working ok.
+sub _get_friends_on_page {
+
     my ( $page ) = @_;
 
     # Default to current page
@@ -5020,8 +5039,8 @@ sub get_friends_on_page {
     my %friend_ids = ();
     my $line;
     my @lines = split( "\n", $page );
-    $self->{_high_friend_id} = 0;
-    $self->{_low_friend_id} = 0;
+#    $self->{_high_friend_id} = 0;
+#    $self->{_low_friend_id} = 0;
     foreach $line ( @lines ) {
         if ( $line =~ /${FRIEND_REGEXP}([0-9]+)/ ) {
             unless ( ( ( $self->logged_in ) &&
@@ -5030,18 +5049,18 @@ sub get_friends_on_page {
                      ( "$1" == 6221 )
                    ) {
                 $friend_ids{"$1"}++;
-                
-                # The following are used to construct the URL
-                # when crawling the user's "view all my friends" pages.
-                # Set high friendID on this page
-                if ( $self->{_high_friend_id} < $1 ) {
-                    $self->{_high_friend_id} = $1;
-                }
-                # Set low friendID on this page
-                if ( ( $self->{_low_friend_id} == 0 ) ||
-                     ( $1 < $self->{_low_friend_id} ) ) {
-                    $self->{_low_friend_id} = $1;
-                }
+
+#                # The following are used to construct the URL
+#                # when crawling the user's "view all my friends" pages.
+#                # Set high friendID on this page
+#                if ( $self->{_high_friend_id} < $1 ) {
+#                    $self->{_high_friend_id} = $1;
+#                }
+#                # Set low friendID on this page
+#                if ( ( $self->{_low_friend_id} == 0 ) ||
+#                     ( $1 < $self->{_low_friend_id} ) ) {
+#                    $self->{_low_friend_id} = $1;
+#                }
             }
         }
     }
@@ -5362,7 +5381,7 @@ sub _next_button {
         $content = $self->current_page->content;
     }
 
-    $content =~ /">\s*Next\s*(<\/a>)?(\s|&nbsp;)+\&gt;/io;
+    $content =~ /">\s*Next\s*((<\/a>)?(\s|&nbsp;)+\&gt;|&rsaquo;\s*<\/a>)/io;
 
 }
 
@@ -5562,12 +5581,32 @@ Fix post_comment. Returns "FN" when it should return "FF".
 =head1 CONTRIBUTING
 
 If you would like to contribute to this module, you can email me
-and/or post patches at the RT bug links below. There are many methods that
+and/or post patches at the RT bug links below.  Please use the RT links/email
+address for pure requests or fixes.  There are many methods that
 could be added to this module (profile editing, for example). If you
 find yourself using the "submit_form" method, it probably means you
 should write whatever you're editing into a method and post it on RT.
 
-See the TODO section above for starters.
+See the TODO section above for starters, and be sure to read the next section
+about how to submit patches for features/fixes.
+
+=head1 HOW TO SUBMIT A PATCH
+
+To submit a patch for a new feature or a bug fix, please observe the following.
+Doing so will allow me to implement your patch quickly.  Not doing so may
+delay its implementation or prevent me from implementing your patch at all.
+
+ - Download the newest development version from SVN.
+   The command to use is here:
+   http://sourceforge.net/svn/?group_id=163042
+   (Or see http://sourceforge.net/projects/www-myspace)
+ - Apply your changes to that version.
+ - Create a unified or context diff of the changed file(s):
+   diff -u original_file.pm your_file.pm
+ - Email the output to C<bug-www-myspace at rt.cpan.org>, or go to the
+   CPAN RT web site (see below) and submit it there.
+
+I will apply your patch and run the tests on it.
 
 =head1 BUGS
 
@@ -5581,7 +5620,7 @@ IF YOU USE A MAIL SERVICE (or program) WITH JUNK MAIL FILTERING, especially
 HOTMAIL or YAHOO, add the bug reporting email address above to your address
 book so that you can receive status updates.
 
-Bug reports are nice, patches are nicer.
+Bug reports are nice, patches are nicer (see "HOW TO SUBMIT A PATCH" above).
 
 =head1 SUPPORT
 

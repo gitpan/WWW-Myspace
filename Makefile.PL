@@ -37,6 +37,7 @@ WriteMakefile(
         'Class::Factory::Util'  => 1.3, # Data.pm (prereq of above)
         'WWW::Mechanize'        => 1.20, # Myspace.pm
         'Time::Local'			=> 0, # Myspace.pm - last_login method
+        'Crypt::SSLeay'			=> 0.53, # WWW::Mechanize, for SSL access to myspace.com
     },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean               => { FILES => 'WWW-Myspace-*' },

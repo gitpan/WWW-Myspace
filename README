@@ -159,6 +159,23 @@ NOTE THAT acct2 MUST BE A PERSONAL (not a band) ACCOUNT, or the is_band
 test will fail, causing your tests to fail.
 
 
+HOW TO SUBMIT A PATCH
+
+To submit a patch for a new feature or a bug fix, please observe the following.
+Doing so will allow me to implement your patch quickly.  Not doing so may
+delay its implementation or prevent me from implementing your patch at all.
+
+ - Download the newest development version from SVN.
+   The command to use is here:
+   http://sourceforge.net/svn/?group_id=163042
+   (Or see http://sourceforge.net/projects/www-myspace)
+ - Apply your changes to that version.
+ - Create a unified or context diff of the changed file(s):
+   diff -u original_file.pm your_file.pm
+ - Email the output to C<bug-www-myspace at rt.cpan.org>, or go to the
+   CPAN RT web site (see below) and submit it there.
+
+I will apply your patch and run the tests on it.
 
 
 SUPPORT AND DOCUMENTATION
