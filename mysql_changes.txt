@@ -1,0 +1,15 @@
+/* Use this file to apply db changes without having to alter tables yourself etc
+The following change as of Data.pm version 0.07
+*/
+
+ALTER TABLE `friends` CHANGE `tagline` `tagline` VARCHAR( 255 ) NULL DEFAULT NULL;
+
+CREATE TABLE `tracking` (
+  `tracking_id` int(11) NOT NULL auto_increment,
+  `account_id` int(11) NOT NULL,
+  `date` date NOT NULL,
+  `friend_count` int(11) default NULL,
+  `comment_count` int(11) default NULL,
+  `profile_views` int(11) default NULL,
+  PRIMARY KEY  (`tracking_id`)
+);

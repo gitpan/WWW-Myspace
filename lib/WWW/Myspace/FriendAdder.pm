@@ -17,11 +17,16 @@ account
 
 =head1 VERSION
 
-Version 0.08
+Version 0.10
 
 =cut
 
-our $VERSION = '0.09';
+our $VERSION = '0.10';
+
+=head1 WARNING
+
+March 2007: Using WWW::Myspace for commenting, messaging, or adding
+friends will probably get your Myspace account deleted or disabled.
 
 =head1 SYNOPSIS
 
@@ -60,6 +65,7 @@ my %default_params = (
     db                  => { default => 0 },
     exclude_my_friends  => { default => 0 },
     exclude_logged_adds => { default => 0 },
+    firefox             => { optional => 1 },
     interactive         => { default => 1 }, # try to be silent
     last_login          => { default => 0 },
     max_count           => { default => 50 },
@@ -157,6 +163,76 @@ you run the script.  (I'm working on an SQL-related solution right now.
 Watch for it...)  If you have a lot of friends, keep in mind that this
 will mean some extra time before your script starts trying to add
 friends. Default is off.
+
+=item * C<< firefox => ["/path/to/firefox/bin +options"] >>
+
+"interactive" (see below) must be switched on for the "firefox" 
+parameter to be enabled.  Previously, the preferred method for
+dealing with CAPTCHA requests was to print out the URL to the terminal.
+You'd then copy/paste the URL into your web browser, fill out the 
+CAPTCHA request and then prompt the script to continue.  Things just
+got (marginally) easier.  I have only tested this on my Ubuntu (Edgy)
+machine, but it works really well.  It's a bit of a hack, but really
+most of this module is just that.
+
+In order for this to run smoothly, fire up your Firefox browser *before*
+running your FriendAdder script.  Log in to your Myspage page and then
+fire up the script in a terminal.  Now, when the CAPTCHA request
+appears, the CAPTCHA URL will automatically be loaded by Firefox.  Just
+switch over to Firefox, fill out the CAPTCHA request and then prompt the
+script to continue.  It cuts out one step in the process, but I've found 
+it to be very handy.  
+
+For example, in your script:
+
+=over 4
+
+Create your $myspace object like this:
+
+# Enter *exactly* the same UserAgent as the browser you'll be using
+
+my $user_agent = 'Mozilla/5.0...';
+
+my $myspace = WWW::Myspace->new ( 
+    auto_login   => 0, 
+    account_name => 'your@email.com', 
+    password     => 'seekrit', 
+);
+
+$myspace->mech_params({ agent => $user_agent, });
+
+$myspace->_new_mech;
+
+$myspace->site_login;
+
+# set up your startup params
+
+my %params = ( 
+    ... # whatever your params would otherwise be
+    firefox => "/usr/bin/firefox -new-tab ",
+);
+
+# create a new FriendAdder object
+
+my $adder = WWW::Myspace::FriendAdder->new($myspace, \%params);
+
+=back
+
+The advantage of doing things this way is that your $myspace UserAgent
+and your browser's reported UserAgent will be identical.  You can now
+let the script run in a terminal window and come back to it every so 
+often to deal with a CAPTCHA request. 
+
+Note that I've passed the "new-tab" option to the binary.  This tells
+Firefox to (naturally) open a new tab in an existing browser instance.
+You can try other options if you like.  Just make sure you're already
+logged in via your browser or you'll be kicked to a login page rather 
+than the CAPTCHA page and that sort of defeats the whole purpose of 
+the exercise.
+
+If you get  this to work on a non-Linux platform, please let me know 
+how to do it so I can add it to the docs. 
+
 
 =item * C<< interactive => [0|1] >>
 
@@ -384,6 +460,7 @@ sub send_friend_requests {
     
     my $skipped = 0;
     
+    FRIEND:
     foreach my $id (@potential_friends) {
         
         ++$count;
@@ -432,7 +509,7 @@ sub send_friend_requests {
                     $self->_sleep_now();
                 }
                 ++$skipped;
-                next;
+                next FRIEND;
             }
         }
         
@@ -444,7 +521,7 @@ sub send_friend_requests {
              $self->_report("$count)\t$id\tSkipping ");
              $self->_report("\tLast login $days days ago.");
              $self->_sleep_now();
-             next;
+             next FRIEND;
         }
         
         # send requests individually
@@ -459,8 +536,18 @@ sub send_friend_requests {
         if ( $self->{'data'} && $status_code eq 'FF' ) {
             $self->{'data'}->update_friend( $id );        
         }
+	if ( $status_code eq 'F' ) {
+
+            #open ("TEST", ">test.html");
+            #    my $mech = $self->{'myspace'}->mech;
+            #    print TEST $mech->content;
+            #close ("TEST");
+
+            #`$self->{'firefox'} test.html`;
+
+        }
         
-        if ( $status_code eq 'FC' ) {
+        elsif ( $status_code eq 'FC' ) {
 
             if ( $self->{'message_on_captcha'} ) {
 
@@ -488,7 +575,44 @@ sub send_friend_requests {
 
             }
 
-            else {
+            if ( $status_code eq 'FC' && $self->{'interactive'} ) {
+
+                if ( $self->{'firefox'} ) {
+
+                    print 'Please fill out the CAPTCHA response using the ';
+                    print 'page that has been opened in your Firefox browser';
+                    
+                    `$self->{'firefox'} "http://collect.myspace.com/index.cfm?fuseaction=invite.addfriend_verify&friendID=$id"`;
+                }
+                else {
+
+                    print 'CAPTCHA response.  Please fill in the form at ';
+                    print "the following url before continuing:\n\n";
+                    print 'http://collect.myspace.com/index.cfm?fuseaction';
+                    print "=invite.addfriend_verify&friendID=$id\n\n";
+
+                }
+
+                $continue = prompt "Continue? (y/n) ", -onechar, -yn;
+
+                if ($continue) {
+
+                    print "Continuing...\n";
+               	    ( $status_code, $status ) = $self->myspace->add_to_friends($id);
+
+                    # if the CAPTCHA response was correct, an "FP" will be returned
+                    ++$adds if ( $status_code eq 'P' || $status_code eq 'FP' );
+
+                }
+
+                else {
+                    print "Exiting nicely.  Wait for the report...\n";
+                    last;
+                }
+
+            }
+
+            elsif ( $self->{'interactive'} ) {
                 $continue = undef;
                 $self->_report("Exiting nicely...");
                 last;
@@ -802,11 +926,11 @@ L<http://search.cpan.org/dist/WWW-Myspace>
 =head1 ACKNOWLEDGEMENTS
 
 Many thanks to Grant Grueninger for giving birth to WWW::Myspace and for
-his help and advice in the development of this module.
+his help and advice in the development of this module.  
 
 =head1 COPYRIGHT & LICENSE
 
-Copyright 2006 Olaf Alders, all rights reserved.
+Copyright 2006-2007 Olaf Alders, all rights reserved.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.

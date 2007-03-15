@@ -7,6 +7,7 @@ use WWW::Myspace;
 my ( $friend_id ) = @ARGV;
 
 $myspace = new WWW::Myspace;
+die $myspace->error if $myspace->error;
 
 print "Getting inbox...\n";
 my $messages = $myspace->inbox;

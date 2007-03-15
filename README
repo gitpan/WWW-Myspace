@@ -1,5 +1,11 @@
 WWW::Myspace - Access MySpace.com from Perl scripts
 
+WARNING
+
+March 2007: Using WWW::Myspace for commenting, messaging, or adding
+friends will probably get your Myspace account deleted or disabled.
+
+
 WWW::Myspace.pm provides methods to access myspace.com accounts and functions
 automatically. It provides a simple interface for scripts to log in,
 access lists of friends, scan user's profiles, retreive profile

@@ -19,11 +19,11 @@ WWW::Myspace::Data - WWW::Myspace database interaction
 
 =head1 VERSION
 
-Version 0.06
+Version 0.07
 
 =cut
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 
 =head1 SYNOPSIS
 
@@ -156,17 +156,15 @@ default to YAML.
 
 =cut
 
-
 field 'myspace';
 
 my %default_params = (
-    config_file         => 0,
-    config_file_format  => { default => 'YAML' },
-    db                  => { type => HASHREF },
-    myspace             => 0,
-    time_zone           => 0,
+    config_file        => 0,
+    config_file_format => { default => 'YAML' },
+    db                 => { type => HASHREF },
+    myspace            => 0,
+    time_zone          => 0,
 );
-
 
 const default_options => \%default_params;
 
@@ -185,13 +183,12 @@ to create one.
 
 =cut
 
-
 sub loader {
 
     unless ( $self->{'loader'} ) {
         $self->_loader;
     }
-    
+
     return $self->{'loader'};
 
 }
@@ -226,33 +223,32 @@ sub set_account {
 
     my $account_name = shift;
     my $password     = shift;
-    
+
     croak "no db connection" unless ( $self->loader );
-    
+
     my $myspace = WWW::Myspace->new( $account_name, $password );
-    
+
     unless ( $myspace->logged_in ) {
         croak "Login failed using: $account_name / $password\n";
     }
-    
+
     $self->{'myspace'} = $myspace;
-    
-    my $account = $self->{'Accounts'}->find_or_create(
-        { account_name => $account_name, }
-    );
-        
-    $account->myspace_password( $password );
+
+    my $account =
+      $self->{'Accounts'}
+      ->find_or_create( { account_name => $account_name, } );
+
+    $account->myspace_password($password);
     $account->my_friend_id( $myspace->my_friend_id );
     my $update = $account->update;
-    
-    if ( $update ) {
+
+    if ($update) {
         $self->{'account_id'} = $account->account_id;
         return $account->account_id;
     }
     else {
         return 0;
     }
-    
 
 }
 
@@ -267,24 +263,25 @@ stuff, but it's available if you need it.
 sub get_account {
 
     my $myspace = $self->{'myspace'};
-    
+
     unless ( $self->{'account_id'} ) {
-    
-        my $account = $self->{'Accounts'}->retrieve( 
-            my_friend_id => $myspace->my_friend_id,
-        );
-        
+
+        my $account =
+          $self->{'Accounts'}
+          ->retrieve( my_friend_id => $myspace->my_friend_id, );
+
         # tweak this later to create an account automatically
         # rather than croaking
-        unless ( $account ) {
-            croak "this account does not exist.  call set_account to create it.\n";
+        unless ($account) {
+            croak
+"this account does not exist.  call set_account to create it.\n";
         }
-        
+
         $self->{'account_id'} = $account->account_id;
     }
-    
+
     return $self->{'account_id'};
-    
+
 }
 
 =head2 cache_friend( $friend_id )
@@ -302,101 +299,118 @@ can call this method.
 sub cache_friend {
 
     croak "no db connection" unless ( $self->loader );
-    
-    my $friend_id  = shift;
-    my $myspace    = $self->{'myspace'};
-    
-    croak 'friend_id required' unless $friend_id;    
-    
-    # manage profile in "friends" table
-    my $friend = $self->_find_or_create_friend( $friend_id );
+    my $page = $self->{'myspace'}->_validate_page_request( @_ );
 
-    my $res = $myspace->get_profile( $friend_id );
-    my $content = $res->content;
+    # page fetches are not always succesful.  opting to return here so that
+    # friend adding doesn't die on a large list. that's annoying...
+    if ( !$page ) {
+        warn "could not cache friend - no defined response object provided";
+        return;
+    }
+
+    my $myspace   = $self->{'myspace'};
+    my $friend_id = $myspace->_apply_regex(
+        regex => 'friend_id',
+        page  => $page,
+    );
     
-    my %profile = ( );
+    croak 'friend_id required' unless $friend_id;
+
+    # manage profile in "friends" table
+    my $friend = $self->_find_or_create_friend($friend_id);
     
+    my $content = $page->content;
+
+    my %profile = ();
+
     # first, do some generic tests
-    
+
     # myspace URL
-    if ( $content =~ /\<title\>[\s]*www.myspace\.com\/([\S]*)[\s]*\<\/title\>/ ) {
+    if ( $content =~
+        /\<title\>[\s]*www.myspace\.com\/([\S]*)[\s]*\<\/title\>/ )
+    {
         $profile{'url'} = $1;
     }
-    
+
     # myspace username
-    if ( $content =~ /index\.cfm\?fuseaction=user\&circuitaction\=viewProfile_commentForm\&friendID\=[0-9]+\&name\=([^\&]+)\&/ ) {
+    if ( $content =~
+/index\.cfm\?fuseaction=user\&circuitaction\=viewProfile_commentForm\&friendID\=[0-9]+\&name\=([^\&]+)\&/
+      )
+    {
         my $line = $1;
         $line =~ s/\+/ /g;
         $line =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
         $profile{'user_name'} = $line;
     }
-    
-    if ( $content =~ /ctl00_Main_ctl00_UserBasicInformation1_hlDefaultImage(.*?Last Login.*?)<br>/ms) {
-        
+
+    if ( $content =~
+/ctl00_Main_ctl00_UserBasicInformation1_hlDefaultImage(.*?Last Login.*?)<br>/ms
+      )
+    {
+
         # split the data on line breaks and evaluate it from there
         # band pages have more line breaks than personal pages
-        my @lines = split(/<br>/, $1);
-    
+        my @lines = split( /<br>/, $1 );
+
         my $size = @lines;
-        
+
         # personal profile
         if ( $size == 9 ) {
-        
-            $profile{'is_band'} = 'N';        
+
+            $profile{'is_band'} = 'N';
 
             if ( $content =~ />"(.*?)"</ms ) {
                 $profile{'tagline'} = $1;
             }
-            
+
             $profile{'sex'} = $lines[2];
             if ( $content =~ /(\d{1,}) years old/ ) {
                 $profile{'age'} = $1;
             }
-            
-            ($profile{'city'}, $profile{'region'}) = $self->_regex_city($lines[4]);
-            $profile{'country'} = $lines[5];
-            $profile{'last_login'} = $self->_regex_date($lines[8]);
-            
+
+            ( $profile{'city'}, $profile{'region'} ) =
+              $self->_regex_city( $lines[4] );
+            $profile{'country'}    = $lines[5];
+
         }
-        
+
         # band profile
         elsif ( $size == 11 ) {
-        
-            $profile{'is_band'} = 'Y';        
+
+            $profile{'is_band'} = 'Y';
 
             if ( $content =~ m/Member Since.*?(\d\d\/\d\d\/\d\d\d\d)/ ) {
                 $profile{'member_since'} = $self->_regex_date($1);
             }
-            
+
             if ( $lines[1] =~ /<strong>.*?"(.*?)".*?<\/strong>/ms ) {
                 $profile{'tagline'} = $1;
             }
-            
-            ($profile{'city'}, $profile{'region'}) = $self->_regex_city($lines[3]);
+
+            ( $profile{'city'}, $profile{'region'} ) =
+              $self->_regex_city( $lines[3] );
             $profile{'country'} = $lines[4];
-            
-            if ($lines[6] =~ /(\d{1,})/) {
+
+            if ( $lines[6] =~ /(\d{1,})/ ) {
                 $profile{'profile_views'} = $1;
             }
 
-            $profile{'last_login'} = $self->_regex_date($lines[10]);
-            
+           
+
         }
-    
+
+        $profile{'last_login'} = $self->{'myspace'}->last_login_ymd(
+            page => $page,
+        );
+        
         foreach my $key ( keys %profile ) {
             if ( $profile{$key} && $profile{$key} =~ /[0-9a-zA-Z]/ ) {
-                $profile{$key} =~ s/\t//g;          # remove tabs
-                $profile{$key} =~ s/^\s{1,}//g;     # remove leading whitespace
-                $profile{$key} =~ s/\s{1,}$//g;     # remove trailing whitespace
+                $profile{$key} =~ s/\t//g;        # remove tabs
+                $profile{$key} =~ s/^\s{1,}//g;   # remove leading whitespace
+                $profile{$key} =~ s/\s{1,}$//g;   # remove trailing whitespace
             }
         }
-        
-#         my $count = 0;
-#         foreach (@lines) {
-#             print "$count) $_\n";
-#             ++$count;
-#         } 
-        
+
     }
 
     foreach my $key ( keys %profile ) {
@@ -406,10 +420,66 @@ sub cache_friend {
     }
 
     $self->{'last_lookup_id'} = $friend_id;
-    
+
     $friend->last_update( $self->date_stamp );
     return $friend->update;
-        
+
+}
+
+=head2 track_friend
+
+Please note that this function requires an additional database table 
+("tracking") has been added to the mysql.txt as of version 0.07  The method 
+returns a Class::DBI object representing the row which has just been inserted.
+
+ EXAMPLE
+ 
+ my $tracking = $data->track_friend( friend_id => $friend_id );
+ 
+ OR
+ 
+ my $page = $myspace->get_profile( $friend_id );
+ my $tracking = $data->track_friend( page => $page );
+ 
+ print "views: " . $tracking->profile_views . "\n";
+ 
+ print "friends: " . $tracking->friend_count . "\n";
+ 
+ print "comments: " . $tracking->comment_count . "\n";
+
+=cut
+
+sub track_friend {
+
+    croak "no db connection" unless ( $self->loader );
+    my $page = $self->{'myspace'}->_validate_page_request( @_ );
+
+    my $myspace   = $self->{'myspace'};
+    my $friend_id = $myspace->_apply_regex(
+        regex => 'friend_id',
+        page  => $page,
+    );
+    
+    croak 'friend_id required' unless $friend_id;
+
+    my $account =
+      $self->{'Accounts'}->find_or_create( my_friend_id => $friend_id, );
+
+    my $dt = $self->date_stamp( { format => 'dt' } );
+
+    my $tracking = $self->{'Tracking'}->find_or_create(
+        account_id => $account->account_id,
+        date       => $dt->ymd,
+    );
+    
+    $tracking->profile_views( $myspace->profile_views( page => $page ) );
+    $tracking->friend_count(  $myspace->friend_count( $page ) );
+    $tracking->comment_count( $myspace->comment_count( page => $page ) );
+    
+    $tracking->update;
+
+    return $tracking;
+
 }
 
 =head2 update_friend( $friend_id )
@@ -433,7 +503,10 @@ updated.  (Returns Class::DBI return value for the update).
     
 Optional Parameters
 
-Optionally, using a hash reference as your second parameter, you may supply update_friend with "freshness" parameters, to ensure that updates are only performed on friend ids which have not been updated since some arbitrary time.  You would define expired data in the following way:
+Optionally, using a hash reference as your second parameter, you may supply 
+update_friend with "freshness" parameters, to ensure that updates are only 
+performed on friend ids which have not been updated since some arbitrary time.  
+You would define expired data in the following way:
 
 my %freshness = (
     days => 7,
@@ -442,7 +515,8 @@ my %freshness = (
 
 $data->update_friend( $friend_id, { freshness => \%freshness } );
 
-This would only update friend_ids which were updated more than 7.5 days ago.  Available parameters are:
+This would only update friend_ids which were updated more than 7.5 days ago.  
+Available parameters are:
 
 =over 4
 
@@ -458,46 +532,48 @@ This would only update friend_ids which were updated more than 7.5 days ago.  Av
 
 =back
 
-Each value should be an integer.  If you do not supply freshness criteria the default behaviour will be to update the friend regardless of last update time.
+Each value should be an integer.  If you do not supply freshness criteria the 
+default behaviour will be to update the friend regardless of last update time.
 
 =cut
 
 sub update_friend {
-    
-    croak "no db connection" unless ( $self->loader );
-    
-    validate_pos( @_, { type => SCALAR }, { type => HASHREF | UNDEF, optional => 1 } );
 
-    my $friend_id   = shift;
-    my $arg_ref     = shift;
-    my $myspace     = $self->{'myspace'};
-    my $account_id  = $self->get_account( );
-    
-    my $friend = $self->_find_or_create_friend( $friend_id );
-    
-    $self->_add_friend_to_account(
-        { friend_id => $friend_id, account_id => $account_id }
+    croak "no db connection" unless ( $self->loader );
+
+    validate_pos(
+        @_,
+        { type => SCALAR },
+        { type => HASHREF | UNDEF, optional => 1 }
     );
-        
+
+    my $friend_id  = shift;
+    my $arg_ref    = shift;
+    my $myspace    = $self->{'myspace'};
+    my $account_id = $self->get_account();
+
+    my $friend = $self->_find_or_create_friend($friend_id);
+
+    $self->_add_friend_to_account(
+        { friend_id => $friend_id, account_id => $account_id } );
+
     # if last_update is true, we may not need to update this record
     if ( $friend->last_update && $arg_ref->{'freshness'} ) {
-    
-        my $dt_update = DateTime::Format::MySQL->parse_datetime( 
-            $friend->last_update 
-        );
 
-        my $fresh = $self->_is_fresh( 
-            $dt_update, 
-            $self->_fresh_after( $arg_ref->{'freshness'} )
-        );
-        
+        my $dt_update =
+          DateTime::Format::MySQL->parse_datetime( $friend->last_update );
+
+        my $fresh =
+          $self->_is_fresh( $dt_update,
+            $self->_fresh_after( $arg_ref->{'freshness'} ) );
+
         # return without updating if data is fresh
         return 0 if $fresh > -1;
-        
+
     }
-    
+
     # cache profile in "friends" table
-    return $self->cache_friend( $friend_id );
+    return $self->cache_friend($friend_id);
 
 }
 
@@ -519,18 +595,17 @@ For more info on freshness parameters, see update_friend()
 =cut
 
 sub update_all_friends {
-    
+
     validate_pos( @_, { type => HASHREF, optional => 1 } );
     my $fresh_ref = shift;
-    
+
     my @friends = $self->{'myspace'}->get_friends;
-    
-    foreach my $friend_id ( @friends ) {
+
+    foreach my $friend_id (@friends) {
         $self->update_friend( $friend_id, $fresh_ref );
     }
 
 }
-
 
 =head2 date_stamp( )
 
@@ -557,6 +632,12 @@ current system time
         { time_zone => 'America/Toronto', epoch => time(), } 
     );
 
+=item * C<< format => 'dt' >>
+
+This option will cause the method to return the actual DateTime object
+rather than a string.  Can be handy if you just need a DateTime object and
+want it initialized with the proper time zone.
+
 =back
 
 =cut
@@ -564,24 +645,28 @@ current system time
 sub date_stamp {
 
     my $param_ref = shift;
-    
+
     my $dt = undef;
-    
+
     if ( $param_ref->{'epoch'} && $param_ref->{'epoch'} > 0 ) {
         $dt = DateTime->from_epoch( epoch => $param_ref->{'epoch'} );
     }
     else {
         $dt = DateTime->now;
     }
-    
+
     if ( $param_ref->{'time_zone'} ) {
         $dt->set_time_zone( $param_ref->{'time_zone'} );
     }
-    
+
     elsif ( $self->{'time_zone'} ) {
         $dt->set_time_zone( $self->{'time_zone'} );
     }
-    
+
+    if ( exists $param_ref->{format} && $param_ref->{'format'} eq 'dt' ) {
+        return $dt;
+    }
+
     return $dt->ymd . ' ' . $dt->hms;
 
 }
@@ -597,17 +682,17 @@ is_band function, cache the info and return the result.
 sub is_band {
 
     my $friend_id = shift;
-    
-    my $is_band = $self->is_band_from_cache( $friend_id );
-    
+
+    my $is_band = $self->is_band_from_cache($friend_id);
+
     # don't return on undef
     if ( defined $is_band ) {
         return $is_band;
     }
     else {
-        $self->cache_friend( $friend_id );
+        $self->cache_friend($friend_id);
         $self->{'last_lookup_id'} = $friend_id;
-        return $self->is_band_from_cache( $friend_id );
+        return $self->is_band_from_cache($friend_id);
     }
 
 }
@@ -623,19 +708,17 @@ id.
 sub is_band_from_cache {
 
     my $friend_id = shift;
-    
-    my $friend = $self->{'Friends'}->retrieve( 
-        friend_id => $friend_id,
-    );    
 
-    if ( $friend ) {
+    my $friend = $self->{'Friends'}->retrieve( friend_id => $friend_id, );
+
+    if ($friend) {
 
         if ( !$friend->is_band ) {
-        
+
             # if it's a NULL value, a proper lookup is needed
             return undef;
         }
-        elsif ( $friend->is_band eq 'Y') {
+        elsif ( $friend->is_band eq 'Y' ) {
             return 1;
         }
         elsif ( $friend->is_band eq 'N' ) {
@@ -690,7 +773,9 @@ default, no LIMIT is applied to queries.
 
 =item * C<< offset => $value >>
 
-Used for OFFSET argument in a query.  Must be used in tandem with the limit parameter.  Offset will set the amount of entries which should be skipped before returning values.  For example:
+Used for OFFSET argument in a query.  Must be used in tandem with the limit 
+parameter.  Offset will set the amount of entries which should be skipped 
+before returning values.  For example:
 
     # Only return 500 results, beginning after the first 10
     my @friend_ids = $data->friends_from_profile( { 
@@ -744,95 +829,94 @@ Here's how you might call this method using all available parameters:
 sub friends_from_profile {
 
     my $arg_ref = shift;
-    
-    my %args    = %{$arg_ref};    
-    my @params  = %args;
-    
-    my %params  = validate( @params,
-    {
-        friend_id => {
-            type        => SCALAR, 
-            optional    => 0, 
-        }, 
 
-        refresh  => {
-            type        => SCALAR, 
-            default     => 0, 
-            optional    => 1, 
-        }, 
-        
-        limit => {
-            type        => SCALAR, 
-            default     => 0, 
-            optional    => 1, 
-        },
+    my %args   = %{$arg_ref};
+    my @params = %args;
 
-        offset => {
-            type        => SCALAR, 
-            default     => 0, 
-            optional    => 1, 
-            depends => [ 'limit' ],
-        },
-                
-        order_column => {
-            type        => SCALAR,
-            default     => 'friend_id',
-            optional    => 1, 
-        },
-                
-        order_direction => {
-            type        => SCALAR,
-            default     => 'ASC',
-            optional    => 1,
-        },
-        
-    } );
-    
+    my %params = validate(
+        @params,
+        {
+            friend_id => {
+                type     => SCALAR,
+                optional => 0,
+            },
+
+            refresh => {
+                type     => SCALAR,
+                default  => 0,
+                optional => 1,
+            },
+
+            limit => {
+                type     => SCALAR,
+                default  => 0,
+                optional => 1,
+            },
+
+            offset => {
+                type     => SCALAR,
+                default  => 0,
+                optional => 1,
+                depends  => ['limit'],
+            },
+
+            order_column => {
+                type     => SCALAR,
+                default  => 'friend_id',
+                optional => 1,
+            },
+
+            order_direction => {
+                type     => SCALAR,
+                default  => 'ASC',
+                optional => 1,
+            },
+
+        }
+    );
+
     if ( $params{'offset'} && !$params{'limit'} ) {
         croak "You must supply a 'limit' param if you supply 'offset'";
     }
-    
+
     my $friend_id = $params{'friend_id'};
 
     # first check if the id exists in the accounts table
-    my $account = $self->{'Accounts'}->find_or_create( 
-        my_friend_id => $friend_id, 
-    );
+    my $account =
+      $self->{'Accounts'}->find_or_create( my_friend_id => $friend_id, );
 
     my $account_id = $account->account_id;
     $params{'account_id'} = $account_id;
-    
 
-    my @friend_ids = ( );
+    my @friend_ids = ();
 
     unless ( $arg_ref->{'refresh'} ) {
-    
+
         @friend_ids = $self->_friends_from_profile( \%params );
         return @friend_ids if @friend_ids;
 
     }
-    
-    # if nothing has been cached, we need to fetch the stuff "old school"    
-    my @lookup_ids = $self->{'myspace'}->friends_from_profile( 
-        id          => $friend_id,
-        max_count   => $arg_ref->{'limit'},
+
+    # if nothing has been cached, we need to fetch the stuff "old school"
+    my @lookup_ids = $self->{'myspace'}->friends_from_profile(
+        id        => $friend_id,
+        max_count => $arg_ref->{'limit'},
     );
-        
-    foreach my $id ( @lookup_ids ) {
-    
-        my $friend = $self->_find_or_create_friend( $id );
-    
-        my $friend_to_account = $self->_add_friend_to_account(
-            { friend_id => $id, account_id => $account_id }
-        ); 
-    
+
+    foreach my $id (@lookup_ids) {
+
+        my $friend = $self->_find_or_create_friend($id);
+
+        my $friend_to_account =
+          $self->_add_friend_to_account(
+            { friend_id => $id, account_id => $account_id } );
+
     }
-    
+
     @friend_ids = $self->_friends_from_profile( \%params );
     return @friend_ids;
 
 }
-
 
 =head2 get_last_lookup_id ( )
 
@@ -859,12 +943,10 @@ Returns 1 if this friend is in the database, 0 if not.
 sub is_cached {
 
     my $friend_id = shift;
-    
-    my $friend = $self->{'Friends'}->retrieve( 
-        friend_id => $friend_id,
-    ); 
 
-    if ( $friend ) {
+    my $friend = $self->{'Friends'}->retrieve( friend_id => $friend_id, );
+
+    if ($friend) {
         return 1;
     }
     else {
@@ -872,6 +954,7 @@ sub is_cached {
     }
 
 }
+
 =head2 _loader( )
 
 This is a private method, which creates a Class::DBI::Loader object,
@@ -882,48 +965,47 @@ object directly, use loader()
 =cut
 
 sub _loader {
- 
+
     my $options = {
-        RaiseError => 1, 
+        RaiseError => 1,
         AutoCommit => 0,
     };
-    
+
     #die Dumper($self);
-    
+
     my $loader = Class::DBI::Loader->new(
-        dsn                     => $self->{'db'}->{'dsn'},
-        user                    => $self->{'db'}->{'user'},
-        password                => $self->{'db'}->{'password'},
-        options                 => $options,
-        namespace               => 'WWW::Myspace::Data',
-        relationships           => 1,
-        options                 => { AutoCommit => 1 }, 
-        inflect                 => { child => 'children' },      
-        additional_classes      => qw/Class::DBI::AbstractSearch/,
-        
+        dsn                => $self->{'db'}->{'dsn'},
+        user               => $self->{'db'}->{'user'},
+        password           => $self->{'db'}->{'password'},
+        options            => $options,
+        namespace          => 'WWW::Myspace::Data',
+        relationships      => 1,
+        options            => { AutoCommit => 1 },
+        inflect            => { child => 'children' },
+        additional_classes => qw/Class::DBI::AbstractSearch/,
+
         #additional_base_classes => qw/My::Stuff/, # or arrayref
         #left_base_classes       => qw/Class::DBI::Sweet/, #
-        #constraint              => '^foo.*',    
+        #constraint              => '^foo.*',
     );
-  
+
     $self->{'loader'} = $loader;
 
     my @classes = $loader->classes;
 
     # each class is now represented in self
     foreach my $class (@classes) {
-        my @namespace = split(/::/, $class);
-        $self->{$namespace[-1]} = $class;
+        my @namespace = split( /::/, $class );
+        $self->{ $namespace[-1] } = $class;
     }
-    
-    unless ( $loader ) {
+
+    unless ($loader) {
         croak "could not make a database connection\n";
     }
-    
-    return $loader;
-    
-}
 
+    return $loader;
+
+}
 
 =head2 _die_pretty( )
 
@@ -936,9 +1018,9 @@ you get it out of the way it can be easier to debug set parameters.
 =cut
 
 sub _die_pretty {
- 
-     delete $self->{'myspace'};
-     die Dumper(\$self);
+
+    delete $self->{'myspace'};
+    die Dumper( \$self );
 }
 
 =head2 _add_friend_to_account ( { friend_id => $friend_id, account_id => $account_id } )
@@ -950,21 +1032,22 @@ Internal method.  Maps a friend to an account id in the db.
 sub _add_friend_to_account {
 
     my $param_ref = shift;
-    
-    croak 'friend_id required' unless $param_ref->{'friend_id'};
+
+    croak 'friend_id required'  unless $param_ref->{'friend_id'};
     croak 'account_id required' unless $param_ref->{'account_id'};
 
     # map friend to account in "friend_to_account" table
     my $account = $self->{'FriendToAccount'}->find_or_create(
-        {   friend_id  => $param_ref->{'friend_id'},
+        {
+            friend_id  => $param_ref->{'friend_id'},
             account_id => $param_ref->{'account_id'},
         }
     );
-    
-    if ( $account->friend_since eq '0000-00-00 00:00:00') {
+
+    if ( $account->friend_since eq '0000-00-00 00:00:00' ) {
         $account->friend_since( $self->date_stamp );
     }
-    
+
     return $account->update;
 
 }
@@ -979,11 +1062,9 @@ with any account.
 sub _find_or_create_friend {
 
     my $id = shift;
-    
-    my $friend = $self->{'Friends'}->find_or_create( 
-        { friend_id => $id, }
-    );
-    
+
+    my $friend = $self->{'Friends'}->find_or_create( { friend_id => $id, } );
+
     return $friend;
 
 }
@@ -996,36 +1077,37 @@ Internal method.  Checks db for cached friends.
 
 sub _friends_from_profile {
 
-    my $param_ref   = shift;
-    my %params      = %{$param_ref};
-    my @friend_ids  = ( );
-    my $order_col   = "$params{'order_column'} $params{'order_direction'}";
-    
+    my $param_ref  = shift;
+    my %params     = %{$param_ref};
+    my @friend_ids = ();
+    my $order_col  = "$params{'order_column'} $params{'order_direction'}";
+
     my $search_params = {
-        limit_dialect   =>  $self->{'FriendToAccount'},
-        order_by        =>  $order_col,
+        limit_dialect => $self->{'FriendToAccount'},
+        order_by      => $order_col,
     };
 
     foreach my $param ( 'limit', 'offset' ) {
-        if ( $params{ $param } ) {
-            $search_params->{ $param } = $params{ $param };
+        if ( $params{$param} ) {
+            $search_params->{$param} = $params{$param};
         }
     }
-    
-    my $iterator = $self->{'FriendToAccount'}->search_where( 
-        {   account_id => $params{'account_id'}   },
-        $search_params,
-    );
-        
-    while ( my $friend = $iterator->next) {
-    
-        push ( @friend_ids, $friend->friend_id );
-                
+
+    my $iterator =
+      $self->{'FriendToAccount'}
+      ->search_where( { account_id => $params{'account_id'} },
+        $search_params, );
+
+    while ( my $friend = $iterator->next ) {
+
+        push( @friend_ids, $friend->friend_id );
+
     }
-    
+
     return @friend_ids;
 
 }
+
 =head2 _fresh_after ( { days => $value } )
 
 Internal method.  Returns a DateTime object for time/data comparisons. 
@@ -1035,26 +1117,29 @@ See update_friend for arguments that _fresh_after takes.
 
 sub _fresh_after {
 
-    my $arg_ref     = shift;
-    
-    my %args        = %{$arg_ref};
-    my @params      = %args;
-    
-    my %params  = validate( @params, {
-        years       => { default => 0 },
-        months      => { default => 0 },
-        days        => { default => 0 },
-        hours       => { default => 0 },
-        minutes     => { default => 0 },
-        seconds     => { default => 0 },
-    });
-    
+    my $arg_ref = shift;
+
+    my %args   = %{$arg_ref};
+    my @params = %args;
+
+    my %params = validate(
+        @params,
+        {
+            years   => { default => 0 },
+            months  => { default => 0 },
+            days    => { default => 0 },
+            hours   => { default => 0 },
+            minutes => { default => 0 },
+            seconds => { default => 0 },
+        }
+    );
+
     my $dt = DateTime->now;
-    $dt->set_time_zone( $self->{'time_zone'} ) if ($self->{'time_zone'});
-    
+    $dt->set_time_zone( $self->{'time_zone'} ) if ( $self->{'time_zone'} );
+
     # get fresh-by date
-    $dt->subtract( %params );
-    
+    $dt->subtract(%params);
+
     return $dt;
 
 }
@@ -1072,8 +1157,8 @@ sub _is_fresh {
     # data is fresh if $dt_update is greater than $dt
     # that scenario retuns a 1
     validate_pos( @_, { isa => 'DateTime' }, { isa => 'DateTime' } );
-    
-    return DateTime->compare( @_ );
+
+    return DateTime->compare(@_);
 
 }
 
@@ -1087,15 +1172,15 @@ sub _regex_city {
 
     my $content = shift;
     my $region  = undef;
-    
-    my @city    = split(/,/, $content);
-    my $city    = shift @city;
-    
-    if ( @city ) {
-        $region = join(",", @city);
+
+    my @city = split( /,/, $content );
+    my $city = shift @city;
+
+    if (@city) {
+        $region = join( ",", @city );
     }
 
-    return ($city, $region);
+    return ( $city, $region );
 }
 
 =head2 _regex_date ( $content )
@@ -1107,9 +1192,9 @@ Internal method.  Regex to return last login time.
 sub _regex_date {
 
     my $content = shift;
-    
-    if ( $content =~ m/(\d\d)\/(\d\d)\/(\d\d\d\d)/ms ) {
-        return $3.'-'.$2.'-'.$1;
+
+    if ( $content =~ m/(\d{1,2})\/(\d{1,2})\/(\d\d\d\d)/ms ) {
+        return $3 . '-' . $2 . '-' . $1;
     }
 
 }
@@ -1188,7 +1273,7 @@ his help and advice in the development of this module.
 
 =head1 COPYRIGHT & LICENSE
 
-Copyright 2006 Olaf Alders, all rights reserved.
+Copyright 2006-2007 Olaf Alders, all rights reserved.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.

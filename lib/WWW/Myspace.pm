@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 311 2007-01-30 12:15:05Z grantg $
+# $Id: Myspace.pm 328 2007-03-12 04:05:24Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -38,33 +38,16 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.60
+Version 0.63
 
 =cut
 
-our $VERSION = '0.62';
+our $VERSION = '0.63';
 
 =head1 WARNING
 
-WARNING - DO NOT USE THIS MODULE FOR MASS MESSAGING OR COMMENTING.
-
-Myspace will cripple or disable your account:
-
-Older accounts:
-
-Messages will appear in your Sent folder but not in the receiver's
-inbox, although they'll be able to see it if they're paging through from
-another message.
-The receiver will get a "New Comments" notification and be able to see
-your comment, but it won't appear on the profile page.
-
-Newer accounts:
-
-If you created your myspace account in or after June 2006 (approximately),
-and you use a "bot" (including this module) to send messages, your message
-sending ability will be disabled and your account may be deleted. This
-is due to security features myspace has implemented to prevent spam
-abuse by people using multiple accounts.
+March 2007: Using WWW::Myspace for commenting, messaging, or adding
+friends will probably get your Myspace account deleted or disabled.
 
 =head1 SYNOPSIS
 
@@ -120,10 +103,6 @@ if ( defined $ENV{'HOME'} ) {
 
 # What's the URL for the user's Home page?
 our $HOME_PAGE="http://home.myspace.com/index.cfm?fuseaction=user";
-
-# What regexp should we look for to verify that we're logged in?
-# This is checked against the home page when we log in.
-our $VERIFY_HOME_PAGE = qr/Hello,.*My Mail.*You have.*friends/si;
 
 # What's the URL to the Browse page?
 our $BROWSE_PAGE = 'http://browseusers.myspace.com/browse/Browse.aspx';
@@ -562,7 +541,7 @@ sub site_login {
     $self->follow_to( $HOME_PAGE );
 
     # Verify we're logged in
-    if ( $self->current_page->content =~ $VERIFY_HOME_PAGE ) {
+    if ( $self->current_page->content =~ /Hello,.*My Mail.*You have.*friends/sio ) {
         $self->logged_in( 1 );
     } else {
         $self->logged_in( 0 );
@@ -853,7 +832,7 @@ sub current_page {
 =head2 mech
 
 The internal WWW::Mechanize object.  Use at your own risk: I don't
-promose this method will stay here or work the same in the future.
+promise this method will stay here or work the same in the future.
 The internal methods used to access Myspace are subject to change at
 any time, including using something different than WWW::Mechanize.
 
@@ -1265,6 +1244,11 @@ sub friend_count {
         if ( $page_source =~ /You have(\s|&nbsp;|<span>)*(<a [^>]+>)?([0-9]+)(<\/a>)?(<\/span>|\s|&nbsp;)*friends/o ) {
             $self->{friend_count} = $3;
         }
+        # has someone else's friend count been requested?  in this case, 
+        # return the value and don't stuff it into self
+        elsif ( $page_source =~ /has <span class="redbtext">(\d{1,})<\/span> friends\./ ){
+            return $1;
+        }
     }
     
     return $self->{friend_count};
@@ -1301,7 +1285,7 @@ sub last_login {
         $page = $self->current_page;
     }
 
-    if ( $page->content =~ /Last Login:(\s|&nbsp;)+([0-9]+)\/([0-9]+)\/([0-9]+)\s*<br>/o ) {
+    if ( $page && $page->content =~ /Last Login:(\s|&nbsp;)+([0-9]+)\/([0-9]+)\/([0-9]+)\s*<br>/o ) {
         # Convert to Perl's time format.
         eval { $time="" ; $time = timelocal( 0, 0, 0, $3, $2 - 1, $4 ); };
         # Return it.
@@ -1338,6 +1322,100 @@ sub get_profile {
     return $self->get_page( "${VIEW_PROFILE_URL}${friend_id}",
         $VERIFY_GET_PROFILE );
 
+}
+
+=head2 profile_views( friend_id => $friend_id || page => $page )
+
+Returns the listed number of Profile Views for a given friend_id.  This has
+only been tested on band profiles.  You can choose to pass either a friend_id
+OR a Myspace profile page in the form of a response object.  You may use
+the get_profile method or just fetch the page on your own use WWW::Mechanize or
+an object which provides a $obj->content method.
+
+ EXAMPLE
+ 
+ my $views = $myspace->profile_views( friend_id => $friend_id );
+ 
+ OR
+ 
+ my $page = $myspace->get_profile( $friend_id );
+ $myspace->profile_views( page => $page );
+
+=cut
+
+sub profile_views {
+
+    my $page = $self->_validate_page_request( @_ );
+     
+    if ( defined $page ) { 
+        my $content = $page->content;
+        $content =~ s/\n//g;
+        # Scan the page for band-specific RE (the music player plug-in).
+        if ( $content =~ /Profile\sViews:&nbsp;\s*(\d{1,})/igmsoxc ) {
+            return $1;
+        }
+    }
+    
+    return;
+}
+
+=head2 comment_count( friend_id => $friend_id || page => $page )
+
+Returns the listed number comments posted a given friend_id.  Behaves the same
+was as profile_views.  See profile_views for documentation on passing 
+parameters to this function.
+
+=cut
+
+sub comment_count {
+
+    my $page = $self->_validate_page_request( @_ );
+     
+    if ( defined $page ) { 
+        my $content = $page->content;
+        $content =~ s/\n//g;
+        # Scan the page for band-specific RE (the music player plug-in).
+        if ( $content =~ /Displaying<span class="redtext"> \d{1,} <\/span>of<span class="redtext"> (\d{1,}) <\/span>comments/ ) {
+            return $1;
+        }
+        else {
+            
+            print "can't find comment count" if $DEBUG;
+        }
+    }
+    
+    else {
+        print "page undefined" if $DEBUG;
+    }
+    return;
+}
+
+=head2 last_login_ymd ( friend_id => $friend_id || page => $page )
+
+Returns the "Last Login" date "posted a given friend_id in YMD format.  
+Behaves the same as profile_views.  See profile_views for documentation on 
+passing parameters to this function.
+
+=cut
+
+sub last_login_ymd {
+
+    my $page = $self->_validate_page_request( @_ );
+     
+    if ( defined $page ) { 
+        my $content = $page->content;
+        $content =~ s/\n//g;
+        # Band pages.
+        if ( $content =~ /Last\sLogin:&nbsp;\s*(\d{1,})\/(\d{1,})\/(\d{4})/igmsoxc ) {
+            return join("-", $3, $1, $2);
+        }
+        # Personal pages
+        elsif ( $content =~ /Last\sLogin:\s*(\d{1,})\/(\d{1,})\/(\d{4})/igmsoxc ) {
+            return join("-", $3, $1, $2);
+        }
+    }
+    
+    return;
 }
 
 =head2 get_comments( $friend_id )
@@ -1849,6 +1927,11 @@ sub _browse_action {
 
 =head2 cool_new_people( $country_code )
 
+NOTE: Myspace appears to have abandoned this method of posting "cool new 
+people" sometime around August of 2006.  However, the .js pages are still 
+posted, so this method will return a list of people.  However, they are not 
+new and maybe not even cool.  This method should be considered deprecated.
+
 This method provides you with a list of "cool new people".
 Currently Myspace saves the "cool new people" data
 to a JavaScript file which is named something like this: 
@@ -2126,9 +2209,15 @@ sub get_friends {
                      ( $page_no < $options{start_page} )
                    );
 
-        last unless $self->_next_button or
-            ( $options{end_page} && ( $page_no >= $options{end_page} ) ) or
-            ( $options{max_count} && ( $#friends >= $options{max_count} ) );
+        last unless $self->_next_button;
+
+        $page_no++;
+
+        return @friends
+          if ( $options{'end_page'} && ( $page_no > $options{'end_page'} ) );
+
+        return @friends
+          if ( $options{'max_count'} && ( $#friends >= $options{max_count} ) );
 
         $page_no++;
         $self->submit_form( {
@@ -3788,8 +3877,7 @@ sub send_friend_request {
     $page =~ s/[ \t\n\r]+/ /go;
 
     # Check for "doesn't accept band"
-    if ( ( $self->is_band ) && ( $page =~
-            /does not accept add requests from bands/io ) ) {
+    if ( $page =~ /does not accept add requests from bands/io ) {
         $return_code = 'FB';
     }
 
@@ -5381,7 +5469,7 @@ sub _next_button {
         $content = $self->current_page->content;
     }
 
-    $content =~ /">\s*Next\s*((<\/a>)?(\s|&nbsp;)+\&gt;|&rsaquo;\s*<\/a>)/io;
+    $content =~ /">\s*Next\s*((<\/a>)?(\s|&nbsp;)+(\&gt;|>)|&rsaquo;\s*<\/a>)/io;
 
 }
 
@@ -5477,6 +5565,79 @@ sub _go_home {
     
     return 1;
 
+}
+
+=head2 _validate_page_request
+
+A bit of parameter validation that has been factored out so that profile_views
+and comment_count can use the same validation.
+
+=cut 
+
+sub _validate_page_request {
+    
+    my %args = ( );
+    
+    # accept one lone parameter as an argument if it's a digit -- treat it as
+    # a friend_id to keep it in line with the rest of the app
+    
+    if ( scalar @_ == 1 ) {
+        my $friend_id = shift;
+        if ( $friend_id && $friend_id !~ /[^0-9]/ ) {
+            $args{'friend_id'} = $friend_id;
+        }
+        else {
+            croak "if passing one parameter, please pass a valid friend_id";
+        }
+    }
+    else {
+        %args = @_;
+    }
+    
+    my $page = undef;
+    
+    # If they gave a friend_id, we load the profile and look at it.
+    if ( exists $args{'page'} && defined $args{'page'}) {
+        $page = $args{'page'};
+    }     
+    elsif ( exists $args{'friend_id'} ) {
+        
+        # Get the profile page
+        my $res = $self->get_profile( $args{'friend_id'} );
+        $page = $res unless ( $self->error );
+    }
+    else {
+        die "You must provide either a friend_id or a response object";
+    }
+
+    return $page;
+}
+
+# let's use this to keep track of various regexes that can be used elswhere
+
+my %regex = (
+    friend_id => qr/fuseaction=user.viewPicture&amp;friendID=([0-9]+)/o,
+);
+
+sub _regex {
+    
+    my $requested = shift;
+    
+    if ( exists $regex{$requested} ) {
+        return $regex{$requested};
+    }
+}
+
+sub _apply_regex {
+    
+    my %args = @_;
+    
+    if ( exists $regex{$args{'regex'}} ) {
+        if ( $args{'page'}->content =~ $regex{$args{'regex'}} ) {
+            return $1;
+        }
+    }
+    
 }
 
 sub ____IN_PROGRESS____ {}

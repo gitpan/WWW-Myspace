@@ -1,5 +1,34 @@
 Revision history for WWW::Myspace
 
+0.63    2007-02-18
+		- Fixed an issue with the logic in Myspace::get_friends.  end_page 
+		  and max_count checks would only be reached once all of the friends
+		  pages had been spidered.  This was causing get_friends to pull 
+		  entire friend lists regardless of limiting parameters.
+		- Added note about cool_new_people being deprecated.
+		- Myspace::last_login now checks to see if $page is defined in order 
+		  to prevent dying on "can't call method on undefined value"
+		- Added Myspace::profile_views method
+		- Added Myspace::comment_count
+		- Added Myspace::_validate_page_request
+		- Added Myspace::Data::track_friend
+		- Updated mysql.txt with new table ("tracking")	
+		- Added new test 15-profile_views.t
+        - 'FB' error code once again being returned for accounts which
+           do not accept add requests from bands
+        - Added "firefox" parameter to Myspace::Data
+        - Added Myspace::last_login_ymd
+        - Fixed last_login bug in Myspace::Data::cache_friend
+        - Added private methods Myspace::_regex and Myspace::_apply_regex
+        - Added mysql_changes.txt to make keeping up with db schema changes easier
+        - Moved login verification regex into site_login method.
+        - get_inbox sample script now checks for login problems.
+        - Changed RE in _next_button to look for "Next >" as well as
+          "Next &gt;".  Yes, they're really using an un-escaped greater-than
+          sign...
+        - Updated warning at top of Myspace.pm, Comment.pm, Message.pm,
+          FriendAdder.pm, and README
+
 0.62    2007-01-30
         - Added date.patch to MANIFEST so it'll appear in the distribution.
         - Added "HOW TO SUBMIT A PATCH" instructions to Myspace.pm docs and

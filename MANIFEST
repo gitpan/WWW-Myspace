@@ -4,6 +4,7 @@ MANIFEST
 Makefile.PL
 README
 mysql.txt
+mysql_changes.txt
 date.patch
 lib/WWW/Myspace.pm
 lib/WWW/Myspace/Comment.pm
@@ -27,6 +28,8 @@ t/11-badlogin.t
 t/12-bulletin.t
 t/13-blog.t
 t/14-photos.t
+t/15-profile_views.t
+t/16-myspace.t
 t/99-enduser.t
 t/boilerplate.t
 t/pod-coverage.t

@@ -3,7 +3,7 @@
 -- http://www.phpmyadmin.net
 -- 
 -- Host: localhost
--- Generation Time: Jun 11, 2006 at 07:15 PM
+-- Generation Time: Mar 11, 2007 at 12:09 AM
 -- Server version: 5.0.15
 -- PHP Version: 5.0.4
 -- 
@@ -74,7 +74,7 @@ CREATE TABLE `friends` (
   `city` varchar(100) default NULL,
   `region` varchar(100) default NULL,
   `country` varchar(100) default NULL,
-  `tagline` varchar(100) default NULL,
+  `tagline` varchar(255) default NULL,
   `profile_views` int(11) default NULL,
   `member_since` date default NULL,
   `last_login` date default NULL,
@@ -111,4 +111,20 @@ CREATE TABLE `post_log` (
   `result_code` char(2) default NULL,
   `last_post` datetime NOT NULL COMMENT 'Last time this account sent this type of post to this friend',
   PRIMARY KEY  (`post_id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `tracking`
+-- 
+
+CREATE TABLE `tracking` (
+  `tracking_id` int(11) NOT NULL auto_increment,
+  `account_id` int(11) NOT NULL,
+  `date` date NOT NULL,
+  `friend_count` int(11) default NULL,
+  `comment_count` int(11) default NULL,
+  `profile_views` int(11) default NULL,
+  PRIMARY KEY  (`tracking_id`)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
