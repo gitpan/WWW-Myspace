@@ -13,3 +13,15 @@ CREATE TABLE `tracking` (
   `profile_views` int(11) default NULL,
   PRIMARY KEY  (`tracking_id`)
 );
+
+/*
+The following change as of Data.pm version 0.08
+*/
+
+CREATE TABLE `accept_log` (
+  `accept_id` int(11) NOT NULL auto_increment,
+  `account_id` int(11) NOT NULL,
+  `friend_id` int(11) NOT NULL,
+  `last_accept` datetime default NULL,
+  PRIMARY KEY  (`accept_id`)
+);

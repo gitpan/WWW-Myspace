@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 328 2007-03-12 04:05:24Z grantg $
+# $Id: Myspace.pm 343 2007-06-04 03:54:33Z oalders $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -38,11 +38,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.63
+Version 0.64
 
 =cut
 
-our $VERSION = '0.63';
+our $VERSION = '0.64';
 
 =head1 WARNING
 
@@ -237,6 +237,15 @@ our $FRIEND_REQUEST_POST = "http://mail.myspace.com/index.cfm?'.
 our $ADD_FRIEND_URL = 'http://collect.myspace.com/index.cfm?'.
             'fuseaction=invite.addfriend_verify&'.
             'friendID=';
+
+# let's use this to keep track of various regexes that can be used elsewhere
+
+my %regex = (
+    friend_id => qr/fuseaction=user.view\w{1,}&amp;friendID=([0-9]+)/o,
+    is_band    => qr/oas_ad\("www\.myspace\.com\/bandprofile,/io,
+    is_private => qr/(This profile is set to private\. This user must add you as a friend to see his\/her profile\.)/,
+    is_invalid => qr/(Invalid Friend ID.<br>This user has either cancelled their membership, or their account has been deleted.)/,
+);
 
 ######################################################################
 # Methods
@@ -538,10 +547,16 @@ sub site_login {
 
     # We probably have an ad or somesuch (started 1/7/2006)
     # so explicitly request our Home.
-    $self->follow_to( $HOME_PAGE );
-
+    # 2007-06-02 : an interim page will appear if requests come too fast
+    # a delay is almost certainly required to get the Home page
+#    if ($self->human) { sleep int(rand(5)) + 5; }
+    $self->follow_link(
+                url_regex => qr/fuseaction=user/i,
+                re=> 'SignOut'
+            );
+                
     # Verify we're logged in
-    if ( $self->current_page->content =~ /Hello,.*My Mail.*You have.*friends/sio ) {
+    if ( $self->current_page->content =~ /SignOut/sio ) {
         $self->logged_in( 1 );
     } else {
         $self->logged_in( 0 );
@@ -1029,7 +1044,7 @@ sub is_band {
         my $res = $self->get_profile( $friend_id );
         unless ( $self->error ) {
             # Scan the page for band-specific RE (the music player plug-in).
-            if ( $res->content =~ /oas_ad\("www\.myspace\.com\/bandprofile,/io ) {
+            if ( $res->content =~ $regex{'is_band'} ) {
                 return 1;
             } else {
                 return 0;
@@ -1056,6 +1071,77 @@ sub is_band {
         
     }
 
+}
+
+=head2 is_private( friend_id => $friend_id || page => $page )
+
+Returns true if we think the profile has been set to private.  You should note
+that you will get the most accurate results if you use this method while *not*
+logged in.  If you *are* logged in and you check the profile of someone who is
+your friend, you will never get a true response returned you, even if this
+person has their profile set to private.  There will be no warnings or errors
+if you call this method while logged in.  We trust you'll "do the right thing".
+
+You can choose to pass either a friend_id OR a Myspace profile page in the 
+form of a response object.  You may use the get_profile method or just fetch 
+the page on your own use WWW::Mechanize or an object which provides a 
+$obj->content method.
+
+Returns true (1) if profile is private.  Otherwise returns false (0).
+
+=cut
+
+sub is_private {
+
+    my $page = $self->_validate_page_request( @_ );
+     
+    if ( defined $page ) { 
+        
+        my $content = $page->content;
+        
+        my $private = $self->_apply_regex( 
+            page    => $page,
+            regex   => 'is_private',  
+        );
+        
+        return 1 if $private;
+    }
+    
+    return 0;
+}
+
+=head2 is_invalid( friend_id => $friend_id || page => $page )
+
+Returns true if we think the profile is invalid or disabled. 
+
+You can choose to pass either a friend_id OR a Myspace profile page in the 
+form of a response object.  You may use the get_profile method or just fetch 
+the page on your own use WWW::Mechanize or an object which provides a 
+$obj->content method.
+
+Returns true (1) if profile is invalid/disabled.  Otherwise returns false (0).
+
+=cut
+
+sub is_invalid {
+
+    my $page = $self->_validate_page_request( @_, no_validation => 1 );
+     
+    if ( defined $page ) { 
+        
+        print "page defined" if $DEBUG;
+        my $content = $page->content;
+        
+        my $private = $self->_apply_regex( 
+            page    => $page,
+            regex   => 'is_invalid',  
+        );
+        
+        print $page->content if $DEBUG;
+        return 1 if $private;
+    }
+    
+    return 0;
 }
 
 =head2 user_name
@@ -1193,7 +1279,7 @@ so you can do:
 
 sub friend_id { 
 
-	my ($friend_url) = @_;
+    my ($friend_url) = @_;
     my $page;
 
     if ( $friend_url ) {
@@ -1207,13 +1293,13 @@ sub friend_id {
         $page = $self->current_page;
     }
 
-	#Look for a RE that's near the top of the page that contains friendid
-	if ($page->content =~ /fuseaction=user.viewPicture&amp;friendID=([0-9]+)/o ) {
-		return $1;
-	}
-	else {
-		return "";
-	}
+    #Look for a RE that's near the top of the page that contains friendid
+    if (defined $page && $page->content =~ $regex{'friend_id'} ) {
+        return $1;
+    }
+    else {
+        return "";
+    }
 	
 }
 
@@ -1358,6 +1444,8 @@ sub profile_views {
     
     return;
 }
+
+
 
 =head2 comment_count( friend_id => $friend_id || page => $page )
 
@@ -2211,8 +2299,6 @@ sub get_friends {
 
         last unless $self->_next_button;
 
-        $page_no++;
-
         return @friends
           if ( $options{'end_page'} && ( $page_no > $options{'end_page'} ) );
 
@@ -2792,6 +2878,9 @@ sub post_comment {
         # This also takes care of possible literal "\n"s that come
         # from command-line arguments.
         $message =~ s/(\n|\\n)/\015\012/gos;
+        # Myspace bug fix:
+        $message .= "\n ";
+
         
         # If we have a friendID, load the profile
         if ( $friend_id ) {
@@ -3200,6 +3289,9 @@ sub read_message {
     # And they have these BR tags at the beginning of each line...
     $message{'body'} =~ s/^[ \t]*<br \/>[ \t]*//mog;
     
+    # And sometimes they put them elsewhere, so we'll convert those to newlines.
+    $message{'body'} =~ s/<br \/>/\n/mog;
+    
     return \%message;
 }
 
@@ -3496,6 +3588,8 @@ sub send_message {
     # (Note that \n does seem to work, but this "should" be safer, especially
     # against myspace changes and platform differences).
     $options{'message'} =~ s/(\n|\\n)/\015\012/gso;
+    # Myspace bug fix:
+    $options{'message'} .= "\n ";
     
     # Submit the message
     if ( $page =~ /ctl00\$ctl00\$Main\$Main\$sendMessageControl\$subjectTextBox/ ) {
@@ -4504,14 +4598,16 @@ sub get_page {
                 $res = $self->mech->get("$url", %headers);
 #        }
         $attempt++;
+        ( $DEBUG ) && print "    - Attempt No: $attempt\n";
         $self->_traceme("Attempt $attempt",$res);
+        sleep ( int( rand( 3 ) ) + 1 ) if $self->human;
 
     } until ( ( $self->_page_ok( $res, $regexp ) ) || ( $attempt >= $max_attempts ) );
 
     # We both set "current_page" and return the value.
 #    $self->_cache_page( $url, $res ) unless $self->error;
     $self->{current_page} = $res;
-    sleep ( int( rand( 5 ) ) + 6 ) if $self->human;
+    sleep ( int( rand( 2 ) ) + 5 ) if $self->human;
     if ( $self->error ) {
         return undef;
     } else {
@@ -5590,6 +5686,9 @@ sub _validate_page_request {
             croak "if passing one parameter, please pass a valid friend_id";
         }
     }
+    elsif ( scalar @_ == 0 ) {
+        $args{'page'} = $self->current_page;
+    }
     else {
         %args = @_;
     }
@@ -5603,8 +5702,16 @@ sub _validate_page_request {
     elsif ( exists $args{'friend_id'} ) {
         
         # Get the profile page
-        my $res = $self->get_profile( $args{'friend_id'} );
-        $page = $res unless ( $self->error );
+        # turn off validation if checking for an invalid profile as these
+        # won't pass the profile validation regex
+        if ( $args{'no_validation'} ) {
+            print "no validation\n" if $DEBUG;
+            $page = $self->get_page( "${VIEW_PROFILE_URL}$args{friend_id}" );
+        }
+        else {
+            my $res = $self->get_profile( $args{'friend_id'} );
+            $page = $res unless ( $self->error );
+        }
     }
     else {
         die "You must provide either a friend_id or a response object";
@@ -5612,12 +5719,6 @@ sub _validate_page_request {
 
     return $page;
 }
-
-# let's use this to keep track of various regexes that can be used elswhere
-
-my %regex = (
-    friend_id => qr/fuseaction=user.viewPicture&amp;friendID=([0-9]+)/o,
-);
 
 sub _regex {
     

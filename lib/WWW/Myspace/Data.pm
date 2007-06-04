@@ -19,11 +19,12 @@ WWW::Myspace::Data - WWW::Myspace database interaction
 
 =head1 VERSION
 
-Version 0.07
+Version 0.08
 
 =cut
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
+my $DEBUG = 0;
 
 =head1 SYNOPSIS
 
@@ -916,6 +917,91 @@ sub friends_from_profile {
     @friend_ids = $self->_friends_from_profile( \%params );
     return @friend_ids;
 
+}
+
+=head2 approve_friend_requests
+
+A wrapper around Myspace::approve_friend_requests.  Calls this method and
+then logs the friend requests which have been accepted.  Returns the list of
+friend_ids which have been approved.
+
+=cut
+
+sub approve_friend_requests {
+    
+    my @friend_ids = $self->{'myspace'}->approve_friend_requests( @_ );
+    my $account_id = $self->get_account();
+    
+    #my @friend_ids = ( 1 );
+    
+    foreach my $friend_id ( @friend_ids ) {
+        my $insert = WWW::Myspace::Data::AcceptLog->insert( {
+            account_id      => $account_id,
+            friend_id       => $friend_id,
+            last_accept     => $self->date_stamp,
+        } );
+        
+        print Dumper $insert if $DEBUG;
+    }
+        
+    return @friend_ids;
+    
+}
+
+=head2 post_comment
+
+A wrapper around Myspace::post_comment.  Calls this method and
+then logs the comment details.  Returns the return value of 
+Myspace::post_comment
+
+=cut
+
+sub post_comment {
+    
+    my $status      = $self->{'myspace'}->post_comment( @_ );
+    my $friend_id   = shift;
+    my $account_id  = $self->get_account();
+    
+    my $insert = WWW::Myspace::Data::CommentLog->insert( {
+        account_id      => $account_id,
+        friend_id       => $friend_id,
+        result_code     => $status,
+        last_comment    => $self->date_stamp,
+    } );
+        
+    print Dumper $insert if $DEBUG;
+        
+    return $status;
+    
+}
+
+=head2 send_message( %options )
+
+A wrapper around Myspace::send_message.  Calls this method and
+then logs the message details.  Returns the return value of 
+Myspace::send_message  This method accepts the %options hash -- not the 
+positional parameters.
+
+=cut
+
+sub send_message {
+    
+    my $status = $self->{'myspace'}->send_message( @_ );
+    my $account_id = $self->get_account();
+    
+    my %args = @_;
+    
+    my $insert = WWW::Myspace::Data::MessageLog->insert( {
+        account_id      => $account_id,
+        friend_id       => $args{'friend_id'},
+        result_code     => $status,
+        last_message    => $self->date_stamp,
+    } );
+        
+    print Dumper $insert if $DEBUG;
+        
+    return $status;
+    
 }
 
 =head2 get_last_lookup_id ( )

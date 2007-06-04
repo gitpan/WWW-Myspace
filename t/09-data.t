@@ -1,6 +1,6 @@
 #!perl -T
 
-use Test::More tests => 11;
+use Test::More tests => 14;
 #use Test::More 'no_plan';
 use strict;
 use Data::Dumper;
@@ -14,6 +14,9 @@ use WWW::Myspace::Data;
 my $data = WWW::Myspace::Data->new();
  
 isa_ok($data, 'WWW::Myspace::Data');
+can_ok( $data, 'approve_friend_requests');
+can_ok( $data, 'post_comment');
+can_ok( $data, 'send_message');
 
 my $dt1 = $data->_fresh_after({ hours => 1});
 isa_ok($dt1, 'DateTime');

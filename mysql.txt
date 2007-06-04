@@ -2,13 +2,27 @@
 -- version 2.7.0-pl1
 -- http://www.phpmyadmin.net
 -- 
--- Host: localhost
--- Generation Time: Mar 11, 2007 at 12:09 AM
--- Server version: 5.0.15
+-- Host: 10.0.1.3
+-- Generation Time: Apr 02, 2007 at 12:17 AM
+-- Server version: 5.0.24
 -- PHP Version: 5.0.4
 -- 
 -- Database: `Friends`
 -- 
+
+-- --------------------------------------------------------
+
+-- 
+-- Table structure for table `accept_log`
+-- 
+
+CREATE TABLE `accept_log` (
+  `accept_id` int(11) NOT NULL auto_increment,
+  `account_id` int(11) NOT NULL,
+  `friend_id` int(11) NOT NULL,
+  `last_accept` datetime default NULL,
+  PRIMARY KEY  (`accept_id`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -22,7 +36,7 @@ CREATE TABLE `accounts` (
   `myspace_password` varchar(20) default NULL,
   `my_friend_id` int(11) NOT NULL,
   PRIMARY KEY  (`account_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=MyISAM AUTO_INCREMENT=55 DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -37,7 +51,7 @@ CREATE TABLE `comment_log` (
   `result_code` char(2) default NULL,
   `last_comment` datetime NOT NULL COMMENT 'Last time this account left this friend a comment',
   PRIMARY KEY  (`comment_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=MyISAM AUTO_INCREMENT=624 DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -52,7 +66,7 @@ CREATE TABLE `friend_to_account` (
   `friend_since` datetime NOT NULL,
   PRIMARY KEY  (`friend_to_account_id`),
   UNIQUE KEY `friend_id` (`friend_id`,`account_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=MyISAM AUTO_INCREMENT=174803 DEFAULT CHARSET=latin1;
 
 -- --------------------------------------------------------
 
@@ -74,7 +88,7 @@ CREATE TABLE `friends` (
   `city` varchar(100) default NULL,
   `region` varchar(100) default NULL,
   `country` varchar(100) default NULL,
-  `tagline` varchar(255) default NULL,
+  `tagline` varchar(100) default NULL,
   `profile_views` int(11) default NULL,
   `member_since` date default NULL,
   `last_login` date default NULL,
@@ -111,20 +125,4 @@ CREATE TABLE `post_log` (
   `result_code` char(2) default NULL,
   `last_post` datetime NOT NULL COMMENT 'Last time this account sent this type of post to this friend',
   PRIMARY KEY  (`post_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
-
--- --------------------------------------------------------
-
--- 
--- Table structure for table `tracking`
--- 
-
-CREATE TABLE `tracking` (
-  `tracking_id` int(11) NOT NULL auto_increment,
-  `account_id` int(11) NOT NULL,
-  `date` date NOT NULL,
-  `friend_count` int(11) default NULL,
-  `comment_count` int(11) default NULL,
-  `profile_views` int(11) default NULL,
-  PRIMARY KEY  (`tracking_id`)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+) ENGINE=MyISAM AUTO_INCREMENT=73189 DEFAULT CHARSET=latin1;

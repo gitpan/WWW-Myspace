@@ -1,5 +1,6 @@
 #!perl -T
 
+use Data::Dumper;
 use Test::More tests => 19;
 #use Test::More 'no_plan';
 
@@ -22,6 +23,13 @@ my $myspace = $CONFIG->{'acct1'}->{'myspace'};
 my $myspace2 = $CONFIG->{'acct2'}->{'myspace'};
 
 ok( ref $myspace, 'Create myspace object' );
+
+
+# Test is_band
+is( $myspace->is_band( 30204716 ), 1,
+	"is_band identifies band profile correctly" );
+is( $myspace->is_band( $CONFIG->{'acct2'}->{'friend_id'} ), 0,
+	"is_band identifies 3rd party non-band profile correctly" );
 
 SKIP: {
 	skip "Not logged in", 7 unless $CONFIG->{login};
@@ -79,9 +87,12 @@ SKIP: {
 		}
 	}
 	
+	@friends = sort @friends;
 	# The friends and other_friends lists should be identical.
 	# So first test the length
 	is( @other_friends, @friends, 'Check friends_from_profile friend count');
+	#diag( Dumper \@other_friends);
+	#diag( Dumper \@friends);
 
 
 	# Now check the elements
@@ -127,12 +138,6 @@ SKIP: {
 		"is_band identifies logged-in non-band profile correctly" );
 
 }
-
-# Test is_band
-is( $myspace->is_band( 30204716 ), 1,
-	"is_band identifies band profile correctly" );
-is( $myspace->is_band( $CONFIG->{'acct2'}->{'friend_id'} ), 0,
-	"is_band identifies 3rd party non-band profile correctly" );
 
 # Test friend_id method
 # 1. Check friend_id is returned when passed a link directly to the profile (eg. myspace.com/<friend_id>)
