@@ -23,12 +23,17 @@ Example:
 
 PREREQUESITES
 
+    (Makefile.PL will always have the the current list. This was copied from there Jun 6, 2007)
+
+        'Test::More' => 0,
         'Spiffy' => 0.24,
         'YAML' => 0.39,
         'File::Spec::Functions' => 0, # Note: Forces File::Spec 0.7 or later.
         'Contextual::Return'    => 0, # For send_friend_request method
+        'Class::DBI::AbstractSearch' => 0, # FriendAdder.pm
         'Config::General'       => 0, # FriendAdder.pm
-        'IO::Prompt'            => 0, # For FriendAdder.pm 
+        'DateTime'              => 0, # FriendAdder.pm
+        'IO::Prompt'            => 0, # FriendAdder.pm 
         'List::Compare'         => 0, # FriendAdder.pm
         'Locale::SubCountry'    => 0, # FriendAdder.pm, cool_new_people
         'Math::Round'           => 0, # FriendAdder.pm
@@ -36,13 +41,16 @@ PREREQUESITES
         'Scalar::Util'          => 0, # FriendAdder.pm
         'Class::DBI'            => 0, # Data.pm
         'Class::DBI::Loader'    => 0, # Data.pm
-        'WWW::Mechanize'        => 0,
+        'DateTime::Format::MySQL'   => 0, # Data.pm
+        'Class::Factory::Util'  => 1.3, # Data.pm (prereq of above)
+        'WWW::Mechanize'        => 1.20, # Myspace.pm
+        'Time::Local'           => 0, # Myspace.pm - last_login method
+        'Crypt::SSLeay'         => 0.53, # WWW::Mechanize, for SSL access to myspace.com
 
 
 Each of them has a list of dependencies also.
 
-If you don't have XML::Parser installed,
-you may need to manually install expat:
+If you don't have XML::Parser installed, you may need to manually install expat:
 http://sourceforge.net/projects/expat/
 Just try installing and if the install fails look through the messages
 and see if it says you need expat.
@@ -143,7 +151,7 @@ acct1:
   friend_id: 12345
   username: myspace_login_email_address
   password: myspace_login_password
-  user_name: Username # (as it appears in "Hello, username" when you log in.)
+  user_name: Username (as it appears in "Hello, Username" when you log in.)
 acct2:
   friend_id: 
   username: 
@@ -178,7 +186,7 @@ delay its implementation or prevent me from implementing your patch at all.
  - Apply your changes to that version.
  - Create a unified or context diff of the changed file(s):
    diff -u original_file.pm your_file.pm
- - Email the output to C<bug-www-myspace at rt.cpan.org>, or go to the
+ - Email the output to bug-www-myspace at rt.cpan.org, or go to the
    CPAN RT web site (see below) and submit it there.
 
 I will apply your patch and run the tests on it.

@@ -19,11 +19,11 @@ WWW::Myspace::Data - WWW::Myspace database interaction
 
 =head1 VERSION
 
-Version 0.08
+Version 0.10
 
 =cut
 
-our $VERSION = '0.08';
+our $VERSION = '0.10';
 my $DEBUG = 0;
 
 =head1 SYNOPSIS
@@ -430,7 +430,7 @@ sub cache_friend {
 =head2 track_friend
 
 Please note that this function requires an additional database table 
-("tracking") has been added to the mysql.txt as of version 0.07  The method 
+("tracking") that has been added to the mysql.txt as of version 0.07.  The method 
 returns a Class::DBI object representing the row which has just been inserted.
 
  EXAMPLE
@@ -1300,12 +1300,59 @@ You may also use a utility like phpMyAdmin to import this file as SQL.
 Keep in mind that the schema hasn't been 100% finalized and is subject
 to change.
 
+=head2 DEPENDENCIES
+
+This module may have varying dependencies, depending on which database server
+you opt to use (MySQL, SQLite etc).  For this reason, you may need to install
+modules additional modules which were included with the default install.  
+
+For example, if you are using MySQL, you will need to install the following 
+modules if they are not already on your system:
+
+=over 4
+
+L<DBD::mysql>
+
+L<Class::DBI::mysql>
+
+=back
+
+SQLite will require:
+
+=over 4
+
+L<DBD::SQLite>
+
+L<Class::DBI::SQLite>
+
+=back
+
+Postgres (untested) will require:
+
+=over 4
+
+L<Class::DBI::Pg>
+
+L<DBD::Pg>
+
+=back
 
 =head1 AUTHOR
 
 Olaf Alders, C<< <olaf at wundersolutions.com> >>
 
 =head1 BUGS
+
+The following L<Class::DBI> issue has been reported:
+
+=over 4
+
+I had to manually downgrade DBD::SQLite from version 1.13
+to 1.12 in order to make Class::DBI work (would otherwise return:
+"DBD::SQLite::st fetchrow_array warning"). For more details on this see
+L<http://lists.digitalcraftsmen.net/pipermail/classdbi/2007-January/001480.html>
+
+=back
 
 Please report any bugs or feature requests to C<bug-www-myspace at
 rt.cpan.org>, or through the web interface at
@@ -1315,14 +1362,28 @@ bug as I make changes.
 
 =head1 NOTES
 
-This module is still in its infancy.  It does a lot of cool stuff, but
-the interface is still subject to change.  Please keep this in mind when
-upgrading
+This module has been stable for some time.  Myspace, however, is not.  The 
+code does a lot of cool stuff, but the database schema is subject to change.  
+Database changes will be tracked in the "mysql_changes.txt" file, which is 
+included in the distribution.  Please keep this in mind when upgrading.
 
 =head1 TO DO
 
-This module is in developer mode.  We still need to finalize a database
-schema and integrate it fully with the other WWW::Myspace modules.
+This module provides a wrapper around many, but by no means all of the 
+WWW::Myspace functions.  I've written it to suit my own needs.  If it does not
+suit all of yours, patches are very welcome.
+
+These scripts have been tested on Mac and Ubuntu platforms, running MySQL.  I
+have no idea how these modules perform on other systems or with other 
+databases, but I'm happy to work with you if you need to solve issues related
+to this.
+
+=head1 HOW TO SUBMIT A PATCH
+
+Please see the HOW TO SUBMIT A PATCH section of L<WWW::Myspace> for a quick
+set of instructions on how to get your patch included in a coming 
+distribution.
+
 
 =head1 SUPPORT
 

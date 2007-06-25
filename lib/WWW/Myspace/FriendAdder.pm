@@ -17,11 +17,11 @@ account
 
 =head1 VERSION
 
-Version 0.10
+Version 0.11
 
 =cut
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 =head1 WARNING
 
@@ -841,7 +841,7 @@ sub _sleep_now {
     my $sleep_now = $self->{'sleep'};
 
     if ( $self->{'random_sleep'} ) {
-        $sleep_now = nearest( .01, rand($self->{'sleep'}) );
+        $sleep_now = int( rand( $self->{'sleep'} ) );
     }
 
     $self->_report("\n\t\t\t");
@@ -878,22 +878,23 @@ Please report any bugs or feature requests to
 C<bug-www-myspace at rt.cpan.org>, or through the web interface at
 L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=WWW-Myspace>.
 I will be notified, and then you'll automatically be notified of
-progress on
-your bug as I make changes.
+progress on your bug as I make changes.
 
 =head1 NOTES
 
-This module is still in its infancy.  It does a lot of cool stuff, but
-the interface is still subject to change.  Please keep this in mind when
-upgrading
+This module has been stable for some time.  Myspace, however, is not.  I've 
+written this code to suit my own needs.  If it does not suit all of yours, 
+patches are very welcome.
+
+=head1 HOW TO SUBMIT A PATCH
+
+Please see the HOW TO SUBMIT A PATCH section of L<WWW::Myspace> for a quick
+set of instructions on how to get your patch included in a coming 
+distribution.
 
 =head1 TO DO
 
-Caching features
-
-Blocking friend requests to ids that are already pending
-
-Tighten up accessor/mutator functions for this module
+Implement a sleep_on_captcha feature.
 
 =head1 SUPPORT
 

@@ -1,39 +1,74 @@
 Revision history for WWW::Myspace
 
-0.64    2007-03-31
-		- Tweaked friend_id regex that FriendAdder uses
-		- Added Myspace::is_private method
-		- Added Myspace::is_invalid method
-		- Added Myspace::Data::post_comment method
-		- Added Myspace::Data::approve_friend_requests method
-		- Added Myspace::Data::send_message method
-		- Myspace::_validate_page_request defaults to $self->current_page if
-		  no parameters are passed
-		- Fixed bug in get_friends that caused it to return every other
-		  page of friends.
-		- Applied patch from RT issue #27381 (thanks Mike)
-		- Applied patch from RT issue #27390 (thanks Mike)
-		- Updated patch to use "SignOut" RE when loading home page to force
-		  more robust checking.
-		- Updated follow_to link to use internal get_page method instead of
-		  mech object.
-		- Updated get_page: split random delay so that there will be a delay
-		  when retrying a failed URL.
+0.65    2007-06-25
+        - KNOWN ISSUES IN THIS RELEASE:
+          - Myspace just made changes that break send_message and post_comment.
+             0.65 was released because it fixes a change to the login form.
+        - Fixed 0.64 release date in Changes file
+        - Changed Myspace.pm to use "decoded_content" method of HTTP::Request
+          instead of "content" method so that charsets are properly decoded
+          when checking regexps, among other things.  See RT issue #27453.
+        - Added note in Myspace::Data about Class::DBI bug as noted in 
+          RT issue #27453
+        - changed regex for is_logged_in to look for a logout URL rather
+          than logout text (this should help for pages in languages
+          other than English)
+        - Updated debug statement in Message and Comment to use decoded_content
+          for consistency.
+        - Updated information in README:
+            Prerequesites
+            Config "Username" info (removed "#" that YAML isn't treating as a comment)
+            Other misc fixes.
+        - De-tabbed "Changes" and "README" files (converted tabs to 4 spaces).
+        - is_private and is_invalid now return "undef" instead of "0" if an error
+          is encountered.
+        - Added example use to documentation for is_private and is_invalid.
+        - Added max_get_attempts and max_post_attempts options and accessors
+          to allow control over the number of times a certain page retrieval
+          or form post is attempted.
+        - Minor internal changes to centralize language handling for possible
+          future internationalization.
+        - Removed table info which may be MySQL-specific from mysql.txt
+        - Updated docs for Myspace::FriendAdder and Myspace::Data
+        - Changed WWW::FriendAdder::_sleep_now to report sleeps in integer
+          seconds
+        - Updated is_band regex
+        - Applied fix from RT issue #27706 to fix login form.
+
+0.64    2007-06-03
+        - Tweaked friend_id regex that FriendAdder uses
+        - Added Myspace::is_private method
+        - Added Myspace::is_invalid method
+        - Added Myspace::Data::post_comment method
+        - Added Myspace::Data::approve_friend_requests method
+        - Added Myspace::Data::send_message method
+        - Myspace::_validate_page_request defaults to $self->current_page if
+          no parameters are passed
+        - Fixed bug in get_friends that caused it to return every other
+          page of friends.
+        - Applied patch from RT issue #27381 (thanks Mike)
+        - Applied patch from RT issue #27390 (thanks Mike)
+        - Updated patch to use "SignOut" RE when loading home page to force
+          more robust checking.
+        - Updated follow_to link to use internal get_page method instead of
+          mech object.
+        - Updated get_page: split random delay so that there will be a delay
+          when retrying a failed URL.
 
 0.63    2007-02-18
-		- Fixed an issue with the logic in Myspace::get_friends.  end_page 
-		  and max_count checks would only be reached once all of the friends
-		  pages had been spidered.  This was causing get_friends to pull 
-		  entire friend lists regardless of limiting parameters.
-		- Added note about cool_new_people being deprecated.
-		- Myspace::last_login now checks to see if $page is defined in order 
-		  to prevent dying on "can't call method on undefined value"
-		- Added Myspace::profile_views method
-		- Added Myspace::comment_count
-		- Added Myspace::_validate_page_request
-		- Added Myspace::Data::track_friend
-		- Updated mysql.txt with new table ("tracking")	
-		- Added new test 15-profile_views.t
+        - Fixed an issue with the logic in Myspace::get_friends.  end_page 
+          and max_count checks would only be reached once all of the friends
+          pages had been spidered.  This was causing get_friends to pull 
+          entire friend lists regardless of limiting parameters.
+        - Added note about cool_new_people being deprecated.
+        - Myspace::last_login now checks to see if $page is defined in order 
+          to prevent dying on "can't call method on undefined value"
+        - Added Myspace::profile_views method
+        - Added Myspace::comment_count
+        - Added Myspace::_validate_page_request
+        - Added Myspace::Data::track_friend
+        - Updated mysql.txt with new table ("tracking") 
+        - Added new test 15-profile_views.t
         - 'FB' error code once again being returned for accounts which
            do not accept add requests from bands
         - Added "firefox" parameter to Myspace::Data

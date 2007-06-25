@@ -1,4 +1,4 @@
-# $Id: Message.pm 328 2007-03-12 04:05:24Z grantg $
+# $Id: Message.pm 346 2007-06-06 03:39:09Z grantg $
 
 package WWW::Myspace::Message;
 
@@ -17,7 +17,7 @@ Version 0.16
 
 =cut
 
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 
 =head1 WARNING
 
@@ -510,7 +510,7 @@ sub send_message {
 						if ( $self->html ) { print "<br>" }
 						print "\n";
 						( $DEBUG ) && print "\n\n" . $myspace->current_page->status_line .
-							"\n" . $myspace->current_page->content . "\n\n";
+							"\n" . $myspace->current_page->decoded_content . "\n\n";
 					}
 				}
 				
