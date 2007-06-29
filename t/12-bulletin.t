@@ -20,7 +20,7 @@ SKIP: {
 	
 	if ( $myspace->error ) {
 		warn $myspace->error . "\n";
-		warn "\n\n".$myspace->current_page->content;
+#		warn "\n\n".$myspace->current_page->content;
 	}
 	
 	ok( $result, "post_bulletin returns positive success code" );

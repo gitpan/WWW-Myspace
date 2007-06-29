@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 360 2007-06-25 19:05:11Z grantg $
+# $Id: Myspace.pm 364 2007-06-29 22:34:55Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -42,7 +42,7 @@ Version 0.65
 
 =cut
 
-our $VERSION = '0.65';
+our $VERSION = '0.66';
 
 =head1 WARNING
 
@@ -143,11 +143,6 @@ our $CAPTCHAi = qr/$CAPTCHA/io;   # ok, we will store both ways
 our $CAPTCHAs = qr/$CAPTCHA/o;  
 #$CAPTCHA = $CAPTCHAi;             # use case insensitive for now
 
-# What's the URL to the comment form? We'll append the user's friend ID to
-# the end of this string.
-our $VIEW_COMMENT_FORM="http://comments.myspace.com/index.cfm?'.
-    'fuseaction=user&circuitaction=viewProfile_commentForm&friendID=";
-
 # What's the URL to view a user's profile? We'll append the friendID to the
 # end of this string.
 our $VIEW_PROFILE_URL="http://profile.myspace.com/index.cfm?".
@@ -166,10 +161,6 @@ our $READ_MESSAGE_URL='http://messaging.myspace.com/index.cfm?'.
 # end if this string too.
 our $SEND_MESSAGE_FORM="http://messaging.myspace.com/index.cfm?'.
     'fuseaction=mail.message&friendID=";
-
-# What regexp should we look for after sending a message that tells
-# us the message was sent?
-our $VERIFY_MESSAGE_SENT = qr/Your Message Has Been Sent\!/o;
 
 # If a person's profile is set to "private" we'll get an error when we
 # pull up the form to mail them. What regexp do we read to identify that
@@ -246,6 +237,11 @@ my %regex = (
     is_logged_in => qr/fuseaction=signout/io,
     is_private => qr/(This profile is set to private\. This user must add you as a friend to see his\/her profile\.)/io,
     is_invalid => qr/(Invalid Friend ID.<br>This user has either cancelled their membership, or their account has been deleted.)/io,
+    basic_info => qr/Table2".*?>(.*Last Login:.*?)<br>/smo,
+    basic_sub_info => qr/align="left">(.*)/smo,
+    comment_posted => qr/Your Comment has been posted/io,
+    not_logged_in => qr/You Must Be Logged-In to do That\!/io,
+    verify_message_sent => qr/Your Message Has Been Sent\!/o
 );
 
 ######################################################################
@@ -628,11 +624,17 @@ sub _try_login {
     $tries_left = 20 unless defined $tries_left;
 
     # Submit the login form
-    my $submitted = $self->submit_form( "$BASE_URL", 2, "",
-                    { 'email' => $self->account_name,
-                      'password' => $self->password
-                    }
-                  );
+    my $submitted = $self->submit_form( {
+        page => 'http://www.myspace.com/',
+        form_name => 'aspnetForm',
+        fields_ref => { 'ctl00$Main$SplashDisplay$ctl01$Email_Textbox' => $self->account_name,
+                        'ctl00$Main$SplashDisplay$ctl01$Password_Textbox' => $self->password,
+#                        '__EVENTTARGET' => 'ctl00$Main$SplashDisplay$ctl01$Login_ImageButton',
+#                        '__EVENTARGUMENT' => '',
+                      },
+        action => 'http://secure.myspace.com/index.cfm?fuseaction=login.process',
+#        no_click => 1,
+    } );
 
     # Check for success
     if ( $submitted ) {
@@ -699,10 +701,10 @@ Pass this parameters you wish the WWW::Mechanize object to use,
 inside a hash reference. for example:
 
   $myspace->mech_params({
-	  onerror => undef,
+      onerror => undef,
           agent => 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)'
-	  stack_depth => 1,
-	  quiet => 1,
+      stack_depth => 1,
+      quiet => 1,
    });
 
 See the docs for WWW::Mechanize for more information. You should
@@ -715,20 +717,20 @@ field mech_params => undef;
 sub _new_mech {
 
     my %default_mech_params = (
-			       onerror => undef,
-			       agent => 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)',
-			       stack_depth => 1,
-			       quiet => 1,
-			      );
+                   onerror => undef,
+                   agent => 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)',
+                   stack_depth => 1,
+                   quiet => 1,
+                  );
 
     my $new_p = $self->mech_params();
     if (defined($new_p)) {
       if (ref($new_p) eq "HASH") {
-	while (my ($k,$v) = each %$new_p) {
-	  $default_mech_params{$k} = $v;
-	}
+    while (my ($k,$v) = each %$new_p) {
+      $default_mech_params{$k} = $v;
+    }
       } else {
-	warn "Please pass mech_params() a HASH reference. Thanks!\n";
+    warn "Please pass mech_params() a HASH reference. Thanks!\n";
       }
     }
 
@@ -789,19 +791,19 @@ that displays the notifications and a Login button.
 =cut
 
 sub get_login_form {
-	
-	my $x = '<form action="http://login.myspace.com/index.cfm?'.
-	    'fuseaction=login.process" method="post" name="theForm" '.
-	    'id="theForm">' .
-		'<input type=hidden name="email" value="' . $self->account_name .
-		'">' .
-		'<input type=hidden name="password" value="' . $self->password . '">' .
-		'<input type=submit name="ctl00$Main$SplashDisplay$login$loginbutton" '.
-		'value="LOGIN">'.
-		'</form>';
-		
-	return $x;
-	
+    
+    my $x = '<form action="http://login.myspace.com/index.cfm?'.
+        'fuseaction=login.process" method="post" name="theForm" '.
+        'id="theForm">' .
+        '<input type=hidden name="email" value="' . $self->account_name .
+        '">' .
+        '<input type=hidden name="password" value="' . $self->password . '">' .
+        '<input type=submit name="ctl00$Main$SplashDisplay$login$loginbutton" '.
+        'value="LOGIN">'.
+        '</form>';
+        
+    return $x;
+    
 }
 
 #---------------------------------------------------------------------
@@ -998,36 +1000,36 @@ my $stats_ref =
     };
 
 sub get_notifications {
-	
-	$self->_go_home;
-			
-	my %data = ();
-	
-	my $page = $self->current_page->decoded_content;
-	$page =~ s/[ \t\n\r]+/ /g; # (Eliminate extra whitespace)
-	
-	# Myspace uses two techniques for displaying this data, and they
-	# keep switching back and forth. Figure out which one they're doing
-	# this week...
-	my $dt;
-	if ( $page =~ /<div id="indicatorComments" class="/ ) {
-		$dt = "css";
-	} else {
-		$dt = "db";
-	}
-	
-	foreach my $stat_type ( keys( %$stats_ref ) ) {
-		my $re = $stats_ref->{"$stat_type"}->{'search'}->{"$dt"};
-		if ( $page =~ /$re/i ) {
-			$data{"$stat_type"} = $stats_ref->{"$stat_type"}->{'display'}
-		}
-	}
-	
-	# Number of friends
-	$data{"friends"} = "You have " . $self->friend_count . " friends";
-	
-	# Return the data
-	return %data;
+    
+    $self->_go_home;
+            
+    my %data = ();
+    
+    my $page = $self->current_page->decoded_content;
+    $page =~ s/[ \t\n\r]+/ /g; # (Eliminate extra whitespace)
+    
+    # Myspace uses two techniques for displaying this data, and they
+    # keep switching back and forth. Figure out which one they're doing
+    # this week...
+    my $dt;
+    if ( $page =~ /<div id="indicatorComments" class="/ ) {
+        $dt = "css";
+    } else {
+        $dt = "db";
+    }
+    
+    foreach my $stat_type ( keys( %$stats_ref ) ) {
+        my $re = $stats_ref->{"$stat_type"}->{'search'}->{"$dt"};
+        if ( $page =~ /$re/i ) {
+            $data{"$stat_type"} = $stats_ref->{"$stat_type"}->{'display'}
+        }
+    }
+    
+    # Number of friends
+    $data{"friends"} = "You have " . $self->friend_count . " friends";
+    
+    # Return the data
+    return %data;
 
 }
 
@@ -1343,9 +1345,9 @@ sub friend_id {
 
     if ( $friend_url ) {
         # If they gave a full URL chop off all but the last part.
-    	$friend_url =~ s/^.*\///;
-    	
-    	#Get page corresponding to the given custom URL
+        $friend_url =~ s/^.*\///;
+        
+        #Get page corresponding to the given custom URL
         $page = $self->get_page( $BASE_URL.$friend_url );
 
     } else {
@@ -1359,7 +1361,7 @@ sub friend_id {
     else {
         return "";
     }
-	
+    
 }
 
 =head2 friend_count
@@ -1469,7 +1471,7 @@ sub get_profile {
 
 }
 
-=head2 profile_views( friend_id => $friend_id || page => $page )
+=head2 profile_views( $friend_id || friend_id => $friend_id || page => $page )
 
 Returns the listed number of Profile Views for a given friend_id.  This has
 only been tested on band profiles.  You can choose to pass either a friend_id
@@ -1506,10 +1508,10 @@ sub profile_views {
 
 
 
-=head2 comment_count( friend_id => $friend_id || page => $page )
+=head2 comment_count( $friend_id || friend_id => $friend_id || page => $page )
 
 Returns the listed number comments posted a given friend_id.  Behaves the same
-was as profile_views.  See profile_views for documentation on passing 
+way as profile_views.  See profile_views for documentation on passing 
 parameters to this function.
 
 =cut
@@ -1521,7 +1523,6 @@ sub comment_count {
     if ( defined $page ) { 
         my $content = $page->decoded_content;
         $content =~ s/\n//g;
-        # Scan the page for band-specific RE (the music player plug-in).
         if ( $content =~ /Displaying<span class="redtext"> \d{1,} <\/span>of<span class="redtext"> (\d{1,}) <\/span>comments/ ) {
             return $1;
         }
@@ -1537,7 +1538,7 @@ sub comment_count {
     return;
 }
 
-=head2 last_login_ymd ( friend_id => $friend_id || page => $page )
+=head2 last_login_ymd ( $friend_id || friend_id => $friend_id || page => $page )
 
 Returns the "Last Login" date "posted a given friend_id in YMD format.  
 Behaves the same as profile_views.  See profile_views for documentation on 
@@ -1565,10 +1566,85 @@ sub last_login_ymd {
     return;
 }
 
+=head2 get_basic_info( $friend_id || friend_id => $friend_id || page => $page );
+
+This routine takes the of a page and returns a hash of information containing:
+
+ country     - country in profile (names of countries are as
+               standardized on MySpace)
+ cityregion  - the line with city and region information (this
+               is free text)
+ headline    - whatever it says next to the picture (including quotes)
+ age         - as number
+ gender      - as text, either male or female
+ lastlogin   - date of last login
+ city        - city*
+ region      - region*
+
+ EXAMPLE:
+ 
+ my ( %info ) = $myspace->get_basic_info( $friend_id );
+ 
+ print "Your friend is $info{'age'} years old and is a $info{'gender'}.\n";
+ 
+ # sample output:
+ Your friend is 25 years old and is a female.
+
+* Note: MySpace joins the profile data from city and region to one line (such as Berlin, Germany).
+However, both city and region are free text so people can write whatever they want. What is more,
+region is optional. This function tries to extract the city and the region by splitting cityregion
+at the last comma. However, it might not work (depending on the profile information) so both city
+and region can be empty.  
+
+See profile_views for documentation on passing parameters to this function.
+
+=cut
+
+sub get_basic_info {
+    # Get and decode the page into HTML source
+    my $page = $self->_validate_page_request( @_ );
+
+#    my $time=time;
+    # matching does take quite long... (around 6s)
+    $page = $self->_apply_regex( regex => 'basic_info', page => $page );
+    my $re = $self->_regex( 'basic_sub_info' );
+    $page =~ /$re/; my $info = $1;
+#    print "took time:",time-$time,", found $1\n";
+
+    ( $DEBUG ) && print $info,"\n";
+
+    my %info = ();
+    # assign values and trim leading and trailing white spaces
+    ( $info{'headline'}, $info{'empty'}, $info{'gender'}, $info{'age'},
+      $info{'cityregion'}, $info{'country'}, $info{'empty'}, $info{'empty'},
+      $info{'lastlogin'}
+    ) = map {s/^\s+//;s/\s+$//;$_} split('<br>',$info);
+
+    # return age as number only
+    $info{'age'} =~ s/^(\d+).*/$1/;
+
+    #return last login as date only
+    $info{'lastlogin'} =~ s/Last Login:\s+([\d\/]*)/$1/;
+
+    # let's guess what is the city and what is the region
+    if ( $info{'cityregion'} =~ /(.*), (.*)/ ){
+      $info{'city'} = $1;
+      $info{'region'} = $2; 
+    }  
+
+    # Be nice...
+    delete $info{'empty'};
+    return (%info);
+}
+
 =head2 get_comments( $friend_id )
 
-Returns a list of hashrefs, like "inbox", of all comments
+Returns a list of hashrefs, like "inbox", of comments
 left for the profile indicated by $friend_id.
+
+get_comments returns a maximum of 50 pages of comments (about 2500).  This limit
+was added in version 0.66 to prevent the method from "running away" if myspace
+changes the code for which the method looks when gathering the comments.
 
  Each list element contains:
  { 
@@ -1585,90 +1661,82 @@ Dies if called when not logged in.
 =cut
 
 sub get_comments {
-
-    warn "get_comments method currently not operational due to change in myspace code";
-    return undef;
-
     my ( $friend_id ) = @_;
-
+    my @comments = ();
+    my $url="http://comment.myspace.com/index.cfm?fuseaction=user.viewComments&friendID=".
+            $friend_id;
+    my $eventtarget='ctl00$Main$PagedComments$pagingNavigation1$NextLinkButton';
+    my $page="";
+    my $commentcount;
+        
     $self->_die_unless_logged_in( 'get_comments' );
 
-    my $page="";
-    my $page_no = 0;
-    my @comments = ();
-    my ( $key, $numless );
-    my %lpd = (
-        '01fuseaction' => '',
-        '02friendID' => '',
-        '03page' => 0,
-        '04finalpage' => '',
-        '05prevPage' => '',
-        '06PREVPageLASTONERETURENED' => '',
-        '07PREVPageFirstONERETURENED' => '',
-        '08Mytoken' => ''
-       );
-
-    # Loop until we get an empty page or there isn't a "next" link.
-    while ( 1 ) {
-
-        # Get the page
-        my $url="http://comment.myspace.com/index.cfm?";
-        if ( $page_no ) {
-            $lpd{'03page'}=$page_no;
-            foreach $key ( sort( keys( %lpd ) ) ) {
-                $numless = $key; $numless =~ s/^..//;
-                $url .= "&${numless}=". $lpd{ $key };
-            }
-        } else {
-            $url .= "fuseaction=user.viewComments&friendID=". $friend_id;
-        }
-
-#        warn "Getting $url\n";
-        $page = $self->get_page( $url );
-
-        # Get the message data.
-
-#        warn "Getting comments from page $page_no\n";
-        push @comments, $self->_get_comments_from_page( $page->decoded_content );
-
-#        warn $page->decoded_content;
-        last unless ( $self->_next_button( $page->decoded_content ) );
+    # only get a maximum of 50 comment pages
+    # this should translate to 2500 comments
+    # and also serves as a safety measure in case 
+    # the method breaks again
         
-        # Next!
-        $page_no++;
-        # Read the page data and remember it.
-        foreach $key ( keys( %lpd ) ) {
-            $numless=$key ; $numless =~ s/^..//;
-            $page->decoded_content =~ /<\s*input\s+type="?hidden"?\s+name="?${numless}"?\s+value="?([^">]*)"?\s*>/i;
-            $lpd{ $key } = $1;
-        }
-        
+    ( $DEBUG ) && print "Getting $url\n";
+    $page = $self->get_page( $url );
+      
+    # find out how many comments in total
+    if ($page->decoded_content =~ /.*Listing [\d-]+ of (\d+).*/smo){
+        $commentcount=$1;
+    } else {
+        $self->error("Could not find how many comments are on profile");
+        return undef;
     }
+      
+    for (my $i=1;$i<=50;$i++) {
+        $page=$self->{current_page};
+
+        push @comments, $self->_get_comments_from_page( $page->decoded_content );
+            
+        #make sure we did not get an error
+        return undef if ($self->error);
+    
+        last unless ( $self->_next_button( $page->decoded_content ) );
+
+        ( $DEBUG ) && print "try to submit form to access comments page #",$i+1,"\n";
+
+        # submit the form to get to next page
+        $self->submit_form({
+                follow => 0,
+                form_name => "aspnetForm",
+                no_click => 1,
+                fields_ref => { __EVENTTARGET => $eventtarget, __EVENTARGUMENT => '' }
+                #re1 => 'something unique.?about this[ \t\n]+page',
+            });
+            
+        # sleep ( int( rand( 2 ) ) + 1 );     
+    }    
+
+#    unless(scalar (@comments) == $commentcount){
+#            $self->error("Could not collect all comments. Have " . @comments .", should have $commentcount");
+#        return undef;
+#    }
 
     return \@comments;
-
-    
 }
 
-# Take a page, return a list of comment data
 sub _get_comments_from_page {
+    # Take a page, return a list of comment data
 
     my ( $page ) = @_;
     my @comments = ();
 
-    # Get to the comments section to avoid mis-reads
+      # Get to the comments section to avoid mis-reads
     if ( $page !~ m/Add Comment<\/a>/gs ) {
         $self->error("Comment section not found on page");
         return undef;
     }
 
     # Read the comment data and push it into our array.
-    while ( $page =~
-#            s/.*?UserID=([^;]+);.*?<span class="blacktext10">\s*([^<]+)\s*<\/span>\s*<br>\s*<br>\s*(.*?)<\/td>\s*<\/tr>//smo ) {
-            s/.*?UserID=([0-9]+).*?<span class="blacktext10">\s*([^<]+)\s*<\/span>\s*<br>\s*<br>\s*(.*?)<\/td>\s*<\/tr>//smo ) {
-        push @comments, { sender => $1, date => $2, comment => $3 }
+    while ( $page =~ s/.*?UserID=([0-9]+).*?<h4>(.*?)<\/h4>\s*(.*?)\s*<\/textarea>//smo ) {
+        push @comments, { sender => $1, date => $2, comment => $3 };
+        #print "found 1:$1\nfound 2:$2\nfound 3:$3\n";
     }
-    
+
     return @comments;
 }
 
@@ -1794,81 +1862,81 @@ and dumps a list of friendIDs in YAML).
  my $myspace = new WWW::Myspace( human => 0, auto_login => 0 );
  
   my @friends = $myspace->browse( {
-    'ctl00$Main$Scope' => 'scopeFullNetwork', # or 'scopeMyFriends'
+    'ctl00$Main$ctl00$Scope' => 'scopeFullNetwork', # or 'scopeMyFriends'
     
-    'ctl00$Main$Gender' => 'genderWomen', # or 'genderMen', 'genderBoth'
-    'ctl00$Main$minAge' => 18,
-    'ctl00$Main$maxAge' => 35,
+    'ctl00$Main$ctl00$Gender' => 'genderWomen', # or 'genderMen', 'genderBoth'
+    'ctl00$Main$ctl00$minAge' => 18,
+    'ctl00$Main$ctl00$maxAge' => 35,
 
     # Marital Status
-    'ctl00$Main$statusSingle' => 'on',
-    'ctl00$Main$statusInRelationship' => 'off',
-    'ctl00$Main$statusSwinger' => 'off',
-    'ctl00$Main$statusMarried' => 'off',
-    'ctl00$Main$statusDivorced' => 'off',
+    'ctl00$Main$ctl00$statusSingle' => 'on',
+    'ctl00$Main$ctl00$statusInRelationship' => 'off',
+    'ctl00$Main$ctl00$statusSwinger' => 'off',
+    'ctl00$Main$ctl00$statusMarried' => 'off',
+    'ctl00$Main$ctl00$statusDivorced' => 'off',
 
     # Here for
-    'ctl00$Main$motiveDating' => 'on',
-    'ctl00$Main$motiveNetworking' => 'off',
-    'ctl00$Main$motiveRelationships' => 'on',
+    'ctl00$Main$ctl00$motiveDating' => 'on',
+    'ctl00$Main$ctl00$motiveNetworking' => 'off',
+    'ctl00$Main$ctl00$motiveRelationships' => 'on',
     
     # Location (there are MANY country values. Check the browse page
     # source (see below)).
-    'ctl00$Main$country' => 'US',
-    'ctl00$Main$zipRadius' => 20,
-    'ctl00$Main$zipCode' => 91604,
-    'ctl00$Main$region' => 'Any',
+    'ctl00$Main$ctl00$country' => 'US',
+    'ctl00$Main$ctl00$zipRadius' => 20,
+    'ctl00$Main$ctl00$zipCode' => 91604,
+    'ctl00$Main$ctl00$region' => 'Any',
 
     # Photos
-    'ctl00$Main$showHasPhotoOnly' => 'on',
-    'ctl00$Main$showNamePhotoOnly' => 'on', # Leave this on for speed.
+    'ctl00$Main$ctl00$showHasPhotoOnly' => 'on',
+    'ctl00$Main$ctl00$showNamePhotoOnly' => 'on', # Leave this on for speed.
 
     # Ethnicity
-    'ctl00$Main$asian' => 'on',
-    'ctl00$Main$white' => 'on',
-    'ctl00$Main$black' => 'off',
-    'ctl00$Main$eastIndian' => 'off',
-    'ctl00$Main$latino' => 'off',
-    'ctl00$Main$midEastern' => 'off',
-    'ctl00$Main$nativeAmer' => 'off',
-    'ctl00$Main$ethnOther' => 'off',
-    'ctl00$Main$pacIslander' => 'off',
+    'ctl00$Main$ctl00$asian' => 'on',
+    'ctl00$Main$ctl00$white' => 'on',
+    'ctl00$Main$ctl00$black' => 'off',
+    'ctl00$Main$ctl00$eastIndian' => 'off',
+    'ctl00$Main$ctl00$latino' => 'off',
+    'ctl00$Main$ctl00$midEastern' => 'off',
+    'ctl00$Main$ctl00$nativeAmer' => 'off',
+    'ctl00$Main$ctl00$ethnOther' => 'off',
+    'ctl00$Main$ctl00$pacIslander' => 'off',
 
     # Body Type
-    'ctl00$Main$slimSlender' => 'on',
-    'ctl00$Main$average' => 'off',
-    'ctl00$Main$moreToLove' => 'off',
+    'ctl00$Main$ctl00$slimSlender' => 'on',
+    'ctl00$Main$ctl00$average' => 'off',
+    'ctl00$Main$ctl00$moreToLove' => 'off',
 
-    'ctl00$Main$athletic' => 'on',
-    'ctl00$Main$littleExtra' => 'off',
-    'ctl00$Main$bodyBuilder' => 'off',
+    'ctl00$Main$ctl00$athletic' => 'on',
+    'ctl00$Main$ctl00$littleExtra' => 'off',
+    'ctl00$Main$ctl00$bodyBuilder' => 'off',
 
     # Height
-    'ctl00$Main$Height' => 'heightBetween', # or 'heightNoPreference'
-    'ctl00$Main$minFoot' => 5,
-    'ctl00$Main$minInch' => 0,
-    'ctl00$Main$maxFoot' => 6,
-    'ctl00$Main$maxInch' => 0,
+    'ctl00$Main$ctl00$Height' => 'heightBetween', # or 'heightNoPreference'
+    'ctl00$Main$ctl00$minFoot' => 5,
+    'ctl00$Main$ctl00$minInch' => 0,
+    'ctl00$Main$ctl00$maxFoot' => 6,
+    'ctl00$Main$ctl00$maxInch' => 0,
     
     # Background & Lifestyle
-    'ctl00$Main$Smoker' => 'smokerBoth', # or 'smokerNo', 'smokerYes'
-    'ctl00$Main$Drinker' => 'drinkerBoth', # or 'drinkerNo', 'drinkerYes'
+    'ctl00$Main$ctl00$Smoker' => 'smokerBoth', # or 'smokerNo', 'smokerYes'
+    'ctl00$Main$ctl00$Drinker' => 'drinkerBoth', # or 'drinkerNo', 'drinkerYes'
 
-    'ctl00$Main$straight' => 'on',
-    'ctl00$Main$bi' => 'on',
-    'ctl00$Main$gay' => 'off',
-    'ctl00$Main$notSure' => 'off',
+    'ctl00$Main$ctl00$straight' => 'on',
+    'ctl00$Main$ctl00$bi' => 'on',
+    'ctl00$Main$ctl00$gay' => 'off',
+    'ctl00$Main$ctl00$notSure' => 'off',
 
     # Education (note: all off means no preference)
-    'ctl00$Main$highSchool' => 'off',
-    'ctl00$Main$inCollege' => 'off',
-    'ctl00$Main$gradSchool' => 'off',
-    'ctl00$Main$someCollege' => 'off',
-    'ctl00$Main$collegeGrad' => 'off',
-    'ctl00$Main$postGrad' => 'off',
+    'ctl00$Main$ctl00$highSchool' => 'off',
+    'ctl00$Main$ctl00$inCollege' => 'off',
+    'ctl00$Main$ctl00$gradSchool' => 'off',
+    'ctl00$Main$ctl00$someCollege' => 'off',
+    'ctl00$Main$ctl00$collegeGrad' => 'off',
+    'ctl00$Main$ctl00$postGrad' => 'off',
 
     # Religion
-    'ctl00$Main$religion' => 'NoPreference',
+    'ctl00$Main$ctl00$religion' => 'NoPreference',
      # Possible Values Are:
      # NoPreference
      # Agnostic
@@ -1887,7 +1955,7 @@ and dumps a list of friendIDs in YAML).
      # Wiccan
 
     # Income
-    'ctl00$Main$income' => 'NoPreference',
+    'ctl00$Main$ctl00$income' => 'NoPreference',
      # Possible Values Are:
      # NoPreference
      # LessThan30000
@@ -1900,7 +1968,7 @@ and dumps a list of friendIDs in YAML).
      # From250000ToHigher
 
     # Children
-    'ctl00$Main$children' => 'NoPreference',
+    'ctl00$Main$ctl00$children' => 'NoPreference',
      # Possible Values Are:
      # NoPreference
      # IDontWantKids
@@ -1910,7 +1978,7 @@ and dumps a list of friendIDs in YAML).
      # Proud parent
 
     # Sort By (last login is good to weed out dead accounts)
-    'ctl00$Main$SortBy' => 'sortByLastLogin',
+    'ctl00$Main$ctl00$SortBy' => 'sortByLastLogin',
      # Possible Values Are:
      # sortByLastLogin
      # sortByNewToMySpace
@@ -2909,6 +2977,9 @@ distribution.
 
 sub post_comment {
 
+#     warn "post_comment disabled due to change in myspace code until method can be updated."
+#     return undef;
+
     my ( $friend_id, $message, $captcha_response ) = @_;
     my $status = ""; # Our return status
     my ($submitted, $attempts, $link);
@@ -2957,14 +3028,16 @@ sub post_comment {
             $self->submit_form( {
                      page => $link->url,
                      follow => 1,
-                     form_no => 1,
+                     form_name => 'aspnetForm',
                      fields_ref => {
-                        'ctl00$Main$postComment$commentTextBox' => "$message"
+                        'ctl00$Main$postComment$commentTextBox' => "$message",
+                        '__EVENTTARGET' => 'ctl00$Main$postComment$postcommentImageButton',
+#                        '__EVENTARGUMENT' => '',
                      },
                      re1 => 'ctl00\$Main\$postComment\$commentTextBox'.
                             ".*<\/form|(${CAPTCHA})|(${NOT_FRIEND_ERROR})|".
                             "($INVALID_ID)",
-                     re2 => 'ctl00\$Main\$postComment\$ConfirmPostButton.*<\/form'
+                     re2 => 'ctl00$Main$postComment$Button1.*<\/form'
             } );
         
         # If we posted ok, confirm the comment
@@ -3003,7 +3076,7 @@ sub post_comment {
         $status="FI";
     } elsif (! $submitted ) {
         $status="FN";
-    } elsif ( $page =~ $VERIFY_COMMENT_POST ) {
+    } elsif ( $page =~ $self->_regex('comment_posted') ) {
         $status="P";
     } elsif ( $page =~ $COMMENT_APPROVAL_MSG ) {
         $status = "PA";
@@ -3443,7 +3516,7 @@ sub reply_message {
     # Return the result
     if (! $submitted ) {
         return "FN";
-    } elsif ( $page =~ $VERIFY_MESSAGE_SENT ) {
+    } elsif ( $page =~ $self->_regex('verify_message_sent') ) {
         return "P";
     } elsif ( $page =~ $EXCEED_USAGE ) {
         return "FE";
@@ -3651,24 +3724,29 @@ sub send_message {
     $options{'message'} .= "\n ";
     
     # Submit the message
-    if ( $page =~ /ctl00\$ctl00\$Main\$Main\$sendMessageControl\$subjectTextBox/ ) {
+#    if ( $page =~ /ctl00\$ctl00\$Main\$Main\$sendMessageControl\$subjectTextBox/ ) {
         # New mail form...
-        $submitted = $self->submit_form( '', 1, "",
-            { 'ctl00$ctl00$Main$Main$sendMessageControl$subjectTextBox' =>
-                "$options{'subject'}",
-              'ctl00$ctl00$Main$Main$sendMessageControl$bodyTextBox' =>
-                "$options{'message'}"
-            }
-        );
-    } else {
-        # Old mail form... Seriously, don't get me started...
-        $submitted = $self->submit_form( '',
-                        1, "",
-                        { 'subject' => "$options{'subject'}",
-                          'mailbody' => "$options{'message'}"
-                        }
-                      );
-    }
+        $submitted = $self->submit_form( {
+            form_name => 'aspnetForm',
+            fields_ref => {
+                'ctl00$ctl00$Main$Main$sendMessageControl$subjectTextBox' =>
+                    "$options{'subject'}",
+                'ctl00$ctl00$Main$Main$sendMessageControl$bodyTextBox' =>
+                    "$options{'message'}",
+#                 '__EVENTTARGET' => '',
+
+            },
+            no_click => 1,
+        } );
+#     } else {
+#         # Old mail form... Seriously, don't get me started...
+#         $submitted = $self->submit_form( '',
+#                         1, "",
+#                         { 'subject' => "$options{'subject'}",
+#                           'mailbody' => "$options{'message'}"
+#                         }
+#                       );
+#     }
 
     
     $page = $self->current_page->decoded_content;
@@ -3679,7 +3757,7 @@ sub send_message {
         $status = "FN";
     } elsif ( $page =~ $CAPTCHAi ) {
         $status = "FC";  # They keep changing which page this appears on.
-    } elsif ( $page =~ $VERIFY_MESSAGE_SENT ) {
+    } elsif ( $page =~ $self->_regex('verify_message_sent') ) {
         $status = "P";
     } elsif ( $page =~ $EXCEED_USAGE ) {
         $status = "FE";
@@ -4170,6 +4248,9 @@ not logged in.
 
 sub delete_friend {
 
+    warn "Myspace page changed - delete_friend method disabled until it can be re-written";
+    return undef;
+
     my ( @del_friends ) = @_;
 
     my ( $form, $tree, $f, $res, $id );
@@ -4232,7 +4313,7 @@ sub delete_friend {
     do {
         $res = $self->mech->request( $request );
         $attempt++;
-	$self->_traceme("Delete friend submit attempt $attempt",$res);
+    $self->_traceme("Delete friend submit attempt $attempt",$res);
     } until ( ( $self->_page_ok( $res ) ) || ( $attempt > $max_attempts ) );
 
     # I felt guilty adding a variable even for readability so I removed $pass :)
@@ -4700,9 +4781,9 @@ the same arguments.  It adds the "re" argument, which is passed to
 get_page to verify we in fact got the page.  Returns an HTTP::Response
 object if it succeeds, sets $self->error and returns undef if it fails.
 
-	$self->_go_home;
-	$self->follow_link( text_regex => qr/inbox/i, re => 'Mail Center' )
-		or die $self->error;
+    $self->_go_home;
+    $self->follow_link( text_regex => qr/inbox/i, re => 'Mail Center' )
+        or die $self->error;
 
 There are a lot of options, so perldoc WWW::Mechanize and search for
 $mech->find_link to see them all.
@@ -4711,24 +4792,24 @@ $mech->find_link to see them all.
 
 sub follow_link {
 
-	my ( %options ) = @_;
-	my $res;
+    my ( %options ) = @_;
+    my $res;
 
-	# Take out options that are just for us
-	my $re = '';
-	if ( $options{re} ) { $re = $options{re}; delete $options{re}; }
+    # Take out options that are just for us
+    my $re = '';
+    if ( $options{re} ) { $re = $options{re}; delete $options{re}; }
 
-	# Find the link
-	my $link = $self->mech->find_link( %options );
+    # Find the link
+    my $link = $self->mech->find_link( %options );
 
-	# Follow it
-	if ( $link ) {
-		$res = $self->get_page( $link->url, $re, 1 );
-		return $res;
-	} else {
-		$self->error('Link not found on page');
-		return undef;
-	}
+    # Follow it
+    if ( $link ) {
+        $res = $self->get_page( $link->url, $re, 1 );
+        return $res;
+    } else {
+        $self->error('Link not found on page');
+        return undef;
+    }
 
 }
 
@@ -4872,7 +4953,9 @@ sub _check_login {
 
     # Check for the "proper" error response, or just look for the
     # error message on the page.
-    if ( ( $res->is_error == 403 ) || ( $res->decoded_content =~ $NOT_LOGGED_IN ) ) {
+    if ( ( $res->is_error == 403 ) ||
+         ( $res->decoded_content =~ $self->_regex('not_logged_in') )
+       ) {
         if ( $res->is_error ) {
             warn "Error: " . $res->is_error . "\n"
         } else {
@@ -4994,18 +5077,6 @@ sure that the Verify Comment page is actually shown.
 
 This is here because Myspace likes to do weird things like reset
 form actions with Javascript then post them without clicking form buttons.
-
-EXAMPLE
-
-This is how post_comment actually posts the comment:
-
-    # Submit the comment to $friend_id's page
-    $self->submit_form( "${VIEW_COMMENT_FORM}${friend_id}", 1, "submit",
-                        { 'f_comments' => "$message" }, '', 'f_comments'
-                    );
-    
-    # Confirm it
-    $self->submit_form( "", 1, "submit", {} );
 
 =cut
 
@@ -5157,7 +5228,7 @@ sub submit_form {
 
         $attempt++;
         $trying_again = 1;
-	$self->_traceme("Submit form attempt $attempt",$res);
+    $self->_traceme("Submit form attempt $attempt",$res);
     } until ( ( $self->_page_ok( $res, $options->{'re2'} ) ) ||
               ( $attempt >= $max_attempts )
             );
@@ -5672,11 +5743,11 @@ my sub count_keys {
 
 sub _format_html {
 
-	my ( $text ) = @_;
-	
-	$text =~ s/\n/<br>\n/gs;
-	
-	return $text;
+    my ( $text ) = @_;
+    
+    $text =~ s/\n/<br>\n/gs;
+    
+    return $text;
 
 }
 
@@ -5690,11 +5761,11 @@ isn't one, loads the page explicitly.
 
 sub _go_home {
 
-	# If we're not logged in, go to the home page
-	unless ( $self->logged_in ) {
-		$self->get_page( $BASE_URL ) or return undef;
-		return 1;
-	}
+    # If we're not logged in, go to the home page
+    unless ( $self->logged_in ) {
+        $self->get_page( $BASE_URL ) or return undef;
+        return 1;
+    }
 
     # Are we there?
     if ( $self->mech->uri =~ /[\?&;]fuseaction=user([&;]|$)/io ) {
@@ -5724,8 +5795,8 @@ sub _go_home {
 
 =head2 _validate_page_request
 
-A bit of parameter validation that has been factored out so that profile_views
-and comment_count can use the same validation.
+A bit of parameter validation that has been factored out so that profile_views,
+comment_count, and similar methods can use the same validation.
 
 =cut 
 
@@ -5786,7 +5857,7 @@ sub _validate_page_request {
 #
 # Example:
 #
-#   if ( $source =~ $self->regex{'is_invalid'} ) {
+#   if ( $source =~ $self->_regex{'is_invalid'} ) {
 #       print "Page matches invalid regex\n";
 #   }
 #
@@ -5919,7 +5990,7 @@ the page content so I can account for it.
 =item -
 
 If the text used to verify that the profile page has been loaded
-changes in the future, get_profile and post_comments will report
+changes, get_profile and post_comments will report
 that the page hasn't been loaded when in fact it has.
 
 =item -
@@ -5968,12 +6039,15 @@ Centralize all regular expressions into _regex and _apply_regex methods.
 
 =head1 CONTRIBUTING
 
-If you would like to contribute to this module, you can email me
-and/or post patches at the RT bug links below.  Please use the RT links/email
-address for pure requests or fixes.  There are many methods that
-could be added to this module (profile editing, for example). If you
-find yourself using the "submit_form" method, it probably means you
-should write whatever you're editing into a method and post it on RT.
+If you would like to contribute to this module, you can
+post patches by following the simple 4-step process below.
+If you end up posting several patches and your code shows a good
+understanding of the module, we will probbaly ask you if you'd
+like to be added as a developer on the project.
+
+There are many methods that could be added to this module (profile editing,
+for example). If you find yourself using the "submit_form" method, it probably
+means you should write whatever you're editing into a method and post it on RT.
 
 See the TODO section above for starters, and be sure to read the next section
 about how to submit patches for features/fixes.
@@ -5981,8 +6055,8 @@ about how to submit patches for features/fixes.
 =head1 HOW TO SUBMIT A PATCH
 
 To submit a patch for a new feature or a bug fix, please observe the following.
-Doing so will allow me to implement your patch quickly.  Not doing so may
-delay its implementation or prevent me from implementing your patch at all.
+Doing so will allow us to implement your patch quickly.  Not doing so may
+delay its implementation or prevent us from implementing your patch at all.
 
  - Download the newest development version from SVN.
    The command to use is here:
@@ -5991,18 +6065,20 @@ delay its implementation or prevent me from implementing your patch at all.
  - Apply your changes to that version.
  - Create a unified or context diff of the changed file(s):
    diff -u original_file.pm your_file.pm
- - Email the output to C<bug-www-myspace at rt.cpan.org>, or go to the
-   CPAN RT web site (see below) and submit it there.
+ - Email the output with comments regarding what the patch
+   implements/fixes to C<bug-www-myspace at rt.cpan.org>,
+   or go to the CPAN RT web site (see below) and submit
+   it there.
 
-I will apply your patch and run the tests on it.
+We will apply your patch and run the tests on it.
 
 =head1 BUGS
 
 Please report any bugs or feature requests, or send any patches, to
 C<bug-www-myspace at rt.cpan.org>, or through the web interface at
 L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=WWW-Myspace>.
-I will be notified, and then you'll automatically be notified of progress on
-your bug as I make changes.
+We will be notified, and then you'll automatically be notified of progress on
+your bug as we make changes.
 
 IF YOU USE A MAIL SERVICE (or program) WITH JUNK MAIL FILTERING, especially
 HOTMAIL or YAHOO, add the bug reporting email address above to your address

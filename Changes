@@ -1,5 +1,29 @@
 Revision history for WWW::Myspace
 
+0.66    2006-06-29
+        - KNOWN ISSUES IN THIS RELEASE:
+          - post_comment is not working
+          - post_bulletin is not working
+          - approve_friends may or may not be working
+            (test fails because delete_friend is broken)
+          - "make test" run with a full config file will fail (due to the above).
+          - This is a maintenance release that fixes several major issues below.
+        - Added Tobias' get_comments method fix from RT issue #27707.
+          (thanks Tobias!)
+        - Added Tobias' get_basic_info method from RT issue #22707 and
+          updated it.
+        - Added test 17-get_basic_info.t.
+        - Minor typo fixes in docs.
+        - Applied (possibly outdated) change to browse method's sample
+          script in WWW::Myspace POD from RT ticket#25254.
+        - Fixed send_message method
+        - Started implementing a fix for post_comment - still failing testing.
+        - Disabled delete_friend method until/if it can be fixed
+          (myspace form has changed significantly)
+        - Fixed login processing and bad login checking.
+        - Updated documentation for submit_form and contributing sections
+        - Moved several REs into regex hash.
+
 0.65    2007-06-25
         - KNOWN ISSUES IN THIS RELEASE:
           - Myspace just made changes that break send_message and post_comment.
