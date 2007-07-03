@@ -30,22 +30,12 @@ PREREQUESITES
         'YAML' => 0.39,
         'File::Spec::Functions' => 0, # Note: Forces File::Spec 0.7 or later.
         'Contextual::Return'    => 0, # For send_friend_request method
-        'Class::DBI::AbstractSearch' => 0, # FriendAdder.pm
-        'Config::General'       => 0, # FriendAdder.pm
-        'DateTime'              => 0, # FriendAdder.pm
-        'IO::Prompt'            => 0, # FriendAdder.pm 
-        'List::Compare'         => 0, # FriendAdder.pm
         'Locale::SubCountry'    => 0, # FriendAdder.pm, cool_new_people
-        'Math::Round'           => 0, # FriendAdder.pm
-        'Params::Validate'      => 0, # FriendAdder.pm
-        'Scalar::Util'          => 0, # FriendAdder.pm
-        'Class::DBI'            => 0, # Data.pm
-        'Class::DBI::Loader'    => 0, # Data.pm
-        'DateTime::Format::MySQL'   => 0, # Data.pm
-        'Class::Factory::Util'  => 1.3, # Data.pm (prereq of above)
         'WWW::Mechanize'        => 1.20, # Myspace.pm
-        'Time::Local'           => 0, # Myspace.pm - last_login method
-        'Crypt::SSLeay'         => 0.53, # WWW::Mechanize, for SSL access to myspace.com
+        'Time::Local'			=> 0, # Myspace.pm - last_login method
+        'Crypt::SSLeay'			=> 0.53, # WWW::Mechanize, for SSL access to myspace.com
+        'Config::General'       => 0, # MyBase.pm
+        'Params::Validate'      => 0, # MyBase.pm
 
 
 Each of them has a list of dependencies also.
@@ -99,13 +89,19 @@ The distribution also installs the following convenience modules:
 WWW::Myspace::Comment
 WWW::Myspace::FriendChanges
 WWW::Myspace::Message
+
+Also be sure to check out:
 WWW::Myspace::FriendAdder
+WWW::Myspace::Data
+which are available as separate modules (these used to be included
+but were separated out on 6/29/2007 to make the base module lighter).
 
 The distribution also installs the following handy scripts:
-add_friends
 approve_friends
 comment_myspace
 message_group
+
+(add_friends was moved to WWW::Myspace::FriendAdder)
 
 These are scripts I use, and decided to include in the
 distribution in case they're handy, since they're the most common

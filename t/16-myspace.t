@@ -41,21 +41,21 @@ my $friend_id_regex = $myspace->_regex( 'friend_id' );
 
 my $friend_id = undef;
 
-if ( $res->content =~ $friend_id_regex ) {
+if ( $res->decoded_content =~ $friend_id_regex ) {
     $friend_id = $1;
 }
 
-cmp_ok ($friend_id, '==', $choclair, "correct friend_id returned");
+cmp_ok ($friend_id, '==', $choclair, "friend_id regex returned friend_id");
 
 # reset the page in memory
 $myspace->get_profile( $choclair );
 my $friend_id_myspace = $myspace->friend_id;
-cmp_ok ($friend_id_myspace, '==', $choclair, "correct friend_id returned");
+cmp_ok ($friend_id_myspace, '==', $choclair, "correct friend_id returned by friend_id method");
 
 my $friend_from_regex = $myspace->_apply_regex(
     regex => 'friend_id',
     page  => $res,
 );
-cmp_ok ($friend_from_regex, '==', $choclair, "correct friend_id returned");
+cmp_ok ($friend_from_regex, '==', $choclair, "friend_id returned by _apply_regex");
 
 

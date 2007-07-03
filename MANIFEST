@@ -3,15 +3,11 @@ MANIFEST
 #META.yml # Will be created by "make dist"
 Makefile.PL
 README
-mysql.txt
-mysql_changes.txt
 date.patch
 lib/WWW/Myspace.pm
 lib/WWW/Myspace/Comment.pm
 lib/WWW/Myspace/Message.pm
 lib/WWW/Myspace/FriendChanges.pm
-lib/WWW/Myspace/FriendAdder.pm
-lib/WWW/Myspace/Data.pm
 lib/WWW/Myspace/MyBase.pm
 t/00-load.t
 t/01-login.t
@@ -20,9 +16,7 @@ t/03-delete.t
 t/04-approve.t
 t/05-message.t
 t/06-comment.t
-t/07-friend_adder.t
 t/08-cool_new_people.t
-t/09-data.t
 t/10-mybase.t
 t/11-badlogin.t
 t/12-bulletin.t
@@ -36,12 +30,9 @@ t/pod-coverage.t
 t/pod.t
 t/TestConfig.pm
 t/config.yaml
-t/friend_adder.cfg
-t/friend_adder.yml
 scripts/approve_friends
 scripts/comment_myspace
 scripts/message_group
-scripts/add_friends
 sample_scripts/already_commented
 sample_scripts/approve_friends
 sample_scripts/browse

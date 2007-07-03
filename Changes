@@ -1,5 +1,32 @@
 Revision history for WWW::Myspace
 
+0.67    2006-07-02
+        - Updated patch submission instructions in CONTRIBUTING section of POD.
+        - Split out FriendAdder and Data into separate modules.
+          This was done to lighten the core WWW::Myspace module for developers
+          not using FriendAdder or Data, which had many dependencies.
+          If you need these modules, simply:
+          cpan -i WWW::Myspace::FriendAdder
+          cpan -i WWW::Myspace::Data
+          They each require WWW::Myspace, so you'll get this module also.
+        - Updated "An error has occurred" error in @ERROR_REGEXPS.
+        - internal method _page_ok now accepts multiple forms of RE, including
+          a key to _regex, so now regex hash keys or quoted REs can be
+          passed to get_page, follow_to, and submit_form.
+        - Fixed NOT_FRIEND_ERROR regexp.
+        - Fixed _apply_regex to return 1 if RE matches but Re has no parenthesis.
+        - Fixed post_comment method.
+        - Disabled MyBase test - uses FriendAdder.
+        - Fixed test names in 16-myspace.t
+        - Login now tests for new (ASP) and old (CFM) login forms in _try_login.
+        - Internal _apply_regex method defaults to current_page if no page or
+          source is specified.
+        - Marked approve_friends tests with TODO blocks to stop them from failing.
+        - Marked delete_friend test (03-delete.t) with TODO block to stop it from failing.
+        - Disabled post_bulletin method and marked with a TODO in 12-bulletin test.
+        - Updated get_photo_ids, set_default_photo, and photos test to work with
+          new album-based photo structure.
+
 0.66    2006-06-29
         - KNOWN ISSUES IN THIS RELEASE:
           - post_comment is not working

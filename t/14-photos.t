@@ -1,6 +1,6 @@
 #!perl -T
 
-use Test::More tests => 3;
+use Test::More tests => 2;
 #use Test::More 'no_plan';
 
 use lib 't';
@@ -12,7 +12,7 @@ my $myspace = $CONFIG->{acct1}->{myspace}; # For sanity
 # Get a list of photo IDs
 my @photo_ids = $myspace->get_photo_ids(
         friend_id => $CONFIG->{acct1}->{friend_id}
-    );
+    ) or warn $myspace->error;
 
 my ( %friend_ids ) = ();
 my $pass = 1;
@@ -22,11 +22,15 @@ foreach my $id ( @photo_ids ) {
         warn "Found duplicate photo ID $id\n";
     } else {
         $friend_ids{ $id }++;
+        warn "Got photoID $id\n";
     }
 }
 
-ok( ( @photo_ids || ( @photo_ids == 0 ) ),
-        'get_photo_ids returned at least one photo' );
+# Can't really test 'cause the test account may not have any photos.
+# ok( ( @photo_ids || ( @photo_ids == 0 ) ),
+#         'get_photo_ids returned at least one photo' );
+
+# Check for duplicates
 ok( $pass, 'No duplicate IDs found' );
 
 SKIP: {
@@ -35,7 +39,13 @@ SKIP: {
     # Try to set the default photo.
     skip "Need more than 1 photo", 1 unless ( @photo_ids > 1 );
 
-    ok( $myspace->set_default_photo( photo_id => $photo_ids[ 0 ] ),
-            'set_default_photo' );
+    # Toggle the default photo between #1 and #2.
+    ok( (
+            $myspace->set_default_photo( photo_id => $photo_ids[ 0 ] ) ||
+            $myspace->set_default_photo( photo_id => $photo_ids[ 1 ] )
+        ),
+        'set_default_photo'
+      );
+    warn $myspace->error if $myspace->error;
 
 }

@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 364 2007-06-29 22:34:55Z grantg $
+# $Id: Myspace.pm 387 2007-07-02 23:34:58Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -42,7 +42,7 @@ Version 0.65
 
 =cut
 
-our $VERSION = '0.66';
+our $VERSION = '0.67';
 
 =head1 WARNING
 
@@ -132,8 +132,8 @@ $COMMENT_APPROVAL_MSG = qr/$COMMENT_APPROVAL_MSG/o;
 
 # What string should we look for if we're trying to post a comment to
 # someone who isn't our friend?
-our $NOT_FRIEND_ERROR="Error: You must be someone\'s friend to make '.
-    'comments about them\.";
+our $NOT_FRIEND_ERROR='Error: You must be someone\'s friend to make '.
+    'comments about them\.';
 
 # What should we look for to see if we are being asked for a CAPTCHA code?
 # We'll extract the URL to return from the area in parenthesis.
@@ -187,14 +187,14 @@ our $INVALID_ID = '<b>Invalid Friend ID\.\s*<br>\s*This user has either cancelle
 # are single spaces, not multiple, nor tabs, nor returns.
 our @ERROR_REGEXPS = (
 
-    "Sorry! an unexpected error has occurred\. <br> <br> ".
-        "This error has been forwarded to MySpace's technical group\.",
+    'Sorry\! an unexpected error has occurred.<br \/><br \/>This error has been '.
+    'forwarded to MySpace\'s technical group\.',
 
-    '<b>This user\'s profile has been temporarily '.
-    'disabled for special maintenance.<br>'.
+    'This user\'s profile has been temporarily '.
+    'disabled for special maintenance\.',
     
     'This profile is undergoing routine maintenance. '.
-    'We apologize for the inconvenience!',
+    'We apologize for the inconvenience',
 
 # Removed: Conflicts with "exceeded usage" message
 #   'An Error has occurred!!.*'.
@@ -241,7 +241,10 @@ my %regex = (
     basic_sub_info => qr/align="left">(.*)/smo,
     comment_posted => qr/Your Comment has been posted/io,
     not_logged_in => qr/You Must Be Logged-In to do That\!/io,
-    verify_message_sent => qr/Your Message Has Been Sent\!/o
+    verify_message_sent => qr/Your Message Has Been Sent\!/o,
+    comment_p1 => qr/ctl00\$Main\$postComment\$commentTextBox.*<\/form|$NOT_FRIEND_ERROR|($CAPTCHA)|($INVALID_ID)/smio,
+    comment_p2 => qr/ctl00\$Main\$postComment\$Button1.*<\/form/smo,
+    not_friend => qr/$NOT_FRIEND_ERROR/smo,
 );
 
 ######################################################################
@@ -585,16 +588,13 @@ sub site_login {
 
     # We probably have an ad or somesuch (started 1/7/2006)
     # so explicitly request our Home.
-    # 2007-06-02 : an interim page will appear if requests come too fast
-    # a delay is almost certainly required to get the Home page
-#    if ($self->human) { sleep int(rand(5)) + 5; }
     $self->follow_link(
-                url_regex => qr/fuseaction=user/i,
-                re=> $regex{'is_logged_in'},
+                url_regex => qr/\.(cfm|aspx?)\?fuseaction=user/i,
+#                re=> 'is_logged_in',
             );
                 
     # Verify we're logged in
-    if ( $self->current_page->decoded_content =~ /SignOut/sio ) {
+    if ( $self->_apply_regex( regex => 'is_logged_in' ) ) {
         $self->logged_in( 1 );
     } else {
         $self->logged_in( 0 );
@@ -623,18 +623,35 @@ sub _try_login {
     if ( $tries_left ) { $tries_left--;  return if ( $tries_left ) < 1; }
     $tries_left = 20 unless defined $tries_left;
 
-    # Submit the login form
-    my $submitted = $self->submit_form( {
-        page => 'http://www.myspace.com/',
-        form_name => 'aspnetForm',
-        fields_ref => { 'ctl00$Main$SplashDisplay$ctl01$Email_Textbox' => $self->account_name,
-                        'ctl00$Main$SplashDisplay$ctl01$Password_Textbox' => $self->password,
-#                        '__EVENTTARGET' => 'ctl00$Main$SplashDisplay$ctl01$Login_ImageButton',
-#                        '__EVENTARGUMENT' => '',
-                      },
-        action => 'http://secure.myspace.com/index.cfm?fuseaction=login.process',
-#        no_click => 1,
-    } );
+    # Submit the login form.  They have two different ones, so if we see indication of
+    # the ASP form (new as of late Jun 2007), use it, otherwise use the CFM version.
+    my $submitted="";
+    $self->get_page( 'http://www.myspace.com/' );
+    if ( $self->current_page->decoded_content =~
+            /ctl00\$Main\$SplashDisplay\$ctl01\$Email_Textbox/io )
+    {
+        $submitted = $self->submit_form( {
+#            page => 'http://www.myspace.com/',
+            form_name => 'aspnetForm',
+            fields_ref => { 'ctl00$Main$SplashDisplay$ctl01$Email_Textbox' => $self->account_name,
+                            'ctl00$Main$SplashDisplay$ctl01$Password_Textbox' => $self->password,
+    #                        '__EVENTTARGET' => 'ctl00$Main$SplashDisplay$ctl01$Login_ImageButton',
+    #                        '__EVENTARGUMENT' => '',
+                          },
+            action => 'http://secure.myspace.com/index.cfm?fuseaction=login.process',
+    #        no_click => 1,
+        } ) ;
+    } else {
+        $submitted = $self->submit_form( {
+#            page => 'http://www.myspace.com/',
+                form_name => 'theForm',
+                fields_ref => {
+                    email => $self->account_name,
+                    password => $self->password
+                },
+                button => 'ctl00$Main$SplashDisplay$ctl01$loginbutton'            
+        } );
+    }
 
     # Check for success
     if ( $submitted ) {
@@ -1355,7 +1372,7 @@ sub friend_id {
     }
 
     #Look for a RE that's near the top of the page that contains friendid
-    if (defined $page && $page->decoded_content =~ $regex{'friend_id'} ) {
+    if (defined $page && $page->decoded_content =~ $self->_regex('friend_id') ) {
         return $1;
     }
     else {
@@ -1756,7 +1773,7 @@ The only valid option at this time is:
 
 Defaults to your friendID.
 
-Croaks if called when not logged in and no photo_id was passed.
+Croaks if called when not logged in and no friend_id was passed.
 
 =cut
 
@@ -1768,8 +1785,13 @@ sub get_photo_ids {
 
     my $friend_id = $options{'friend_id'} ? $options{'friend_id'} : $self->my_friend_id;
 
-    $self->get_page("http://viewmorepics.myspace.com/index.cfm?" .
-                    "fuseaction=user.viewPicture&friendID=" . $friend_id ) or return undef;
+    $self->get_profile( $friend_id ) or return;
+
+    $self->follow_link( url_regex => qr/fuseaction\=user\.viewAlbums/io ) or return;
+
+    # If there's a "View All Pictures" link, click it.  Otherwise it means
+    # they only have one album (or myspace changed something again).
+    $self->follow_link( url_regex => qr/fuseaction\=user\.viewPicture/io );
 
     my $last_id = -1;
     my @photo_ids = ();
@@ -1805,23 +1827,45 @@ sub set_default_photo {
 
     $self->_die_unless_logged_in( 'set_default_photo' );
 
-    $self->_go_home or return undef;
+    $self->_go_home or return;
 
 #    warn "Going to Edit photos page\n";
-    $self->follow_link( text_regex => qr/Edit Photos/io ) or return undef;
+    $self->follow_link( text_regex => qr/Edit Photos/io ) or return;
+
+    # Click "View All Photos".
+    $self->follow_link( url_regex => qr/fuseaction=user\.editAlbumPhotos/io ) or return;
 
     # The photo should be on form 2 or later (search form and photo privacy form come
     # before the first picture).
 #    warn "Getting form number\n";
-    my $form_no = $self->_get_photo_form_no( $options{'photo_id'} ) or return undef;
+    my $button_no = $self->_get_photo_button_no( $options{'photo_id'} ) or return;
 #    warn "Found photo in form number $form_no\n";
 
     # We index from form 0 in submit_form.
     $self->submit_form( {
-        form_no => $form_no,
-        button => 'setDefault',
+        form_name => 'aspnetForm',
+        button => 'ctl00$Main$ViewAndEditPhotos1$ImageListings1$dtImageList$ctl' .
+                  ${button_no} . '$SetAsDefault',
     } );
 
+}
+
+# Myspace now (July 2007) numbers the submit buttons sequentially on the page.
+# The RE here searches for the imageID in the URL and returns the sequence number
+# from the "set as default" button that follows it.
+sub _get_photo_button_no {
+    my ( $photo_id ) = @_;
+
+    my $page = $self->current_page->decoded_content;
+
+    my $re = 'imageID=' . $photo_id .
+       '.*?ctl00\$Main\$ViewAndEditPhotos1\$ImageListings1\$dtImageList\$ctl([0-9]+)\$SetAsDefault';
+    if ( $page =~ /$re/sm ) {
+        return $1
+    }
+    
+    $self->error( "No button for photo ID $photo_id found on page" );
+    return;
 }
 
 sub _get_photo_form_no {
@@ -1839,7 +1883,7 @@ sub _get_photo_form_no {
     }
 
     $self->error( "No photo with ID $photo_id found on Edit Photos page" );
-    return undef;
+    return;
 }
 
 sub ____FIND_PEOPLE____ {}
@@ -3034,10 +3078,8 @@ sub post_comment {
                         '__EVENTTARGET' => 'ctl00$Main$postComment$postcommentImageButton',
 #                        '__EVENTARGUMENT' => '',
                      },
-                     re1 => 'ctl00\$Main\$postComment\$commentTextBox'.
-                            ".*<\/form|(${CAPTCHA})|(${NOT_FRIEND_ERROR})|".
-                            "($INVALID_ID)",
-                     re2 => 'ctl00$Main$postComment$Button1.*<\/form'
+                     re1 => 'comment_p1',
+                     re2 => 'comment_p2'
             } );
         
         # If we posted ok, confirm the comment
@@ -3052,8 +3094,11 @@ sub post_comment {
             
             # Otherwise, confirm it.
             ( $DEBUG ) && print "Confirming comment...\n";
-            $submitted = $self->submit_form( '', 1, "",
-                    {} );
+            $submitted = $self->submit_form( {
+                follow => 1,
+                form_name => 'aspnetForm',
+                button => 'ctl00$Main$postComment$ConfirmPostButton'
+            } );
         } else {
             $self->error( 'First submit failed in post_comment with error: '.
                 $self->error );
@@ -3070,13 +3115,13 @@ sub post_comment {
     $page =~ s/[ \t\n\r]+/ /g;
 
     # Set the status code to return.
-    if ( $page =~ $NOT_FRIEND_ERROR ) {
+    if ( $self->_apply_regex( source => $page, regex => 'not_friend_error' ) ) {
         $status="FF";
-    } elsif ( $page =~ /$INVALID_ID/i ) {
+    } elsif ( $self->_apply_regex( source => $page, regex => 'is_invalid' ) ) {
         $status="FI";
     } elsif (! $submitted ) {
         $status="FN";
-    } elsif ( $page =~ $self->_regex('comment_posted') ) {
+    } elsif ( $self->_apply_regex( source => $page, regex => 'comment_posted') ) {
         $status="P";
     } elsif ( $page =~ $COMMENT_APPROVAL_MSG ) {
         $status = "PA";
@@ -3893,7 +3938,7 @@ sub approve_friend_requests
 
     # Go Home
     $self->_go_home;
-    return 0 if $self->error;
+    return undef if $self->error;
 
     # Click the friend requests link
     $self->follow_to(
@@ -3902,7 +3947,7 @@ sub approve_friend_requests
         )->url,
         'Friend Request Manager'
     );
-    return 0 if $self->error;
+    return undef if $self->error;
 
     # As long as there are friend requests on the page,
     # select all of them and click "Approve Selected Friends"
@@ -4514,6 +4559,9 @@ Croaks if called when not logged in.
 
 sub post_bulletin {
 
+    warn "post_bulletin disabled due to change in myspace until it can be fixed.";
+    return undef;
+
     my %options = @_;
 
     $self->_die_unless_logged_in( 'post_bulletin' );
@@ -4875,6 +4923,21 @@ sub _clean_cache {
 # Called by get_page and submit_form.
 # Sets the internal error method to 0 if there's no error, or
 # to a printable error message if there is an error.
+#
+# $regexp can be:
+#   - a key that, if passed to _regexp will return the regexp to use
+#   - a quoted RE
+#   - an RE in string form.
+#
+# _page_ok will pass $regexp to _regex.  If a value is returned, $regex
+# will be replaced with the value.
+# If $re is a string, it is converted into an RE and compared to
+# the page content.
+#
+# Examples:
+# $self->_page_ok( $res, 'you must be logged-in to do that\!.*<\/html>' )
+# $self->_page_ok( $res, qr/you must be logged-in to do that\!.*<\/html>/ismo )
+# $self->_page_ok( $res, 'logged_in' )
 
 sub _page_ok {
     my ( $res, $regexp ) = @_;
@@ -4902,10 +4965,14 @@ sub _page_ok {
         
         # If they gave us a RE with which to verify the page, look for it.
         if ( $regexp ) {
+            # See what format it's in and convert to RE if necessary
+            $regexp = $self->_regex( $regexp ) if ( $self->_regex( $regexp ) );
+            if ( $regexp !~ /^\(\?/ ) { $regexp = qr/$regexp/i }
+
             # Page must match the regexp
-            unless ( $page =~ /$regexp/i ) {
+            unless ( $page =~ $regexp ) {
                 $page_ok = 0;
-                $self->error("Page doesn't match verification pattern.");
+                $self->error("Page doesn't match verification pattern: $regexp");
 #               warn "Page doesn't match verification pattern.\n";
             }
         
@@ -5882,12 +5949,16 @@ sub _regex {
 #             );
 #
 # _apply_regex provides a centralized source for matching regular expressions on
-# pages against the centralized "regex" hash.
+# pages against the centralized "regex" hash.  It returns a true value if the
+# page or source contains the regex.  If the RE contains parenthesis, returns $1.
 #
-# page: An HTTP::Response object
-# source: A string containing text (i.e. the HTML source of a page) against which
-#         the regex should be matched
-# regex: A string that must match the keys to the appropriate regex.
+# page:   An HTTP::Response object (optional)
+# source: A string containing text (i.e. the HTML source of a page) against
+#         which the regex should be matched (optional)
+# regex:  A string that must match the keys to the appropriate regex.
+#
+# If neither page nor source are specified, _apply_regex will apply the regex to
+# $self->current_page->decoded_content (that is, to the current page).
 #
 # Example:
 # 
@@ -5919,12 +5990,16 @@ sub _apply_regex {
     
     my %args = @_;
     
+    # If they didn't specify a page or source, default to current page.
+    unless ( $args{'page'} || $args{'source'} ) { $args{'page'} = $self->current_page }
+    
+    # Test the regex against the supplied page or source
     if ( exists $regex{$args{'regex'}} ) {
         if ( $args{'page'} && ( $args{'page'}->decoded_content =~ $regex{$args{'regex'}} ) ) {
-            return $1;
+            if ( $1 ) { return $1 } else { return 1 };
         }
         if ( $args{'source'} && ( $args{'source'} =~ $regex{$args{'regex'}} ) ) {
-            return $1;
+            if ( $1 ) { return $1 } else { return 1 };
         }
     }
     
@@ -6058,20 +6133,33 @@ To submit a patch for a new feature or a bug fix, please observe the following.
 Doing so will allow us to implement your patch quickly.  Not doing so may
 delay its implementation or prevent us from implementing your patch at all.
 
- - Download the newest development version from SVN.
+ - Check out the newest development version from SVN.
    The command to use is here:
    http://sourceforge.net/svn/?group_id=163042
    (Or see http://sourceforge.net/projects/www-myspace)
- - Apply your changes to that version.
+ - Makke your changes to that version. *
  - Create a unified or context diff of the changed file(s):
-   diff -u original_file.pm your_file.pm
- - Email the output with comments regarding what the patch
-   implements/fixes to C<bug-www-myspace at rt.cpan.org>,
+   svn diff filename > filename.diff
+   (i.e. svn diff Myspace.pm > Myspace.pm.diff)
+ - Email the output (filename.diff) with comments regarding what
+   the patch implements/fixes to C<bug-www-myspace at rt.cpan.org>,
    or go to the CPAN RT web site (see below) and submit
    it there.
 
 We will apply your patch and run the tests on it.
 
+* You can use the checked-out version in your scripts by one of several
+methods:
+
+ # Somewhere in your script:
+ use lib '/path/to/svn/checkout/lib';
+ 
+ # Top of your script:
+ #!/usr/bin/perl -w -I/path/to/svn/checkout/lib
+ 
+ # Command line:
+ perl -I'/path/to/svn/checkout/lib'
+ 
 =head1 BUGS
 
 Please report any bugs or feature requests, or send any patches, to
