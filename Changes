@@ -1,5 +1,35 @@
 Revision history for WWW::Myspace
 
+0.68    2006-07-06
+        - Updated post_bulletin method to work with changed myspace forms.
+        - Added 25-30 second random sleep after each group of 25 group invitations
+          is sent in send_group_invitation.
+        - Humanized send_friend_request method (gets profile, clicks "add to friends"
+          button). Added FL return code if button not found on profile page.
+          Updated status codes in docs.
+        - Added "fulltests" config parameter to developer test_config file
+          documentation in README.
+        - Updated bulletin and blog tests to use new "fulltest" config item.
+          If set to 1, blog and bulletin tests will do a full post instead of
+          stopping short of the final confirmation.
+        - Updated prerequisite list to require Locale::SubCountry 1.38
+        - Disabled "use WWW::Myspace::FriendAdder" in 10-myspace test to prevent
+          errors on systems without it installed.
+        - Moved last_login_ymd method to right beneath last_login method for clarity.
+        - Added warning to test for last_login to report if an error occurred to help
+          track down mysterious failure in CPAN testing.
+        - Added additional error message to last_login if the regex isn't found on
+          the profile page.
+        - Moved Locale::Subcountry to an eval statement within cool_new_people to
+          stop warnings when it's loaded.
+        - Added get_real_name method that tries to get the user's real name from their
+          profile page if they say "my real name is ___" or similar.
+        - Added test 17-get_basic_info.t to MANIFEST.
+        - Added test 18-get_real_name.t to distribution and MANIFEST.
+        - Updated internal profile page validation method.
+        - Fixed issue that would cause bulletin test to fail in testing mode.
+        - Fixed error output in submit_form when a form number isn't found on the page.
+
 0.67    2006-07-02
         - Updated patch submission instructions in CONTRIBUTING section of POD.
         - Split out FriendAdder and Data into separate modules.

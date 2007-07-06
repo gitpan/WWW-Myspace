@@ -21,7 +21,7 @@ WriteMakefile(
 #        'IO::All' => 0.33, # Needed for the scripts
         'File::Spec::Functions' => 0, # Note: Forces File::Spec 0.7 or later.
         'Contextual::Return'    => 0, # For send_friend_request method
-        'Locale::SubCountry'    => 0, # FriendAdder.pm, cool_new_people
+        'Locale::SubCountry'    => 1.38, # FriendAdder.pm, cool_new_people
         'WWW::Mechanize'        => 1.20, # Myspace.pm
         'Time::Local'			=> 0, # Myspace.pm - last_login method
         'Crypt::SSLeay'			=> 0.53, # WWW::Mechanize, for SSL access to myspace.com

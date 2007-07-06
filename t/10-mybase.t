@@ -6,11 +6,11 @@ use lib 't';
 use TestConfig;
 use Data::Dumper;
 use WWW::Myspace::MyBase;
+#use WWW::Myspace::FriendAdder;
 
 SKIP: {
     skip "test uses FriendAdder which has been moved", 3;
     # create an object without params
-    use WWW::Myspace::FriendAdder;
     my $adder = WWW::Myspace::FriendAdder->new();
     
     isa_ok($adder, 'WWW::Myspace::FriendAdder');

@@ -156,4 +156,6 @@ if ( $CONFIG->{login} ) {
 } else {
 	ok ( $myspace->last_login( $CONFIG->{'acct2'}->{'friend_id'} ),
 	     "last_login returns a value" );
+
 }
+warn $myspace->error if $myspace->error;

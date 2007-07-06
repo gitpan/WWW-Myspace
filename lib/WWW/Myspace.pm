@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 387 2007-07-02 23:34:58Z grantg $
+# $Id: Myspace.pm 402 2007-07-06 08:37:47Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -27,7 +27,7 @@ our $DEBUG=0;
 
 use Carp;
 use Contextual::Return;
-use Locale::SubCountry;
+#use Locale::SubCountry;  # moved to cool_new_people to stop warnings
 use WWW::Mechanize;
 use File::Spec::Functions;
 use Time::Local;
@@ -38,11 +38,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.65
+Version 0.68
 
 =cut
 
-our $VERSION = '0.67';
+our $VERSION = '0.68';
 
 =head1 WARNING
 
@@ -110,26 +110,6 @@ our $BROWSE_PAGE = 'http://browseusers.myspace.com/browse/Browse.aspx';
 # What should we look for to see if there's a link to a friend's page?
 our $FRIEND_REGEXP = qr/fuseaction=user\.viewprofile\&friendID=/io;
 
-# After posting a comment we look for text on the following page to
-# tell us if the post was successful. What RE should we look for
-# that we'll only see if the post was successful (this is currently
-# the user's profile page, so we look for text that'll be near the top of
-# the page).
-our $VERIFY_COMMENT_POST='<span class="nametext">[^\<]*<\/span>.*View '.
-    '(More Pics|My:)'; 
-$VERIFY_COMMENT_POST = qr/$VERIFY_COMMENT_POST/o;  # /o flag ok here since we do once
-
-# After loading a person's profile page, we look for this RE to
-# verify that we actually got the page.
-our $VERIFY_GET_PROFILE = qr/<span class="nametext">[^\<]*<\/span>/o;
-
-# On the page following posting a comment, what should we look for
-# to indicate that the user requires comments to be approved?
-# (This is only checked after VERIFY_COMMENT_POST has been checked).
-our $COMMENT_APPROVAL_MSG="This user requires all comments to be approved '.
-    'before being posted";
-$COMMENT_APPROVAL_MSG = qr/$COMMENT_APPROVAL_MSG/o;
-
 # What string should we look for if we're trying to post a comment to
 # someone who isn't our friend?
 our $NOT_FRIEND_ERROR='Error: You must be someone\'s friend to make '.
@@ -147,20 +127,6 @@ our $CAPTCHAs = qr/$CAPTCHA/o;
 # end of this string.
 our $VIEW_PROFILE_URL="http://profile.myspace.com/index.cfm?".
     "fuseaction=user.viewprofile&friendID=";
-
-# Mail Inbox URL
-# What's the URL to read a page from our inbox?
-our $MAIL_INBOX_URL="http://messaging.myspace.com/index.cfm?".
-    "fuseaction=mail.inbox&page=";
-
-# What's the URL to read a message if we know the messageID?
-our $READ_MESSAGE_URL='http://messaging.myspace.com/index.cfm?'.
-    'fuseaction=mail.readmessage&messageID=';
-
-# What's the URL to send mail to a user? We'll append the friendID to the
-# end if this string too.
-our $SEND_MESSAGE_FORM="http://messaging.myspace.com/index.cfm?'.
-    'fuseaction=mail.message&friendID=";
 
 # If a person's profile is set to "private" we'll get an error when we
 # pull up the form to mail them. What regexp do we read to identify that
@@ -209,21 +175,6 @@ our @ERROR_REGEXPS = (
 );
 @ERROR_REGEXPS = map qr/$_/i, @ERROR_REGEXPS;
 
-# If we exceed our daily mail usage, what regexp would we see?
-# (Note: they've misspelled usage, so the ? is in case they fix it.)
-our $EXCEED_USAGE = qr/User has exceeded their daily use?age/io;
-#our $EXCEED_USAGE = "User has exceeded their daily useage\.";
-
-# What RE should we look for to tell if we're on the "You must be logged
-# in to do that!" page? XXX - CONFIRM THIS!
-our $NOT_LOGGED_IN = 'You Must Be Logged-In to do That!.*?<input.*?'.
-    'name="email"';
-$NOT_LOGGED_IN = qr/$NOT_LOGGED_IN/iso;
-
-# Where do we post friend requests?
-our $FRIEND_REQUEST_POST = "http://mail.myspace.com/index.cfm?'.
-    'fuseaction=mail.processFriendRequests";
-
 # What's the URL for a friend request button (to send a friend request)?
 our $ADD_FRIEND_URL = 'http://collect.myspace.com/index.cfm?'.
             'fuseaction=invite.addfriend_verify&'.
@@ -244,7 +195,18 @@ my %regex = (
     verify_message_sent => qr/Your Message Has Been Sent\!/o,
     comment_p1 => qr/ctl00\$Main\$postComment\$commentTextBox.*<\/form|$NOT_FRIEND_ERROR|($CAPTCHA)|($INVALID_ID)/smio,
     comment_p2 => qr/ctl00\$Main\$postComment\$Button1.*<\/form/smo,
+    comment_approval_msg => qr/This user requires all comments to be approved before being posted/o,
     not_friend => qr/$NOT_FRIEND_ERROR/smo,
+    bulletin_url => qr/fuseaction=bulletin\.edit/io,
+    bulletin_post_action =>
+        qr/<\s*input .*?value\s*=\s*"Post".*?submitPage\s*\(\s*'\s*(.*?)\s*'/ismo,
+    bulletin_p1 => qr/ctl00\$cpMain\$Subject_Textbox/io,
+    bulletin_p2 => qr/Confirm\s+Bulletin/o,
+    bulletin_confirm_action =>
+        qr/function postBulletin\(\).*?submitPage\('(.*?)'/ismo,
+    bulletin_posted => qr/Bulletin Has Been Posted/io,
+    verify_get_profile => qr/<span class="nametext">[^\<]*<\/span>/o,
+    exceed_usage => qr/User has exceeded their daily use?age/io,
 );
 
 ######################################################################
@@ -1381,6 +1343,30 @@ sub friend_id {
     
 }
 
+=head2 C<get_real_name( [ $friend_id | friend_id => $friend_id | page => $page ] )>
+
+Tries to determine the real name of the person whose profile is specified.
+It does this by looking for "my name is ____" or "my real name is _____" on their
+profile page.  The regex used takes several common myspace grammar/spelling erorrs
+into account.
+
+If passed no arguments, real_name parses the current page. If passed a friend_id,
+it calls get_profile to retrieve the friend's profile page. If passed
+a page (an HTTP::Response object), it parses $page->decoded_content.
+
+=cut
+
+sub get_real_name {
+
+    my ( $page ) = $self->_validate_page_request( @_ );
+
+    if ( $page->decoded_content =~ /my (real )?(name i[sz]|name'?[sz])\s+(\w+)/ismo ) {
+        return ucfirst ( $3 );
+    }
+    
+    return;
+}
+
 =head2 friend_count
 
 Returns the logged in user's friend count as displayed on the
@@ -1444,7 +1430,7 @@ sub last_login {
     my ( $page, $time );
     
     if ( @_ ) {
-        $page = $self->get_profile( @_ );
+        $page = $self->get_profile( @_ ) or return;
     } else {
         $page = $self->current_page;
     }
@@ -1455,8 +1441,37 @@ sub last_login {
         # Return it.
         return $time;
     } else {
-        return "";
+        $self->error("Last Login regex not found on profile page");
+        return;
     }
+}
+
+=head2 last_login_ymd ( $friend_id || friend_id => $friend_id || page => $page )
+
+Returns the "Last Login" date for a given friend_id in YMD format.  
+Behaves the same as profile_views.  See profile_views for documentation on 
+passing parameters to this function.
+
+=cut
+
+sub last_login_ymd {
+
+    my $page = $self->_validate_page_request( @_ );
+     
+    if ( defined $page ) { 
+        my $content = $page->decoded_content;
+        $content =~ s/\n//g;
+        # Band pages.
+        if ( $content =~ /Last\sLogin:&nbsp;\s*(\d{1,})\/(\d{1,})\/(\d{4})/igmsoxc ) {
+            return join("-", $3, $1, $2);
+        }
+        # Personal pages
+        elsif ( $content =~ /Last\sLogin:\s*(\d{1,})\/(\d{1,})\/(\d{4})/igmsoxc ) {
+            return join("-", $3, $1, $2);
+        }
+    }
+    
+    return;
 }
 
 #---------------------------------------------------------------------
@@ -1481,10 +1496,14 @@ profile page for $friend_id.
 
 sub get_profile {
 
-    my ( $friend_id ) = @_;
+    # $no_validate is used by the internal _validate_page_request method
+    # in case a method needs to specifically check for an invalid
+    # profile or somesuch.
+    my ( $friend_id, $no_validate ) = @_;
 
-    return $self->get_page( "${VIEW_PROFILE_URL}${friend_id}",
-        $VERIFY_GET_PROFILE );
+    my $re = 'verify_get_profile';
+    $re = undef if ( $no_validate );
+    return $self->get_page( "${VIEW_PROFILE_URL}${friend_id}", $re );
 
 }
 
@@ -1552,34 +1571,6 @@ sub comment_count {
     else {
         print "page undefined" if $DEBUG;
     }
-    return;
-}
-
-=head2 last_login_ymd ( $friend_id || friend_id => $friend_id || page => $page )
-
-Returns the "Last Login" date "posted a given friend_id in YMD format.  
-Behaves the same as profile_views.  See profile_views for documentation on 
-passing parameters to this function.
-
-=cut
-
-sub last_login_ymd {
-
-    my $page = $self->_validate_page_request( @_ );
-     
-    if ( defined $page ) { 
-        my $content = $page->decoded_content;
-        $content =~ s/\n//g;
-        # Band pages.
-        if ( $content =~ /Last\sLogin:&nbsp;\s*(\d{1,})\/(\d{1,})\/(\d{4})/igmsoxc ) {
-            return join("-", $3, $1, $2);
-        }
-        # Personal pages
-        elsif ( $content =~ /Last\sLogin:\s*(\d{1,})\/(\d{1,})\/(\d{4})/igmsoxc ) {
-            return join("-", $3, $1, $2);
-        }
-    }
-    
     return;
 }
 
@@ -2268,8 +2259,9 @@ sub cool_new_people {
     }
     
     # get a list of valid country codes
-    my $world = new Locale::SubCountry::World;
-    my %countries = $world->code_full_name_hash();  
+    my ( $world, %countries );
+    eval 'use Locale::SubCountry;$world = new Locale::SubCountry::World; '.
+         '%countries = $world->code_full_name_hash();';
     
     if (exists $countries{$country_code_uc}) {
 
@@ -2278,26 +2270,24 @@ sub cool_new_people {
             'http://viewmorepics.myspace.com/js/coolNewPeople_'.
             $country_code_lc.'.js';
         
-        #my $res = $self->get_page( $javascript_url );
+#        my $res = $self->get_page( $javascript_url );
         
         # get_page helps circumvent myspace errors by checking for
-        # errors and trying many times. If you DON'T want to do that
-        # (and maybe you don't for this), then you'd do this instead:
+        # errors and trying many times. We might not want to do that here
+        # (since we could have a country code that's not working, etc).
         
-        my $res = $self->{mech}->get( $javascript_url );
+        my $res = $self->mech->get( $javascript_url );
 
         unless ($res->is_success) {
         
             if ($res->code == 404) {
            
-                # Do this instead of warning - lets the scripter have more control.
                 $self->error("Unable to find cool new friends for $country_code_uc ($countries{$country_code_uc})");
-                # warn "Unable to find cool new friends for $country_code_uc ($countries{$country_code_uc})";
             }
             else {
                 
                 $self->error( $res->status_line . " $javascript_url\n" );
-                return 0;
+                return;
                 
                 # don't die in modules, scripters will be mad. :)
                 # die $mech->response->status_line, "$javascript_url\n";
@@ -2318,14 +2308,7 @@ sub cool_new_people {
     else {
         
         $self->error( qq[You supplied: $country_code  You must supply a valid 2 character country code. For example cool_new_people('US')] );
-        
-        # Note: if the script is providing the value and it's bad, you can "croak".
-        # If the user is providing the value and we're supposed to validate it,
-        # set error and return a false value (or some indication of failure).
-        # Note that they can: "if ( $myspace->error ) { ... }" also.
-        # But you want to make sure the return value doesn't blow up their
-        # script (and this shouldn't in this case).
-        return 0;
+        return;
         
         #die qq[You supplied: $country_code  You must supply a valid 2 character country code. For example cool_new_people('US')];
     }
@@ -3123,7 +3106,7 @@ sub post_comment {
         $status="FN";
     } elsif ( $self->_apply_regex( source => $page, regex => 'comment_posted') ) {
         $status="P";
-    } elsif ( $page =~ $COMMENT_APPROVAL_MSG ) {
+    } elsif ( $self->_apply_regex( source => $page, regex => 'comment_approval_msg' ) ) {
         $status = "PA";
     } else {
         $status="F";
@@ -3561,9 +3544,9 @@ sub reply_message {
     # Return the result
     if (! $submitted ) {
         return "FN";
-    } elsif ( $page =~ $self->_regex('verify_message_sent') ) {
+    } elsif ( $self->_apply_regex( source => $page, regex => 'verify_message_sent') ) {
         return "P";
-    } elsif ( $page =~ $EXCEED_USAGE ) {
+    } elsif ( $self->_apply_regex( source => $page, regex => 'exceed_usage' ) ) {
         return "FE";
     } elsif ( $page =~ $CAPTCHAi ) {
         return "FC";
@@ -3804,7 +3787,7 @@ sub send_message {
         $status = "FC";  # They keep changing which page this appears on.
     } elsif ( $page =~ $self->_regex('verify_message_sent') ) {
         $status = "P";
-    } elsif ( $page =~ $EXCEED_USAGE ) {
+    } elsif ( $self->_apply_regex( source => $page, regex => 'exceed_usage' ) ) {
         $status = "FE";
     } else {
         $status = "F";
@@ -4048,12 +4031,15 @@ the "add as friend" button and confirming that you want to add them.
 
 Returns a status code and a human-readable error message:
 
- FF: Failed, this person is already your friend.
- FN: Failed, network error (couldn't get the page, etc).
- FP: Failed, you already have a pending friend request for this person
- FC: Failed, CAPTCHA response requested.
- P:  Passed! Verification string received.
- F: Failed, verification string not found on page after posting.
+ FF  =>  Failed, this person is already your friend.
+ FN  =>  Failed, network error (couldn't get the page, etc).
+ FL  =>  Failed, Add Friend error clicking link on profile page
+ FP  =>  Failed, you already have a pending friend request for this person
+ FB  =>  Failed, this person does not accept friend requests from bands.
+ FA  =>  Failed, this person requires an email address or last name to add them
+ FC  =>  Failed, CAPTCHA response requested.
+ P   =>  Passed! Verification string received.
+ F   =>  Failed, verification string not found on page after posting.
 
 After send_friend_request posts a friend request, it searches for
 various Regular Expressions on the resulting page and sets the
@@ -4128,6 +4114,7 @@ sub send_friend_request {
 
         FF  =>  'Failed, this person is already your friend.',
         FN  =>  'Failed, network error (couldn\'t get the page, etc).',
+        FL  =>  'Failed, Add Friend error clicking link on profile page',
         FP  =>  'Failed, you already have a pending friend request for this person',
         FB  =>  'Failed, this person does not accept friend requests from bands.',
         FA  =>  'Failed, this person requires an email address or last name to add them',
@@ -4138,88 +4125,91 @@ sub send_friend_request {
     );
 
     my $return_code = undef;
-    my $page;
+    my ($page, $res);
 
-    # Get the form
-    my $res = $self->get_page( $ADD_FRIEND_URL . $friend_id );
-
-    # Check for network failure
-    if ( $self->error ) {
-        $return_code='FN';
-    }
-
-    # Strip the page for comparisons
-    $page = $self->current_page->decoded_content;
-    $page =~ s/[ \t\n\r]+/ /go;
-
-    # Check for "doesn't accept band"
-    if ( $page =~ /does not accept add requests from bands/io ) {
-        $return_code = 'FB';
-    }
-
-    # Check for "last name or email" required
-    elsif ( $page =~ /only accepts add requests from people he\/she knows/o ) {
-        $return_code = 'FA';
-    }
+    TESTBLOCK: {
+        # Go to their profile page
+        unless ( $self->get_profile( $friend_id ) ) {
+            $return_code='FN';
+            last;
+        }
     
-    # Check for CAPTCHA
-    elsif ( $page =~ /CAPTCHA/o ) {
-        $return_code = 'FC';
-    }
-
-    # Check for "already your friend"
-    elsif ( $page =~ /already your friend/io ) {
-        $return_code = 'FF';
-    }
-
-    # Check for pending friend request
-    elsif ( $page =~ /pending friend request/io ) {
-        $return_code = 'FP';
-    }
-
-    # Now see if we have a button to click.
-    # MUST BE LAST.
-    # (This probably could return a different code, but it means we don't
-    # have a button and we don't know why).
-    # XXX You may want to loop this entire statement, because currently:
-    # - get_page gets a page, checking for any known error messages.
-    # - this if statement checks for known errors we might receive
-    # - This final statement makes sure we have a button to click so
-    #   we don't bomb in "submit_form".
-    # - BUT, if we get an error page get_page doesn't know (i.e. they
-    #   change an error message or something), we probbaly
-    #   want to retry this page.
-    # You might want to change this whole section to:
-    # do { $res = $self->get_page ... ;
-    # $attempts++; } until ( ( $attempts > 20 ) || ( $page =~ /<input type="submit" ...) );
-    elsif ( $page !~ /<input\s+type="submit"\s+value="Add to Friends"[^>]*>/io ) {
-        $return_code ='F';
-        warn "No Add to Friends button on form!\n";
-    }
+        # Get the form
+        unless ( $self->follow_link( url_regex => qr/fuseaction=invite\.addfriend_verify/io ) ) {
+            $return_code='FL';
+            last;
+        }
     
-    unless ( $return_code ) {
+        # Strip the page for comparisons
+        $page = $self->current_page->decoded_content;
+        $page =~ s/[ \t\n\r]+/ /go;
+    
+        # Check for "doesn't accept band"
+        if ( $page =~ /does not accept add requests from bands/io ) {
+            $return_code = 'FB';
+        }
+    
+        # Check for "last name or email" required
+        elsif ( $page =~ /only accepts add requests from people he\/she knows/o ) {
+            $return_code = 'FA';
+        }
+        
+        # Check for CAPTCHA
+        elsif ( $page =~ /CAPTCHA/o ) {
+            $return_code = 'FC';
+        }
+    
+        # Check for "already your friend"
+        elsif ( $page =~ /already your friend/io ) {
+            $return_code = 'FF';
+        }
+    
+        # Check for pending friend request
+        elsif ( $page =~ /pending friend request/io ) {
+            $return_code = 'FP';
+        }
+    
+        # Now see if we have a button to click.
+        # MUST BE LAST.
+        # (This probably could return a different code, but it means we don't
+        # have a button and we don't know why).
+        # XXX You may want to loop this entire statement, because currently:
+        # - get_page gets a page, checking for any known error messages.
+        # - this if statement checks for known errors we might receive
+        # - This final statement makes sure we have a button to click so
+        #   we don't bomb in "submit_form".
+        # - BUT, if we get an error page get_page doesn't know (i.e. they
+        #   change an error message or something), we probbaly
+        #   want to retry this page.
+        # You might want to change this whole section to:
+        # do { $res = $self->get_page ... ;
+        # $attempts++; } until ( ( $attempts > 20 ) || ( $page =~ /<input type="submit" ...) );
+        elsif ( $page !~ /<input\s+type="submit"\s+value="Add to Friends"[^>]*>/io ) {
+            $return_code ='F';
+            warn "No Add to Friends button on form!\n";
+        }
+
         # Post the add request form
-        $res = $self->submit_form(
-            $self->current_page, 1, '', {} );
+        $res = $self->submit_form( { form_no => 1 } );
     
         # Check response
         unless ( $res ) {
             $return_code = 'FN';
+            last;
         }
         
-        # Unless we already have a return code, check for REs on the page
-        # to see what we got.
-        unless ( $return_code ) {
+        # Unless we already have a return code (in which case we shouldn't be here)
+        # check for REs on the page to see what we got.
     
-            $page = $self->current_page->decoded_content;
-            $page =~ s/[ \t\n\r]+/ /go;
+        $page = $self->current_page->decoded_content;
+        $page =~ s/[ \t\n\r]+/ /go;
+
+        # Check for success
+        if ( $page =~ /An email has been sent to the user/io ) {
+            $return_code = 'P';
+            last;
+        }
     
-            # Check for success
-            if ( $page =~ /An email has been sent to the user/io ) {
-                $return_code = 'P';
-            }
-    
-        }   
     }
 
     # If we still don't have a return code, something went wrong
@@ -4470,6 +4460,10 @@ running report of the friends its inviting with "Passed" or "Failed":
  Inviting 12345: Passed
  Inviting 12346: Failed
 
+You're only allowed to send 25 intivations at a time (because Myspace users
+are unpopular I guess?), so we pause for 25-30 seconds after each group of 25
+to allow for clicking time so we don't make the server mad.
+
  Example:
  
  my ( $passed, $failed ) =
@@ -4518,9 +4512,14 @@ sub send_group_invitation {
 
     # For each friendID, fill in the form and submit it.  Hey, this is
     # their idea, not mine...
+    # We can only send 25 at a time, so pause like a user clicking the next
+    # batch of friends to invite, then continue.
     my @passed = ();
     my @failed = ();
+    my $post_count = 0;
     foreach my $id ( @friend_ids ) {
+        $post_count++;
+        sleep ( int( rand( 5 ) ) + 25 ) if ( ( $post_count % 25 ) == 0 );
         print "Inviting $id: ";
         if ( $self->submit_form( {
                 page => $res,
@@ -4559,52 +4558,96 @@ Croaks if called when not logged in.
 
 sub post_bulletin {
 
-    warn "post_bulletin disabled due to change in myspace until it can be fixed.";
-    return undef;
-
     my %options = @_;
 
     $self->_die_unless_logged_in( 'post_bulletin' );
 
+    # Myspace calls the message the "body", so we'll take that too.
+    if ( ( ! $options{'message'} ) && $options{'body'} ) {
+        $options{'message'} = $options{'body'}
+    }
+
     # Go home
     $self->_go_home;
-    return 0 if $self->error;
+    return if $self->error;
 #    warn "Got home page" . "\n" if $options{'testing'};
     
     # Click "post bulletin"
-    my $link = $self->mech->find_link(
-                            text_regex => qr/^post\s+bulletin$/io );
+    my $link = $self->follow_link( url_regex => $self->_regex( 'bulletin_url' ) );
 
     unless ( $link ) {
         $self->error("Post Bulletin link not found on home page");
-        return 0;
+        return;
     }
 #    warn "Found Post Bulletin link: ".$link->url . "\n" if $options{'testing'};
 
-    # Fill in and submit the form
-    my $submitted = $self->submit_form( {
-        page => $link->url,
-        follow => 1,
-        form_name => 'bulletinForm',
-        fields_ref => {
-            subject => $options{'subject'},
-            body => $options{'message'},
-        },
-        re1 => 'name="bulletinForm"',
-        re2 => 'Confirm\s+Bulletin',
-    } );
-
-    return 0 unless $submitted;
-
-    # And now confirm it (unless we're testing).
-    unless ( $options{'testing'} ) {
-#        warn "Submitting Confirmation screen";
-        $submitted = $self->submit_form( {
-            form_name => 'bulletinForm'
-        } );
+    # eee eee eee ooo ooo ooo !!!
+    # Sorry, that's myspace programmer speak. I'll translate:
+    # Instead of posting a simple form, the Post button calls a Javascript
+    # routine that takes the values we entered into the main form, puts
+    # them into a hidden form, sets the action of that form, and posts it.
+    my $action = '';
+    unless ( $action = $self->_apply_regex( regex => 'bulletin_post_action' ) ) {
+        $self->error("Can't find action URL on first bulletin form page");
+        return;
     }
 
-    return $submitted;
+#    print $self->current_page->decoded_content."\n\n".$action."\n";
+
+    # Fill in and submit the form (see note below re: form number)
+    my $submitted = $self->submit_form( {
+#        page => $link->url,
+#        follow => 1,
+        form_no => 3,
+        fields_ref => {
+            'ctl00$cpMain$Subject_Textbox' => $options{'subject'},
+            'ctl00$cpMain$Body_Textbox' => $options{'message'},
+            subject => $options{'subject'},  # Seriously, don't even ask...
+            body => $options{'message'},
+            mode => 1,
+        },
+        no_click => 1,
+        action => $action,
+        re1 => 'bulletin_p1',
+        re2 => 'bulletin_p2',
+    } );
+
+    return unless $submitted;
+
+    # Now for the confirmation page...
+    # So on this page, we have the bulletin ASP form, a separate form for
+    # the Post button, and a secret little bulletinForm form.  The Post button
+    # calls javascript that sets the bulletinForm's action URL and posts it.
+    # Note that "bulletinForm" is identified by ID, not name, so we just specify
+    # form#4 (5th form on the page).  Sorry, did I mention one of those forms
+    # is just a tag, embedded in another form?  So it's form 3, not 4...
+#        warn "Submitting Confirmation screen";
+    # Get the action
+    $action = '';
+    unless ( $action = $self->_apply_regex( regex => 'bulletin_confirm_action' ) ) {
+        $self->error("Can't find action URL on bulletin confirmation page");
+        return;
+    }
+
+    # We skip this if we're testing.
+    return 1 if $options{'testing'};
+
+    $submitted = $self->submit_form( {
+        form_no => 3,
+        action => $action,
+        no_click => 1,
+    } );
+
+
+    # See if we submitted ok.
+    if ( $submitted && $self->_apply_regex( regex => 'bulletin_posted' ) ) {
+        return 1;
+    } else {
+        $self->error("Bulletin Posted verification not found - bulletin post failed ".
+                     "or confirmation page has changed");
+        warn $self->current_page->decoded_content."\n";
+        return;
+    }
 
 }
 
@@ -5205,7 +5248,7 @@ sub submit_form {
         if ( $options->{'form_no'} ) {
             unless ( @forms > $options->{'form_no'} ) {
                 $self->error( "Form " . $options->{form_no} . 
-                              "not on page in submit_form!"
+                              " not on page in submit_form!"
                             );
                 return 0;
             }
@@ -5223,7 +5266,7 @@ sub submit_form {
             }
             unless ( $options->{form_no} ) {
                 $self->error( "Form " . $options->{form_name} .
-                              "not on page in submit_form!"
+                              " not on page in submit_form!"
                             );
                 return 0;
             }
@@ -5860,12 +5903,35 @@ sub _go_home {
 
 }
 
-=head2 _validate_page_request
-
-A bit of parameter validation that has been factored out so that profile_views,
-comment_count, and similar methods can use the same validation.
-
-=cut 
+# _validate_page_request( [ $friend_id | friend_id => $friend_id | page => $page ],
+#                         [ no_validation => 1 ]);
+#
+# Internal method (obviously) that handles validation for methods that get
+# information from a profile page.
+#
+# Instead of parsing a friendID and calling get_profile, you can
+# just do:
+# my ( $page ) = $self->_validate_page_request( @_ );
+#
+# Then apply your regex to the page or do whatever else you need to do to it.
+#
+# Arguments are parsed as follows:
+# no args: returns $self->current_page
+# friend_id: calls get_profile (get_page if no_validation is specified as a true value)
+#            and returns the resulting HTTP::Response object
+# page:      Returns the page
+# 
+# if no_validation is set to a true value (use 1 just in case this changes in
+# the future), get_profile will be told not to check for the page validation
+# regex.  This is currently used by is_invalid to check for invalid profiles.
+#
+# You can put these docs in your method.  Change "MY_METHOD" to the name of your
+# method:
+#
+# =head2 C<MY_METHOD( [ $friend_id | friend_id => $friend_id | page => $page ] )>
+# If passed no arguments, MY_METHOD parses the current page. If passed a friend_id,
+# it calls get_profile to retrieve the friend's profile page. If passed
+# a page (an HTTP::Response object), it parses $page->decoded_content.
 
 sub _validate_page_request {
     
@@ -5899,16 +5965,11 @@ sub _validate_page_request {
     elsif ( exists $args{'friend_id'} ) {
         
         # Get the profile page
-        # turn off validation if checking for an invalid profile as these
-        # won't pass the profile validation regex
-        if ( $args{'no_validation'} ) {
-            print "no validation\n" if $DEBUG;
-            $page = $self->get_page( "${VIEW_PROFILE_URL}$args{friend_id}" );
-        }
-        else {
-            my $res = $self->get_profile( $args{'friend_id'} );
-            $page = $res unless ( $self->error );
-        }
+        # Set the no_validation argument to a definite value so we can pass it
+        # through to get_profile.
+        $args{'no_validation'}=0 unless $args{'no_validation'};
+        my $res = $self->get_profile( $args{'friend_id'}, $args{'no_validation'} );
+        $page = $res unless ( $self->error );
     }
     else {
         die "You must provide either a friend_id or a response object";

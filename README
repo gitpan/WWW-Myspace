@@ -154,6 +154,12 @@ acct2:
   password: 
   user_name: 
 test_group: 100009984
+# If fulltest is set to 1, tests will post bulletins (and possibly other similar
+# "destructive" or "public" things in the future).  If it's set to 0 (the default)
+# bulletin won't actually post a bulletin, but will stop short of the final
+# confirmation.  This is probably fine unless you're actually working on those
+# methods.
+fulltest: 0
 
 
 See t/config.yaml for an example file (but lacking "username" and "password").
