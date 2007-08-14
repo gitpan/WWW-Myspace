@@ -1,7 +1,7 @@
 #!perl -T
 
 use Data::Dumper;
-use Test::More tests => 19;
+use Test::More tests => 24;
 #use Test::More 'no_plan';
 
 use lib 't';
@@ -30,6 +30,22 @@ is( $myspace->is_band( 30204716 ), 1,
 	"is_band identifies band profile correctly" );
 is( $myspace->is_band( $CONFIG->{'acct2'}->{'friend_id'} ), 0,
 	"is_band identifies 3rd party non-band profile correctly" );
+	
+#Test get_profile_type for individuals
+is( $myspace->get_profile_type( 76959716), 1,
+	"get_profile_type identifies personal profile correctly" );
+
+#Test get_profile_type for music
+is( $myspace->get_profile_type( 3327112), 2,
+	"get_profile_type identifies music profile correctly" );
+	
+#Test get_profile_type for film
+is( $myspace->get_profile_type( 198234322), 3,
+	"get_profile_type identifies film profile correctly" );
+	
+#Test get_profile_type for comedy
+is( $myspace->get_profile_type( 45202648), 4,
+	"get_profile_type identifies comedy profile correctly" );
 
 SKIP: {
 	skip "Not logged in", 7 unless $CONFIG->{login};
@@ -144,7 +160,8 @@ SKIP: {
 is ($myspace->friend_id("48439059"), 48439059, "Get correct friend_id when passsed myspace.com/<friend_id>");
 
 # 2. check friend_id is returned by url
-is  ($myspace->friend_id("tomkerswill"), 7875748,"Get correct friend_id when passed custom URL.");
+is  ($myspace->friend_id("myspace.com/tomkerswill"), 7875748,
+     "Get correct friend_id when passed custom URL.");
 
 # 3. check nothing is returned when passed just homepage
 #is ( $myspace->friend_id(""), "","Get when URL doesn't correspond to a profile");
@@ -159,3 +176,17 @@ if ( $CONFIG->{login} ) {
 
 }
 warn $myspace->error if $myspace->error;
+
+# Test get_birthdays
+SKIP: {
+    skip "Skip get_birthday test - not logged in", 1 unless $CONFIG->{login};
+
+    my @bd = ( $myspace->get_birthdays );
+    
+    # We check for a friendID and a valid-looking month in the birthdate.
+    # In case the test account has no birthdays, we'll pass too.
+    ok( ( ! @bd ) || ( $bd[0] && ( $bd[1] =~ /Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/ ) ),
+        "get_birthday returned a friendID and valid-looking birthday" ) or
+        warn "get_birthday got friendID " . $bd[0] . ", Bday: " . $bd[1] . " and ".
+             "returned " . @bd / 2 . " birthdays.\n";
+}

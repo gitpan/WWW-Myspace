@@ -10,7 +10,7 @@ use WWW::Myspace;
 
 my $myspace = WWW::Myspace->new( auto_login => 0);
 
-plan tests => 7;
+plan tests => 8;
 
 my $friend_id = $myspace->friend_id('greatbigseaofficial');
 ok ($friend_id, "got friend id: $friend_id");
@@ -26,6 +26,9 @@ ok ($views_from_page, "got $views_from_page views based on page" );
 
 my $comments = $myspace->comment_count( page => $page );
 ok ( $comments, "got $comments comments from page");
+
+$comments = $myspace->comment_count( 76772500 );
+is ( $comments, 0, "detected that profile has zero comments");
 
 my $ymd = $myspace->last_login_ymd( page => $page );
 like ( $ymd, qr/\d\d\d\d-\d{1,2}-\d{1,2}/, "got YMD format for band page" );
