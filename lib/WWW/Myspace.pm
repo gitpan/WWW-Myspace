@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 463 2007-08-14 18:41:07Z grantg $
+# $Id: Myspace.pm 471 2007-08-16 23:16:34Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -30,7 +30,8 @@ use Contextual::Return;
 #use Locale::SubCountry;  # moved to cool_new_people to stop warnings
 use WWW::Mechanize;
 use File::Spec::Functions;
-use Time::Local;
+#use Time::Local;
+use Time::ParseDate;
 
 =head1 NAME
 
@@ -38,11 +39,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.69
+Version 0.70
 
 =cut
 
-our $VERSION = '0.69';
+our $VERSION = '0.70';
 
 =head1 WARNING
 
@@ -645,7 +646,7 @@ sub _try_login {
                     email => $self->account_name,
                     password => $self->password
                 },
-                button => 'ctl00$Main$SplashDisplay$ctl01$loginbutton'            
+                button => 'ctl00$Main$SplashDisplay$ctl00$loginbutton'            
         } );
     }
 
@@ -1476,7 +1477,11 @@ sub friend_count {
 =head2 last_login( [friend_id] )
 
 Returns the last login date from the specified profile in Perl "time"
-format.
+format.  As of WWW::Myspace 0.70, uses the Time::ParseDate module's
+"parsedate" method to parse the date according to your system's locale
+settings.  This was done to allow for UK-style dates, which myspace seems
+to display based either on your profile settings, if you're logged in, or
+based on your IP address if not logged in.
 
 If no friend_id is specified, this method scans the current page
 so you can do:
@@ -1503,11 +1508,13 @@ sub last_login {
         $page = $self->current_page;
     }
 
-    if ( $page && $page->decoded_content =~ /Last Login:(\s|&nbsp;)+([0-9]+)\/([0-9]+)\/([0-9]+)\s*<br>/o ) {
+    if ( $page && $page->decoded_content =~ /Last Login:(\s|&nbsp;)+([0-9]+\/[0-9]+\/[0-9]+)\s*<br>/o ) {
         # Convert to Perl's time format.
-        my $time = "";
-        eval { $time = timelocal( 0, 0, 0, $3, $2 - 1, $4 ); };
-        $self->error( $@ . "\nDate found was $2/$3/$4" ); # Need to report to the caller if we got an error.
+                
+        my $time = parsedate( "$2", DATE_REQUIRED => 1); # From Time::ParseDate
+        $self->error( "Unable to parse date: $1" ) unless $time;
+#        eval { $time = timelocal( 0, 0, 0, $3, $2 - 1, $4 ); }; # From Time::Local
+#        $self->error( $@ . "\nDate found was $2/$3/$4" ); # Need to report to the caller if we got an error.
         # Return it.
         return $time;
     } else {
@@ -3543,7 +3550,7 @@ sub read_message {
 
     # Now we have to yank data out of a messy page.
     my $page = $res->decoded_content;
-    $page =~ s/[ \t\n\r]+/ /go; # Strip whitespace
+    $page =~ s/[ \t\n\r]+/ /go; # Turn multiple whitespace into single space
 
     # From:
     $page =~ /From:.*?friendID=([0-9]+)[^0-9]/io;
@@ -3556,13 +3563,22 @@ sub read_message {
     $message{'date'} = $1;
     
     # Subject:
-    if ( $page =~ />Subject:<.*?<td>([^ <][^<]+)<\/td>/o ) {
+    if ( $page =~ /<th.*?>\s*Subject:\s*<.*?<td>\s*(.*?)\s*<\/td>/smo ) {
         $message{'subject'} = $1;
     }
  
     # Body:
 #   $res->decoded_content =~ /<span class="blacktextnb10">.*^(.*)^                          <br><br><br>/sm;
-    $res->decoded_content =~ /<th>Body:.*?<td>(.*)\s+<br \/><br \/><br \/>/smo;
+    # TODO: Message body works like this:
+    # <th>Body:</th><td>This is a great message<br /><br /><br /></td>
+    # In real life, there's a lot of random whitespace in there.
+    # Myspace adds three br tags after the message.
+    # This RE looks for those tags followed by the </td>. We do this because
+    # it's always possible someone will include an HTML table in the message.
+    # What we really need to do is find the matching closing tag for the body's <td>
+    # tag, but I'm not really sure how to easily do that, so I did this as a
+    # workaround.
+    $page =~ /<th>\s*Body:\s*<\/th>\s*<td>\s*(.*)\s+<br \/>\s*<br \/>\s*<br \/>\s*<\/td>/smo;
     $message{'body'} = $1;
     
     # Clean up newlines
@@ -3573,7 +3589,8 @@ sub read_message {
     $message{'body'} =~ s/\s*$//so;  # After
 
     # And they have these BR tags at the beginning of each line...
-    $message{'body'} =~ s/^[ \t]*<br \/>[ \t]*//mog;
+    # Not any more - 8/16/07
+#    $message{'body'} =~ s/^[ \t]*<br \/>[ \t]*//mog;
     
     # And sometimes they put them elsewhere, so we'll convert those to newlines.
     $message{'body'} =~ s/<br \/>/\n/mog;
@@ -6232,7 +6249,7 @@ sub _use_captcha_killer {
     $captcha_id = "";
     if ( $response->is_success ) {
         print $response->decoded_content;
-        if ( $response->decoded_content =~ /SUCCESS: captcha_id=([\w\-]+)/ ) {
+        if ( $response->decoded_content =~ /SUCCESS: captcha_id=([\w\-]+)/o ) {
             $captcha_id = $1;
             print "GOT CAPTCHA ID: $captcha_id\n";
         } else {
@@ -6250,9 +6267,9 @@ sub _use_captcha_killer {
             Content => [ api_key => $api_key, method => "get_result", captcha_id => $captcha_id ] );
         if ( $response->is_success ) {
             print $response->decoded_content;
-            next if ( $response->decoded_content =~ /^WAIT/ );
-            last if ( $response->decoded_content =~ /^ERROR/ );
-            if ( $response->decoded_content =~ /^SUCCESS: captcha_result=\"(.*)\"$/ ) {
+            next if ( $response->decoded_content =~ /^WAIT/o );
+            last if ( $response->decoded_content =~ /^(ERROR|FAILURE)/o );
+            if ( $response->decoded_content =~ /^SUCCESS: captcha_result=\"(.*)\"$/o ) {
                 $captcha_result = $1;
                 last;
             }

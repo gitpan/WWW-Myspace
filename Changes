@@ -1,6 +1,18 @@
 Revision history for WWW::Myspace
 
-0.69    2007-07-07
+0.70    2007-08-16
+        - Updated captcha handling to stop trying when "FAILURE" is returned by
+          captchakiller.com.
+        - Fixed 0.69 release date.
+        - Added "o" to end of REs in captcha handling routine for efficiency.
+        - Fixed name of login button due to myspace change 8/15/07.
+        - Fixed 19-find_friend.t "skip" warning message.
+        - Updated read_message to work with changed myspace code.
+        - Updated last_login sample script to report error on failure.
+        - Updated last_login method to use Time::ParseDate to better handle
+          UK dates.
+
+0.69    2007-08-14
         - Added get_real_name sample script
         - Updated Known Issues in Myspace.pm docs to mention that location
           must be United States or other location that uses English with
@@ -24,7 +36,8 @@ Revision history for WWW::Myspace
           matching friendIDs.
         - Added find_friend sample script in sample_scripts
         - Added 19-find_friend.t test.
-        - updated get_friends to correctly handle profiles wit no friends at all (not even Tom)
+        - updated get_friends to correctly handle profiles with no friends
+          at all (not even Tom)
         - find_friend now returns friends as a list even if there is only one.
         - added get_profile_type to for an easy check on type of profile
         - added tests for get_profile_type in t/01-login.t

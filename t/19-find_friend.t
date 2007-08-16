@@ -15,7 +15,7 @@ my $myspace = new WWW::Myspace( auto_login => 0 );
 
 SKIP: {
     my $email = $CONFIG->{acct1}->{username};
-    skip "find_friend_email not set in config" unless $email;
+    skip "find_friend_email not set in config", 1 unless $email;
 
     my ( $friend_id ) = $myspace->find_friend( $email );
     

@@ -23,10 +23,11 @@ WriteMakefile(
         'Contextual::Return'    => 0, # For send_friend_request method
         'Locale::SubCountry'    => 1.38, # FriendAdder.pm, cool_new_people
         'WWW::Mechanize'        => 1.20, # Myspace.pm
-        'Time::Local'			=> 0, # Myspace.pm - last_login method
+#        'Time::Local'			=> 0, # Myspace.pm - last_login method
         'Crypt::SSLeay'			=> 0.53, # WWW::Mechanize, for SSL access to myspace.com
         'Config::General'       => 0, # MyBase.pm
         'Params::Validate'      => 0, # MyBase.pm
+        'Time::ParseDate'       => 100.010301, # Myspace.pm - last_login method.
     },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean               => { FILES => 'WWW-Myspace-*' },
