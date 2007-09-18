@@ -66,4 +66,5 @@ sample_scripts/post_comment
 sample_scripts/read_message
 sample_scripts/send_friend_request
 sample_scripts/set_random_photo
+sample_scripts/test_next_button
 META.yml                                 Module meta-data (added by MakeMaker)

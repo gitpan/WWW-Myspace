@@ -35,12 +35,17 @@ SKIP: {
 	
 	is( $response, 'P', 'Send Message' );
 	
-	# Use inbox to find the message
-	my $inbox = $myspace2->inbox;
+	# Use get_inbox to find the message. We just sent it, so we just
+	# check the 1st 2 pages of messages for speed (and to make sure we
+	# can get to the 2nd page).
+	my $inbox = $myspace2->get_inbox( end_page => 2);
 	my @messages = @{$inbox};
 	
 	# Check contents
-	cmp_ok( @{$inbox}, ">", 0, "Inbox has contents" );
+	my $msgcnt = @{$inbox};
+	cmp_ok( $msgcnt, ">", 0, "Inbox has contents" );
+	warn "get_inbox may not be reading second page. Got $msgcnt messages."
+	    unless ( $msgcnt > 10 );
 	
 	like( $inbox->[0]->{message_id}, qr/^[0-9]+$/,
 		"Inbox has a valid message ID in first slot" );
@@ -89,7 +94,7 @@ SKIP: {
 			
 			# And make sure it's deleted
 			my $message_id = $msg{message_id};
-			$inbox = $myspace2->inbox;
+			$inbox = $myspace2->get_inbox( end_page => 2 );
 			$found_message=0;
 			foreach $msg ( @{$inbox} ) {
 				if ( $msg->{message_id} == $message_id ) {

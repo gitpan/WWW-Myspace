@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 471 2007-08-16 23:16:34Z grantg $
+# $Id: Myspace.pm 478 2007-09-18 21:12:17Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -39,11 +39,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.70
+Version 0.71
 
 =cut
 
-our $VERSION = '0.70';
+our $VERSION = '0.71';
 
 =head1 WARNING
 
@@ -109,7 +109,7 @@ our $HOME_PAGE="http://home.myspace.com/index.cfm?fuseaction=user";
 our $BROWSE_PAGE = 'http://browseusers.myspace.com/browse/Browse.aspx';
 
 # What should we look for to see if there's a link to a friend's page?
-our $FRIEND_REGEXP = qr/fuseaction=user\.viewprofile\&friendID=/io;
+our $FRIEND_REGEXP = qr/fuseaction=user\.viewprofile\&(amp;)?friendID=/io;
 
 # What string should we look for if we're trying to post a comment to
 # someone who isn't our friend?
@@ -622,9 +622,25 @@ sub _try_login {
 
     # Submit the login form.  They have two different ones, so if we see indication of
     # the ASP form (new as of late Jun 2007), use it, otherwise use the CFM version.
+    # 9/17/07 - they changed from "ctl01" to "ctl00", so we check for both in case
+    # they go back and forth.
     my $submitted="";
     $self->get_page( 'http://www.myspace.com/' );
     if ( $self->current_page->decoded_content =~
+            /ctl00\$Main\$SplashDisplay\$ctl00\$Email_Textbox/io )
+    {
+        $submitted = $self->submit_form( {
+#            page => 'http://www.myspace.com/',
+            form_name => 'aspnetForm',
+            fields_ref => { 'ctl00$Main$SplashDisplay$ctl00$Email_Textbox' => $self->account_name,
+                            'ctl00$Main$SplashDisplay$ctl00$Password_Textbox' => $self->password,
+    #                        '__EVENTTARGET' => 'ctl00$Main$SplashDisplay$ctl00$Login_ImageButton',
+    #                        '__EVENTARGUMENT' => '',
+                          },
+            action => 'http://secure.myspace.com/index.cfm?fuseaction=login.process',
+    #        no_click => 1,
+        } ) ;
+    } elsif ( $self->current_page->decoded_content =~
             /ctl00\$Main\$SplashDisplay\$ctl01\$Email_Textbox/io )
     {
         $submitted = $self->submit_form( {
@@ -637,8 +653,12 @@ sub _try_login {
                           },
             action => 'http://secure.myspace.com/index.cfm?fuseaction=login.process',
     #        no_click => 1,
-        } ) ;
+        } )
     } else {
+        my $btn_name = $self->current_page->decoded_content =~
+            /ctl00\$Main\$SplashDisplay\$ctl00\$loginbutton/ ? 
+            'ctl00$Main$SplashDisplay$ctl00$loginbutton' :
+            'ctl00$Main$SplashDisplay$ctl01$loginbutton';
         $submitted = $self->submit_form( {
 #            page => 'http://www.myspace.com/',
                 form_name => 'theForm',
@@ -646,7 +666,7 @@ sub _try_login {
                     email => $self->account_name,
                     password => $self->password
                 },
-                button => 'ctl00$Main$SplashDisplay$ctl00$loginbutton'            
+                button => $btn_name
         } );
     }
 
@@ -1555,9 +1575,13 @@ sub last_login_ymd {
 # get_profile( $friend_id )
 # Return the friend's profile page as an HTTP::Response object
 
-=head2 get_profile( $friend_id )
+=head2 get_profile( $friend_id || $friend_url )
 
-Gets the profile identified by $friend_id.
+Gets the profile identified by $friend_id or $friend_url. That means
+both of these will work:
+
+ $myspace->get_profile( "12345" );
+ $myspace->get_profile( "hilaryduff" );
 
 Returns a reference to a HTTP::Response object that contains the
 profile page for $friend_id.
@@ -1580,7 +1604,7 @@ sub get_profile {
 
     my $re = 'verify_get_profile';
     $re = undef if ( $no_validate );
-    return $self->get_page( "${VIEW_PROFILE_URL}${friend_id}", $re );
+    return $self->get_page( "${BASE_URL}${friend_id}", $re );
 
 }
 
@@ -2065,17 +2089,17 @@ sub set_default_photo {
     # Click "View All Photos".
     $self->follow_link( url_regex => qr/fuseaction=user\.editAlbumPhotos/io ) or return;
 
-    # The photo should be on form 2 or later (search form and photo privacy form come
-    # before the first picture).
-#    warn "Getting form number\n";
-    my $button_no = $self->_get_photo_button_no( $options{'photo_id'} ) or return;
-#    warn "Found photo in form number $form_no\n";
+    # Click on the picture
+    $self->follow_link( url_regex => qr/imageID=$options{'photo_id'}/i ) or return;
 
-    # We index from form 0 in submit_form.
+    # Click the "Set a default" button
     $self->submit_form( {
         form_name => 'aspnetForm',
-        button => 'ctl00$Main$ViewAndEditPhotos1$ImageListings1$dtImageList$ctl' .
-                  ${button_no} . '$SetAsDefault',
+        fields_ref => {
+            '__EVENTTARGET' => 'ctl00$cpMain$contentHolder$editPhoto$PhotoHeader1$lbtnSetAsDefault',
+            '__EVENTARGUMENT' => ''
+        },
+        no_click => 1,
     } );
 
 }
@@ -2693,7 +2717,7 @@ sub get_friends {
     if ( ! defined $options{'source'} ) {
         $self->_go_home;
         $self->follow_link(
-            text_regex => qr/view all of my friends/io,
+            url_regex => qr/fuseaction=user\.viewfriends/io,
             re => 'View All Friends',
         );
     } elsif ( $options{'source'} eq 'group' ) {
@@ -2710,11 +2734,11 @@ sub get_friends {
         $self->get_profile( $options{id} );
         #check first whether there are friends at all
         #if not, return zero friends    
-        if($self->current_page->decoded_content =~ qr/Invite Your Friends Here/o){
-            return ( @friends);
+        if ( $self->current_page->decoded_content =~ qr/Invite Your Friends Here/o ) {
+            return ( @friends)
         }
         else {
-            $self->follow_link( text_regex => qr/view all of .* friends/io );
+            $self->follow_link( url_regex => qr/fuseaction=user\.viewfriends/io );
             $exclude=$options{id}; # Exclude the owner's ID (bit of a hack).
         }
     }
@@ -3172,8 +3196,8 @@ sub post_comment {
                          follow => 1,
                          form_name => 'aspnetForm',
                          fields_ref => {
-                            'ctl00$Main$postComment$commentTextBox' => "$message",
-                            '__EVENTTARGET' => 'ctl00$Main$postComment$postcommentImageButton',
+                            'ctl00$cpMain$postComment$commentTextBox' => "$message",
+                            '__EVENTTARGET' => 'ctl00$cpMain$postComment$postcommentImageButton',
     #                        '__EVENTARGUMENT' => '',
                          },
                          re1 => 'comment_p1',
@@ -3201,7 +3225,7 @@ sub post_comment {
                 $submitted = $self->submit_form( {
                     follow => 1,
                     form_name => 'aspnetForm',
-                    button => 'ctl00$Main$postComment$ConfirmPostButton',
+                    button => 'ctl00$cpMain$postComment$ConfirmPostButton',
                     @captcha
                 } );
             } else {
@@ -3401,7 +3425,7 @@ sub already_commented {
 
 }
 
-=head2 get_inbox
+=head2 get_inbox ( %options )
 
 Returns a reference to an array of hash references that contain data
 about the messages in your Myspace message inbox. The hashes contain:
@@ -3414,6 +3438,22 @@ about the messages in your Myspace message inbox. The hashes contain:
 The messages are returned IN ORDER with the newest first to oldest last
 (that is, the same order in which they'd appear if you were looking through
 your inbox).
+
+There is currently one option:
+
+ end_msg => $message_id # Stop and return when
+                        # the message with this
+                        # messageID is reached.
+                        # Does NOT return message $message_id.
+ end_page => $page_no   # Stop and return after reading this page.
+
+end_msg is primarily used if you're caching your mail into a database.  This
+lets you get all the mail since the last message you cached.  get_inbox
+does not return the message matching $message_id (because you already have it).
+If there are no new messages before $message_id, returns an empty list.
+
+end_page will read up to and including the page specified.  So if you
+pass "end_page => 1", it will read only the first page of messages.
 
 I'm sure reading that first line made you as dizzy as it made me typing it.
 I think this says it all much more clearly:
@@ -3438,12 +3478,22 @@ I think this says it all much more clearly:
 
 (This script is in the sample_scripts directory, named "get_inbox").
 
+ EXAMPLE 2
+ 
+ # Read the messages since the last one we got 
+ my $last_msg = selectrow_array(
+    "select message_id from mydatabase order by messagedate desc limit 1"
+ );  # Sorry for the psuedocode, but hopefully you get the idea
+
+ my $messages = $myspace->get_inbox( stop_at => $last_msg )
+
 "inbox" croaks if called when you're not logged in.
 
 =cut
 
 sub get_inbox {
 
+    my ( %options ) = @_;
     my $page="";
     my $page_no = 0;
     my @messages = ();
@@ -3451,36 +3501,43 @@ sub get_inbox {
     $self->_die_unless_logged_in( 'inbox' );
 
     # Go home
-    $self->_go_home;
-    return () if $self->error;
+    $self->_go_home or return;
 
     # Get the first page
     $page = $self->follow_to(
                 $self->mech->find_link(
                     url_regex => qr/fuseaction=mail\.inbox/i
                 )->url, 'Mail Center.*Inbox'
-            ) or return ();
+            ) or return;
 
     # Loop until we get an empty page or there isn't a "next" link.
     while ( 1 ) {
+        $page_no++;
 
         ( $DEBUG ) && print "inbox reading page $page_no\n";
         # Get the message data.
-        push @messages, $self->_get_messages_from_page;
+        push @messages, $self->_get_messages_from_page( %options );
 
-       last unless ( $self->_next_button );
-#       last unless ( $page->decoded_content =~ /">Next( |&nbsp;)\&gt;/io );
+        # Stop if we got to the specified message
+        last if ( $options{'stop_at_msg'} &&
+                  ( $options{'stop_at_msg'} == $messages[-1]->{message_id} )
+                );
+
+        # Stop if we're on the last page
+        last unless ( $self->_next_button );
+        
+        # Stop if we've reached the last page they requested
+        last if ( $options{'end_page'} && ( $page_no >= $options{'end_page'} ) );
         
         # Next!
         $self->submit_form( {
             form_name => 'aspnetForm',
             fields_ref => {
-                '__EVENTTARGET' =>
-                'ctl00$cpMain$messageList$pagingNavigation1$NextLinkButton',
+                '__EVENTTARGET' => 'ctl00$ctl00$Main$Main$messageList$pagingTop',
+                '__EVENTARGUMENT' => $page_no+1
             },
             no_click => 1,
         } );
-        $page_no++;
         
     }
 
@@ -3491,10 +3548,12 @@ sub get_inbox {
 # Return a list of message data from the current page
 sub _get_messages_from_page {
 
+    my ( %options ) = @_;
     my $page = $self->current_page->decoded_content;
     my @messages = ();
     while ( $page =~
             s/.*?UserID=([^;]+);.*?(Unread|Read|Sent|Replied).*?messageID=([^&]+)&.*?>([^<]+)<//som ) {
+        last if ( $options{'stop_at'} && ( $options{'stop_at'} == $3 ) );
         push @messages,
              { sender => $1, status => $2, message_id => $3, subject => $4 }
     }
@@ -5601,13 +5660,13 @@ sub get_friends_on_page {
 
     while ( $page =~ s/.*?${FRIEND_REGEXP}([0-9]+)//smi ) {
         unless ( ( ( $self->logged_in ) &&
-                   ( "$1" == $self->my_friend_id )
+                   ( "$2" == $self->my_friend_id )
                  ) ||
-                 ( "$1" == 6221 ) ||
-                 ( ( $exclude ) && ( "$1" == $exclude ) )||
-                 ( @friend_ids && ( "$1" == $friend_ids[$#friend_ids] ) ) # Duplicate check
+                 ( "$2" == 6221 ) ||
+                 ( ( $exclude ) && ( "$2" == $exclude ) )||
+                 ( @friend_ids && ( "$2" == $friend_ids[$#friend_ids] ) ) # Duplicate check
                  ) {
-            push( @friend_ids, $1 );
+            push( @friend_ids, $2 );
         }
     }
     
@@ -5615,50 +5674,6 @@ sub get_friends_on_page {
 
 }
 
-# Original method - delete if all is working ok.
-sub _get_friends_on_page {
-
-    my ( $page ) = @_;
-
-    # Default to current page
-    unless ( $page ) { $page = $self->current_page->decoded_content }
-
-    my %friend_ids = ();
-    my $line;
-    my @lines = split( "\n", $page );
-#    $self->{_high_friend_id} = 0;
-#    $self->{_low_friend_id} = 0;
-    foreach $line ( @lines ) {
-        if ( $line =~ /${FRIEND_REGEXP}([0-9]+)/ ) {
-            unless ( ( ( $self->logged_in ) &&
-                       ( "$1" == $self->my_friend_id )
-                     ) ||
-                     ( "$1" == 6221 )
-                   ) {
-                $friend_ids{"$1"}++;
-
-#                # The following are used to construct the URL
-#                # when crawling the user's "view all my friends" pages.
-#                # Set high friendID on this page
-#                if ( $self->{_high_friend_id} < $1 ) {
-#                    $self->{_high_friend_id} = $1;
-#                }
-#                # Set low friendID on this page
-#                if ( ( $self->{_low_friend_id} == 0 ) ||
-#                     ( $1 < $self->{_low_friend_id} ) ) {
-#                    $self->{_low_friend_id} = $1;
-#                }
-            }
-        }
-    }
-    
-    if ( $DEBUG ) {
-        my @friends = keys( %friend_ids );
-        print "  Got " . @friends . " friends on page\n";
-    }
-
-    return ( keys( %friend_ids ) );
-}
 
 =head2 remove_cache
 
@@ -5995,7 +6010,7 @@ sub _previous_button {
         $content = $self->current_page->decoded_content;
     }
 
-    $content =~ /&lt;\s*<a [^>]+>\s*Previous\s*<\/a>/io;
+    $content =~ /(&lt;\s*<a [^>]+>|<a .*?>\s*\&lsaquo;)\s*Previous\s*<\/a>/io;
 
 }
 
@@ -6036,7 +6051,7 @@ sub _go_home {
 
     # If we're not logged in, go to the home page
     unless ( $self->logged_in ) {
-        $self->get_page( $BASE_URL ) or return undef;
+        $self->get_page( $BASE_URL ) or return;
         return 1;
     }
 
@@ -6054,7 +6069,7 @@ sub _go_home {
                       )
        ) {
 #        warn "_go_home going to " . $home_link->url . "\n";
-        $self->follow_to( $home_link->url ) or return undef;
+        $self->follow_to( $home_link->url ) or return;
         return 1;
     }
     

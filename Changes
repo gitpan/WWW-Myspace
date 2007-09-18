@@ -1,5 +1,27 @@
 Revision history for WWW::Myspace
 
+0.71    2007-09-18
+        - MAINTENANCE RELEASE:
+          This release handles the myspace login form change 9/17/07.
+          post_comment and send_message are failing tests.
+          Other changes in this release are as listed below.
+        - Added end_page and end_msg options to get_inbox.
+        - Updated 05-message test to use get_inbox (instead of inbox)
+          and to use end_page option for speed.
+        - Fixed paging in get_inbox - was only getting the 1st page.
+        - Created test_next_button sample script to ease testing of _next_button
+          method across different paging methods (get_friends, get_inbox, etc).
+        - Updated login method to check for button names Myspace switches between.
+        - get_profile can now take a friend_id or friend_url
+        - Updated _try_login method broken by change in login form 9/17/07.
+        - Updated "View All Friends" URL to account for myspace change.
+          Fixes get_friends.
+        - Updated field names in post_comment due to myspace change.
+        - Updated set_default_photo to work with new button on photo page.
+        - Updated RE used in $FRIEND_REGEXP to include "&amp;" (fixes
+          get_friends_on_page and all other get_friends-style methods).
+        - Removed outdated get_friends_on_page code.
+
 0.70    2007-08-16
         - Updated captcha handling to stop trying when "FAILURE" is returned by
           captchakiller.com.
