@@ -1,10 +1,12 @@
-# $Id: Comment.pm 346 2007-06-06 03:39:09Z grantg $
+# $Id: Comment.pm 486 2007-09-22 20:05:58Z grantg $
 
 package WWW::Myspace::Comment;
 
 use Spiffy -Base;
 use Carp;
 use File::Spec::Functions;
+use warnings;
+use strict;
 
 =head1 NAME
 

@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 478 2007-09-18 21:12:17Z grantg $
+# $Id: Myspace.pm 496 2007-10-11 08:17:05Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -14,6 +14,9 @@
 # Declare our package.
 package WWW::Myspace;
 use WWW::Myspace::MyBase -Base;
+use Data::Dumper;
+use warnings;
+use strict;
 
 # *** If you're not familiar with Spiffy, read its docs. To save you
 # confusion, one of its features is to add "my $self = shift;" to
@@ -39,11 +42,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.71
+Version 0.72
 
 =cut
 
-our $VERSION = '0.71';
+our $VERSION = '0.72';
 
 =head1 WARNING
 
@@ -200,8 +203,8 @@ my %regex = (
     comment_posted => qr/Your Comment has been posted/io,
     not_logged_in => qr/You Must Be Logged-In to do That\!/io,
     verify_message_sent => qr/Your Message Has Been Sent\!/o,
-    comment_p1 => qr/ctl00\$Main\$postComment\$commentTextBox.*<\/form|$NOT_FRIEND_ERROR|($CAPTCHA)|($INVALID_ID)/smio,
-    comment_p2 => qr/ctl00\$Main\$postComment\$Button1.*<\/form/smo,
+    comment_p1 => qr/ctl00\$(cp)?Main\$postComment\$commentTextBox.*<\/form|$NOT_FRIEND_ERROR|($CAPTCHA)|($INVALID_ID)/smio,
+    comment_p2 => qr/ctl00\$(cp)?Main\$postComment\$Button1.*<\/form/smo,
     comment_approval_msg => qr/This user requires all comments to be approved before being posted/o,
     not_friend => qr/$NOT_FRIEND_ERROR/smo,
     bulletin_url => qr/fuseaction=bulletin\.edit/io,
@@ -585,19 +588,25 @@ sub site_login {
 
     # We probably have an ad or somesuch (started 1/7/2006)
     # so explicitly request our Home.
-    $self->follow_link(
-                url_regex => qr/\.(cfm|aspx?)\?fuseaction=user/i,
-#                re=> 'is_logged_in',
-            );
-                
+    # We can't click "home", because as of 10/10/07 Myspace sets the Home
+    # link using Javascript if you're logged in.  Why do the work on the
+    # server when you can just add extra code and do it on the browser instead?
+    # In fact, why not just make all of Myspace run in the browser?
+    $self->follow_to( $HOME_PAGE, '' )
+        or warn "Couldn't go to user's home page";
+
+#    ( $DEBUG ) && warn $self->current_page->content;
+
     # Verify we're logged in
     if ( $self->_apply_regex( regex => 'is_logged_in' ) ) {
         $self->logged_in( 1 );
+        warn "Logged in\n" if ( $DEBUG );
     } else {
         $self->logged_in( 0 );
         unless ( $self->error ) {
             $self->error( "Login Failed. Couldn't verify load of home page." )
         }
+        warn $self->current_page->decoded_content if $DEBUG;
         return;
     }
 
@@ -710,7 +719,7 @@ sub _account_verified {
 # Initialize basic account/login-specific settings after login
 sub _init_account {
     
-    # Get our friend ID from our profile page (which happens to
+    # Get our friend ID from our home page (which happens to
     # be the page we go to after logging in).
     $self->_get_friend_id( $self->current_page );
 
@@ -1989,17 +1998,18 @@ Croaks if called when not logged in.
     my %bd=(); my $page = 1;
 
     do {
-        my $page = $self->current_page->decoded_content;
+        my $page_source = $self->current_page->decoded_content;
     
-        while ( $page =~ s/^.*?friendid=([0-9]+).*?birthday_icon\.gif.*?>\s*(.*?)\s*<//ismo ) {
+        while ( $page_source =~ s/^.*?friendid=([0-9]+).*?birthday_icon\.gif.*?>\s*(.*?)\s*<//ismo ) {
             print "$1: $2\n" if ( $DEBUG );
             $bd{"$1"}="$2";
         }
     
         # Click "Next"
-        $page++;
+        $page++; ( $DEBUG ) && print "\n\nPage $page:\n";
+        last if ( $page > 5 );  # To prevent endless loop if below doesn't work.
         $self->submit_form( {
-            form_name=>'theForm',
+            form_name=>'aspnetForm',
             fields_ref=>{ '__EVENTTARGET' => 'ctl00$cpMain$BirthdayList$PagerTop',
                           '__EVENTARGUMENT' => $page
                         },
@@ -2027,7 +2037,7 @@ The only valid option at this time is:
 
 Defaults to your friendID.
 
-Croaks if called when not logged in and no friend_id was passed.
+Croaks if called when not logged in.
 
 =cut
 
@@ -2035,9 +2045,9 @@ sub get_photo_ids {
 
     my ( %options ) = @_;
 
-    $self->_die_unless_logged_in( 'get_photo_ids' ) unless $options{'friend_id'};
+    $self->_die_unless_logged_in( 'get_photo_ids' );
 
-    my $friend_id = $options{'friend_id'} ? $options{'friend_id'} : $self->my_friend_id;
+    my $friend_id = $options{'friend_id'} || $self->my_friend_id;
 
     $self->get_profile( $friend_id ) or return;
 
@@ -2046,6 +2056,7 @@ sub get_photo_ids {
     # If there's a "View All Pictures" link, click it.  Otherwise it means
     # they only have one album (or myspace changed something again).
     $self->follow_link( url_regex => qr/fuseaction\=user\.viewPicture/io );
+    $self->error(undef); # Ignore any error we got.
 
     my $last_id = -1;
     my @photo_ids = ();
@@ -2176,9 +2187,9 @@ sub find_friend {
     $self->error( "Must provide an email address in find_friend") unless ( $email );
 
     $self->_go_home or return;
-    
-    $self->follow_link( url_regex=> qr/fuseaction=find/io ) or return;
-    
+
+    $self->follow_to( 'http://search.myspace.com/index.cfm?fuseaction=find', '' ) or return;
+
     return unless $self->submit_form( {
         form_no => 2,
         fields_ref=>{
@@ -3552,7 +3563,7 @@ sub _get_messages_from_page {
     my $page = $self->current_page->decoded_content;
     my @messages = ();
     while ( $page =~
-            s/.*?UserID=([^;]+);.*?(Unread|Read|Sent|Replied).*?messageID=([^&]+)&.*?>([^<]+)<//som ) {
+            s/.*?viewprofile&friendid=([0-9]+).*?(Unread|Read|Sent|Replied).*?messageID=([^&]+)&.*?>([^<]+)<//som ) {
         last if ( $options{'stop_at'} && ( $options{'stop_at'} == $3 ) );
         push @messages,
              { sender => $1, status => $2, message_id => $3, subject => $4 }
@@ -3964,7 +3975,8 @@ sub send_message {
                         "$options{'subject'}",
                     'ctl00$ctl00$Main$Main$sendMessageControl$bodyTextBox' =>
                         "$options{'message'}",
-    #                 '__EVENTTARGET' => '',
+                     '__EVENTTARGET' => 'ctl00$ctl00$Main$Main$sendMessageControl$btnSend',
+                     '__EVENTARGUMENT' => ''
     
                 },
                 no_click => 1,
@@ -3978,17 +3990,17 @@ sub send_message {
     #                         }
     #                       );
     #     }
-    
-        
+
+
         $page = $self->current_page->decoded_content;
         $page =~ s/[ \t\n\r]+/ /g;
-    
+
         # Return the result
         if (! $submitted ) {
             $status = "FN";
         } elsif ( $page =~ $CAPTCHAi ) {
             $status = "FC";  # They keep changing which page this appears on.
-        } elsif ( $page =~ $self->_regex('verify_message_sent') ) {
+        } elsif ( $self->_apply_regex( source => $page, regex => 'verify_message_sent') ) {
             $status = "P";
         } elsif ( $self->_apply_regex( source => $page, regex => 'exceed_usage' ) ) {
             $status = "FE";
@@ -4820,7 +4832,7 @@ sub post_bulletin {
     my $submitted = $self->submit_form( {
 #        page => $link->url,
 #        follow => 1,
-        form_no => 3,
+        form_no => 2,
         fields_ref => {
             'ctl00$cpMain$Subject_Textbox' => $options{'subject'},
             'ctl00$cpMain$Body_Textbox' => $options{'message'},
@@ -4841,8 +4853,8 @@ sub post_bulletin {
     # the Post button, and a secret little bulletinForm form.  The Post button
     # calls javascript that sets the bulletinForm's action URL and posts it.
     # Note that "bulletinForm" is identified by ID, not name, so we just specify
-    # form#4 (5th form on the page).  Sorry, did I mention one of those forms
-    # is just a tag, embedded in another form?  So it's form 3, not 4...
+    # form#3 (4th form on the page).  Sorry, did I mention one of those forms
+    # is just a tag, embedded in another form?  So it's form 2, not 3...
 #        warn "Submitting Confirmation screen";
     # Get the action
     $action = '';
@@ -4855,7 +4867,7 @@ sub post_bulletin {
     return 1 if $options{'testing'};
 
     $submitted = $self->submit_form( {
-        form_no => 3,
+        form_no => 2,
         action => $action,
         no_click => 1,
     } );
@@ -5811,8 +5823,8 @@ sub _get_acct {
 #---------------------------------------------------------------------
 # _get_friend_id( $homepage )
 # This internal method stores our friend ID. We get this from the
-# "View All of My Friends" link on the bottom of our profile page (the one
-# we see when we first log in)
+# "View Profile" link on our home page (the page we see when we
+# click the "Home" link in the top nav bar)
 
 sub _get_friend_id {
 
@@ -6062,16 +6074,18 @@ sub _go_home {
         return 1;
     }
     
-    # No, try to click home
-    my $home_link = "";
-    if ( $home_link = $self->mech->find_link(
-                        url_regex => qr/fuseaction=user/io
-                      )
-       ) {
+#    # No, try to click home
+#    # Broken by myspace on 10/10/07 - Home page link set by Javascript.
+#    my $home_link = "";
+#    
+#    if ( $home_link = $self->mech->find_link(
+#                        url_regex => qr/fuseaction=user([&;]|$|")/io
+#                      )
+#       ) {
 #        warn "_go_home going to " . $home_link->url . "\n";
-        $self->follow_to( $home_link->url ) or return;
-        return 1;
-    }
+#        $self->follow_to( $home_link->url ) or return;
+#        return 1;
+#    }
     
     # Still here?  Load the page explicitly
     $self->get_page( $HOME_PAGE ) or return undef;
@@ -6260,7 +6274,7 @@ sub _use_captcha_killer {
     my $response = $ua->post( "http://www.captchakiller.com/api.php", 
             Content_Type => 'form-data', 
             Content => [ api_key => $api_key, method => "upload_captcha", 
-            captcha_url => $captcha_url, file => [ $upload_filename ] ] );
+            captcha_url => $captcha_url, expire => ( $self->captcha_tries * 10 ), file => [ $upload_filename ] ] );
     $captcha_id = "";
     if ( $response->is_success ) {
         print $response->decoded_content;
@@ -6300,7 +6314,12 @@ sub _handle_captcha {
     print "GOT CAPTCHA URL: $url\n";
     my $file = catfile( $self->cache_dir, "captcha$$" );
     print "SAVING INTO FILE: $file\n";
-    my $res = $self->mech->get( $url, ':content_file' => $file );
+    for ( my $i = 0; $i < 5; $i++ ) {
+    	my $res = $self->mech->get( $url, ':content_file' => $file );
+    	last if ( -f $file );
+	print "FILE TROUBLE: ", Dumper( $file );
+    }
+    return "" if ( ! -f $file );
     my $solution = $self->_use_captcha_killer( $url, $file );
     unlink ( $file );
     return $solution;

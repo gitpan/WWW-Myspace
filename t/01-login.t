@@ -1,7 +1,7 @@
 #!perl -T
 
 use Data::Dumper;
-use Test::More tests => 24;
+use Test::More tests => 23;
 #use Test::More 'no_plan';
 
 use lib 't';
@@ -86,7 +86,7 @@ is( $myspace->friend_user_name( $CONFIG->{'acct2'}->{'friend_id'} ),
 
 SKIP: {
 
-	skip "Not logged in", 5 unless $CONFIG->{login};
+	skip "Not logged in", 4 unless $CONFIG->{login};
 
 	# Get someone else's friends (same list, different method).
 	my @other_friends =
@@ -106,7 +106,9 @@ SKIP: {
 	@friends = sort @friends;
 	# The friends and other_friends lists should be identical.
 	# So first test the length
-	is( @other_friends, @friends, 'Check friends_from_profile friend count');
+# Disabled 10/10/07: Deleted friends show up when viewing your own friends,
+# but not when viewing as an "outsider". So this breaks.
+#	is( @other_friends, @friends, 'Check friends_from_profile friend count');
 	#diag( Dumper \@other_friends);
 	#diag( Dumper \@friends);
 

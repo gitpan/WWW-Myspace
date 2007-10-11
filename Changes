@@ -1,5 +1,26 @@
 Revision history for WWW::Myspace
 
+0.72    2007-10-10
+        - Fixed a bug that would cause get_birthdays to enter an endless loop.
+        - Fixed form name in get_birthdays due to change on myspace.
+        - get_photo_ids now errors properly if called when not logged in,
+          even if a friend_id is passed.
+        - Test 14-photos.t now skips both tests if not logged in.
+        - Added get_birthdays and get_basic_info sample scripts
+        - Added bail out to tests in case WWW::Myspace doesn't compile for some reason.
+        - Renamed sample_scripts -> samples for
+          http://cpants.perl.org/kwalitee/WWW-Myspace
+        - Added use warnings and use strict to Myspace.pm, Comment.pm, FriendRequest.pm,
+          Message.pm, MyBase, Promoter. (not sure how those got left out...?)
+        - Updated MANIFEST
+        - Added Catpcha Killer patch from rt#29773
+        - Fixed login method.  Broken by change in "Home" link handling on myspace.
+        - Disabled friend_count test in 01-login.t.
+        - Updated post_comment verification REs; Fixes post_comment method.
+        - Fixed button target handling in send_message; Fixes send_message.
+        - Fixed post_bulletin broken by recent myspace change.
+        - Fixed find_friend URL lookup broken by myspace change.
+
 0.71    2007-09-18
         - MAINTENANCE RELEASE:
           This release handles the myspace login form change 9/17/07.

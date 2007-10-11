@@ -7,6 +7,8 @@ use Carp;
 use Params::Validate;
 use Config::General;
 use YAML qw'LoadFile DumpFile';
+use warnings;
+use strict;
 
 =head1 NAME
 

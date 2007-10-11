@@ -1,10 +1,11 @@
-# http://module-build.sourceforge.net/META-spec.html
-#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
-name:         WWW-Myspace
-version:      0.71
-version_from: lib/WWW/Myspace.pm
-installdirs:  site
-requires:
+--- #YAML:1.0
+name:                WWW-Myspace
+version:             0.72
+abstract:            Access MySpace.com profile information from Perl
+license:             ~
+generated_by:        ExtUtils::MakeMaker version 6.36
+distribution_type:   module
+requires:     
     Config::General:               0
     Contextual::Return:            0
     Crypt::SSLeay:                 0.53
@@ -16,6 +17,8 @@ requires:
     Time::ParseDate:               100.010301
     WWW::Mechanize:                1.2
     YAML:                          0.39
-
-distribution_type: module
-generated_by: ExtUtils::MakeMaker version 6.30
+meta-spec:
+    url:     http://module-build.sourceforge.net/META-spec-v1.2.html
+    version: 1.2
+author:
+    - Grant Grueninger <grantg@cpan.org>

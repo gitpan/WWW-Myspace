@@ -1,4 +1,4 @@
-# $Id: Message.pm 346 2007-06-06 03:39:09Z grantg $
+# $Id: Message.pm 486 2007-09-22 20:05:58Z grantg $
 
 package WWW::Myspace::Message;
 
@@ -6,6 +6,8 @@ use Spiffy -Base;
 use Carp;
 use File::Spec::Functions;
 use YAML;
+use warnings;
+use strict;
 
 =head1 NAME
 
