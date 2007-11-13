@@ -44,7 +44,7 @@ SKIP: {
 	# Check contents
 	my $msgcnt = @{$inbox};
 	cmp_ok( $msgcnt, ">", 0, "Inbox has contents" );
-	warn "get_inbox may not be reading second page. Got $msgcnt messages."
+	diag "get_inbox may not be reading second page. Got $msgcnt messages."
 	    unless ( $msgcnt > 10 );
 	
 	like( $inbox->[0]->{message_id}, qr/^[0-9]+$/,

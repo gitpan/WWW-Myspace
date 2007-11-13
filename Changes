@@ -1,5 +1,37 @@
 Revision history for WWW::Myspace
 
+0.73    2007-11-13
+        - Updated last_login regex to be more sturdy.
+        - Updated get_profile to use long form of URL when passed a friend_id.
+          This works around a myspace bug that causes a stream of "302 Found" errors
+          when accessing certain profiles.
+        - WARNING: POSSIBLE BACKWARD COMPATIBILITY BREAKAGE.
+          send_friend_request now returns "FU" (Failed, User's settings require
+          you to enter a CAPTCHA to add them as a friend).  This might break your scripts
+          if you're checking for "FC", as some CAPTCHAs will now be "FU" instead.
+          Be sure to check for FC and FU if you're looking for CAPTCHAs.
+          For the record, I picked the code as "Failed, User", but since they're requiring
+          you to enter an annoying captcha code, I think it sounds like they're really
+          saying "FU" anyway, don't you?
+        - Fixed bug in get_birthdays that would cause an error stating "Can't
+          'last' outside a loop block" if more than 5 pages were read.
+        - get_birthdays now safety-exists after 10 pages instead of 5 (this exit
+          is solely to prevent endless loops).
+        - Fixed get_comments, broken by myspace change.
+        - get_comments will now retrieve the logged-in user's comments if no friendID
+          is passed.
+        - send_friend_request now retries captcha 5 times if it guesses it incorrectly,
+          and will properly return "FC" or "FU" instead of "F" if it can't guess correctly.
+        - Added expire time and total attempts count ("attempt 1 of x") to captcha handling
+          output.
+        - get_comments now accepts a hash of options including the new "last_comment_time"
+          argument.
+        - get_comments now returns up to 100 pages (5000 comments) of comments instead of
+          50.
+        - Fixed read_message - body RE broken by myspace change.
+        - get_comments now returns comment_id also.
+        - get_comments accepts "last_comment" argument.
+
 0.72    2007-10-10
         - Fixed a bug that would cause get_birthdays to enter an endless loop.
         - Fixed form name in get_birthdays due to change on myspace.

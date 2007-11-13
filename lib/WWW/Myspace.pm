@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 496 2007-10-11 08:17:05Z grantg $
+# $Id: Myspace.pm 519 2007-11-13 08:03:58Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -42,11 +42,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.72
+Version 0.73
 
 =cut
 
-our $VERSION = '0.72';
+our $VERSION = '0.73';
 
 =head1 WARNING
 
@@ -217,6 +217,7 @@ my %regex = (
     bulletin_posted => qr/Bulletin Has Been Posted/io,
     verify_get_profile => qr/fuseaction=invite\.addfriend/io,
     exceed_usage => qr/User has exceeded their daily use?age/io,
+    user_requires_captcha => qr/settings require that you solve a CAPTCHA/iosm,
     
 );
 
@@ -834,19 +835,71 @@ that displays the notifications and a Login button.
 =cut
 
 sub get_login_form {
+
+    # This form is obsolete, but still sorta works. Take this out once the
+    # section below is working.
+     my $x = '<form action="http://login.myspace.com/index.cfm?'.
+         'fuseaction=login.process" method="post" name="theForm" '.
+         'id="theForm">' .
+         '<input type=hidden name="email" value="' . $self->account_name .
+         '">' .
+         '<input type=hidden name="password" value="' . $self->password . '">' .
+         '<input type=submit name="ctl00$Main$SplashDisplay$login$loginbutton" '.
+         'value="LOGIN">'.
+         '</form>';
+         
+     return $x;
     
-    my $x = '<form action="http://login.myspace.com/index.cfm?'.
-        'fuseaction=login.process" method="post" name="theForm" '.
-        'id="theForm">' .
-        '<input type=hidden name="email" value="' . $self->account_name .
-        '">' .
-        '<input type=hidden name="password" value="' . $self->password . '">' .
-        '<input type=submit name="ctl00$Main$SplashDisplay$login$loginbutton" '.
-        'value="LOGIN">'.
-        '</form>';
-        
-    return $x;
+
+    # Clear errors
+    $self->error(0);
+
+    # This used to be a lot easier...
+    # Now that Myspace (ab)uses ASP, we need to:
+    # - Create a fresh browser object
+    my $b = new WWW::Mechanize(quiet=>1, stack_depth=>1, onerror=>undef);
+
+    # - Get the login page
+    my $res = $b->get( "http://www.myspace.com/" );
+    unless ( $res ) {
+        $self->error("Couldn't load home page");
+        return
+    }
     
+    # - Get the login form
+    my @forms = HTML::Form->parse( $res );
+    my $found_form = 0;
+    my $form = "";
+#   TODO: This is setting found_form, but then the eval below fails stating
+#   that the method "value" must be called on an object.
+#   Setting $form = $forms[1] prevents that error, but the "return $form->make_request->content"
+#   line just returns an escaped URL string, not a form.  Need to find out how to
+#   display a form as HTML output.
+#     foreach $form ( @forms ) {
+#         if ( $form->find_input( 'ctl00$Main$SplashDisplay$ctl00$Email_Textbox' ) ) {
+#             $found_form = 1;
+#             last;
+#         }
+#     }
+#     unless ( $found_form ) {
+#         $self->error( "Couldn't find login form on myspace home page.  ".
+#                       "Email field name may have changed." );
+#         return;
+#     }
+    $form = $forms[1];
+
+    # - Set the account/password inputs
+    # the "value" method will croak if the input isn't found, so we eval it to catch
+    # that.  This way we don't die if/when myspace changes the name of the input field.
+    eval {
+        $form->value( 'ctl00$Main$SplashDisplay$ctl00$Email_Textbox', $self->account_name );
+        $form->value( 'ctl00$Main$SplashDisplay$ctl00$Password_Textbox', $self->password );
+    };
+    if ( $@ ) { $self->error( $@ ); return } # Set error and return if eval had a problem
+
+    # - Return its content
+    return ( $form->make_request->content );
+
 }
 
 #---------------------------------------------------------------------
@@ -1537,7 +1590,8 @@ sub last_login {
         $page = $self->current_page;
     }
 
-    if ( $page && $page->decoded_content =~ /Last Login:(\s|&nbsp;)+([0-9]+\/[0-9]+\/[0-9]+)\s*<br>/o ) {
+    if ( $page && $page->decoded_content =~
+        /Last\s+Login:(\s|&nbsp;)+([0-9]+\/[0-9]+\/[0-9]+)\s*<br\s?\/?>/smo ) {
         # Convert to Perl's time format.
                 
         my $time = parsedate( "$2", DATE_REQUIRED => 1); # From Time::ParseDate
@@ -1613,7 +1667,17 @@ sub get_profile {
 
     my $re = 'verify_get_profile';
     $re = undef if ( $no_validate );
-    return $self->get_page( "${BASE_URL}${friend_id}", $re );
+    # Myspace bug on 10/25/07: Calling certain profiles (occurred on a Chinese
+    # profile in the test/discovery case myspace.com/1300323889) using the
+    # myspace.com/friend_id format causes a circular redirect.
+    # So now we use the explicit profile request if
+    # we were given a friendID, or the short form if we were given a MySpace URL.
+    if ( $friend_id =~ /^[0-9]+$/o ) {
+        return $self->get_page( 'http://profile.myspace.com/index.cfm?fuseaction='.
+            'user.viewprofile&friendid='.$friend_id, $re );
+    } else {
+        return $self->get_page( "${BASE_URL}${friend_id}", $re );
+    }
 
 }
 
@@ -1788,21 +1852,45 @@ sub get_basic_info {
     return (%info);
 }
 
-=head2 get_comments( $friend_id )
+=head2 C<get_comments( friend_id => $friend_id, last_comment_time => time(), last_comment => comment_id )>
 
 Returns a list of hashrefs, like "get_inbox", of comments
 left for the profile indicated by $friend_id.
 
-get_comments returns a maximum of 50 pages of comments (about 2500).  This limit
+Returns the logged-in user's comments if no friend_id is specified.
+
+if last_comment_time is specified, returns comments left at the same time
+or more recently than the time specified.  last_comment_time is a UTC time
+value (i.e. what "time" returns).  This should work as expected if you
+convert your local time, as it is compared to the "time" return value (see
+below), which is also converted to UTC.  For example, "last_comment_time => time - 3600"
+will return all comments left within the last hour.
+"last_comment_time => time( 2007, 11, 01, 14, 00 )" will return comments left since
+2PM Nov 1, 2007 in your server's time zone.  (I might have the format to "time" wrong
+there, but hopefully you get the idea that comment times are given to your server in
+your server's local time and this module converts all those times to UTC for comparison).
+
+If last_comment_id is specified, get_comments will return all comments left AFTER
+the specified comment.  Note that the comment_id might not be a "real" unique
+ID, so this could break.
+
+get_comments returns a maximum of 100 pages of comments (about 5000).  This limit
 was added in version 0.66 to prevent the method from "running away" if myspace
-changes the code for which the method looks when gathering the comments.
+changes the code for which the method looks when gathering the comments.  It was
+updated from 50 to 100 pages in version 0.73.
 
  Each list element contains:
  { 
+   comment_id => $comment_id  # Myspace's unique ID for this comment (might change/break)
    sender => $friend_id, # friendID of the person who sent the comment
    date => $date_time,   # As formatted on MySpace
+   time => $datetime,    # time the comment was left in "time" format.
    comment => $string    # HTML of the comment.
  }
+
+Note: The comment_id is used in myspace's "delete" buttons - it might be a unique
+ID, or it could change in the future.  Try not to depend on it for long-term
+dependencies.  Short-term it might work.
 
 Comments are returned in the order in which they appear on myspace
 (currently most recent first).
@@ -1812,23 +1900,34 @@ Dies if called when not logged in.
 =cut
 
 sub get_comments {
-    my ( $friend_id ) = @_;
+
+    my ( $friend_id, %options, $last_comment_time, $last_comment );
+
+    # Parse the arguments properly
+    # Old format: get_comments( $friend_id );
+    # New format: get_comments( friend_id => $friend_id, last_comment_time => time() );
+    if ( @_ > 1 ) {
+        %options = @_;
+        $friend_id = ( $options{'friend_id'} || '' );
+        $last_comment_time = ( $options{'last_comment_time'} || '' );
+        $last_comment = ( $options{'last_comment'} || '' );
+    } else {
+        ( $friend_id ) = @_;
+        $last_comment_time = $last_comment = '';
+    }
+
+    $friend_id = $self->my_friend_id unless ( $friend_id );
     my @comments = ();
     my $url="http://comment.myspace.com/index.cfm?fuseaction=user.viewComments&friendID=".
             $friend_id;
-    my $eventtarget='ctl00$Main$PagedComments$pagingNavigation1$NextLinkButton';
-    my $eventvalidation;
+    my $eventtarget='ctl00$cpMain$PagedComments$pagerTop';
+    my $mspagerstate;
     my $viewstate;
     my $page="";
     my $commentcount;
         
     $self->_die_unless_logged_in( 'get_comments' );
 
-    # only get a maximum of 50 comment pages
-    # this should translate to 2500 comments
-    # and also serves as a safety measure in case 
-    # the method breaks again
-        
     ( $DEBUG ) && print "Getting $url\n";
     $page = $self->get_page( $url );
       
@@ -1845,23 +1944,35 @@ sub get_comments {
         $self->error("Could not find how many comments are on profile");
         return undef;
     }
-      
-    for (my $i=1;$i<=50;$i++) {
+
+    # only get a maximum of 100 comment pages
+    # this should translate to 5000 comments
+    # and also serves as a safety measure in case 
+    # the method breaks again
+    for (my $i=1;$i<=100;$i++) {
         $page=$self->{current_page};
 
-        push @comments, $self->_get_comments_from_page( $page->decoded_content );
-            
+        push @comments, $self->_get_comments_from_page(
+            page => $page->decoded_content,
+            last_comment_time => $last_comment_time,
+            last_comment => $last_comment
+        );
+
         #make sure we did not get an error
         return undef if ($self->error);
-    
+
+        # Stop if we got the last comment we're supposed to
+        last if ( $last_comment_time && ( $comments[-1]->{'time'} <= $last_comment_time ) );
+
+        # Stop if there's no next button
         last unless ( $self->_next_button( $page->decoded_content ) );
 
-        #get value of form field eventvalidation
-        if ($page->decoded_content =~ /id=\"__EVENTVALIDATION\" value=\"(.*?)\"/o){
-            $eventvalidation=$1;
+        #get value of form field msPagerState
+        if ($page->decoded_content =~ /id=\"___msPagerState\" value=\"(.*?)\"/o){
+            $mspagerstate=$1;
         }
         else {
-            $self->error("get_comments could not determine eventvalidation in form"); 
+            $self->error("get_comments could not determine msPagesState in form"); 
             return undef;
         }
         #get value of form field viewstate
@@ -1872,17 +1983,20 @@ sub get_comments {
             $self->error("get_comments could not determine viewstate in form");
             return undef; 
         }        
-        
+
+        # Get the next page
+        my $nextpage = $i+1;
+
         #create a form using these values
         my $htmlform=qq{<form name="aspnetForm" method="post" action="/index.cfm?fuseaction=user.viewComments&amp;friendID=$friend_id" id="aspnetForm">}.
                 qq{<input type="hidden" name="__EVENTTARGET" id="__EVENTTARGET" value="$eventtarget" />}.
-                qq{<input type="hidden" name="__EVENTARGUMENT" id="__EVENTARGUMENT" value="" />}.
+                qq{<input type="hidden" name="__EVENTARGUMENT" id="__EVENTARGUMENT" value="$nextpage" />}.
                 qq{<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="$viewstate" />}.
-                qq{<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="$eventvalidation" />}.
+                qq{<input type="hidden" name="___msPagerState" id="___msPagerState" value="$mspagerstate" />}.
                 qq{</form>};        
         my $form=HTML::Form->parse($htmlform,"http://comment.myspace.com/index.cfm");
         
-        ( $DEBUG ) && print "try to submit form to access comments page #",$i+1,"\n";
+        ( $DEBUG ) && print "Sumbitting form to access comments page #",$i+1,"\n";
 
         #submit it and hope for the best
         $self->submit_form({form => $form,no_click=> 1,follow=>0});
@@ -1910,7 +2024,8 @@ sub get_comments {
 sub _get_comments_from_page {
     # Take a page, return a list of comment data
 
-    my ( $page ) = @_;
+    my ( %opts ) = @_;
+    my $page = $opts{'page'};
     my @comments = ();
 
       # Get to the comments section to avoid mis-reads
@@ -1920,9 +2035,16 @@ sub _get_comments_from_page {
     }
 
     # Read the comment data and push it into our array.
-    while ( $page =~ s/.*?UserID=([0-9]+).*?<h4>(.*?)<\/h4>\s*(.*?)\s*<\/textarea>//smo ) {
-        push @comments, { sender => $1, date => $2, comment => $3 };
-        #print "found 1:$1\nfound 2:$2\nfound 3:$3\n";
+    while ( $page =~ s/.*?"deleteList"\s+value="([0-9]+)".*?UserID=([0-9]+).*?<h4>(.*?)<\/h4>\s*(.*?)\s*<\/textarea>//smo ) {
+        unless ( $1 =~ /[0-9]+/o ) {
+            $self->error( "Invalid comment ID: $1" );
+            return;
+        }
+        last if ( $opts{'last_comment'} && ( $opts{'last_comment'} == $1 ) );
+        my $datetime = parsedate( $3 );
+        push @comments, { comment_id => $1, sender => $2, date => $3, comment => $4, 'time' => $datetime };
+        last if ( $opts{'last_comment_time'} && ( $datetime <= $opts{'last_comment_time'} ) );
+#        print "found 1:$1\nfound 2:$2\nfound 3:$3\ndatetime: ". parsedate( $2 )."\n\n";
     }
 
     return @comments;
@@ -2007,7 +2129,6 @@ Croaks if called when not logged in.
     
         # Click "Next"
         $page++; ( $DEBUG ) && print "\n\nPage $page:\n";
-        last if ( $page > 5 );  # To prevent endless loop if below doesn't work.
         $self->submit_form( {
             form_name=>'aspnetForm',
             fields_ref=>{ '__EVENTTARGET' => 'ctl00$cpMain$BirthdayList$PagerTop',
@@ -2015,7 +2136,9 @@ Croaks if called when not logged in.
                         },
             no_click => 1,
         } );
-    } while ( $self->_next_button );
+      # Loop until there's no next button or we've read 10 pages (to prevent
+      # endless loop if _next_button gets broken)
+    } while ( $self->_next_button && ( $page < 10 ) );
 
     return ( %bd );
 
@@ -3638,18 +3761,15 @@ sub read_message {
     }
  
     # Body:
-#   $res->decoded_content =~ /<span class="blacktextnb10">.*^(.*)^                          <br><br><br>/sm;
-    # TODO: Message body works like this:
-    # <th>Body:</th><td>This is a great message<br /><br /><br /></td>
-    # In real life, there's a lot of random whitespace in there.
-    # Myspace adds three br tags after the message.
-    # This RE looks for those tags followed by the </td>. We do this because
-    # it's always possible someone will include an HTML table in the message.
-    # What we really need to do is find the matching closing tag for the body's <td>
-    # tag, but I'm not really sure how to easily do that, so I did this as a
-    # workaround.
-    $page =~ /<th>\s*Body:\s*<\/th>\s*<td>\s*(.*)\s+<br \/>\s*<br \/>\s*<br \/>\s*<\/td>/smo;
-    $message{'body'} = $1;
+    # Note: If there's a </div> tag within the message itself, we'll only
+    # get the message up to that point.
+    # The checking for the </p> tag differentiates the actual body from the
+    # "spamBody" hidden field, which contains ended stuff we don't want.
+    if ( 
+        $page =~ /Body:\s*<\/p>\s*<div .*?>\s*(.*?)\s+<\/div>/smo
+    ) {
+        $message{'body'} = $1;
+    }
     
     # Clean up newlines
     $message{'body'} =~ s/[\n\r]/\n/go;
@@ -3663,6 +3783,7 @@ sub read_message {
 #    $message{'body'} =~ s/^[ \t]*<br \/>[ \t]*//mog;
     
     # And sometimes they put them elsewhere, so we'll convert those to newlines.
+    # (Note: Maybe this shouldn't be done, since the messages *are* HTML after all)
     $message{'body'} =~ s/<br \/>/\n/mog;
     
     return \%message;
@@ -4336,6 +4457,7 @@ sub send_friend_request {
         FB  =>  'Failed, this person does not accept friend requests from bands.',
         FA  =>  'Failed, this person requires an email address or last name to add them',
         FC  =>  'Failed, CAPTCHA response requested.',
+        FU  =>  'Failed, CAPTCHA response required by user.',
         FE  =>  'Failed, user has exceeded their daily usage.',
         P   =>  'Passed! Verification string received.',
         F   =>  'Failed, verification string not found on page after posting.',
@@ -4378,7 +4500,12 @@ sub send_friend_request {
         #elsif ( $page =~ /CAPTCHA/o ) {
         elsif ( $page =~ $CAPTCHAi ) {
             $captcha_result = $self->_handle_captcha( $1 );
-            $return_code = 'FC' unless ( $captcha_result );
+
+            # If didn't get a captcha result, return the appropriate failure code.
+            unless ( $captcha_result ) {
+                $return_code = 'FC';
+                $return_code = 'FU' if $self->_apply_regex( regex => 'user_requires_captcha' );
+            }
         }
         # Check for "already your friend"
         elsif ( $page =~ /already your friend/io ) {
@@ -4420,7 +4547,24 @@ sub send_friend_request {
 
         # Post the add request form
         if ( $captcha_result ) {
-            $res = $self->submit_form( '', 1, '', { 'CAPTCHAResponse' => $captcha_result } );
+            my $count = 0;
+            while ( $captcha_result && ( $page =~ $CAPTCHAi ) ) {
+                # Submit the form
+                $res = $self->submit_form( '', 1, '', { 'CAPTCHAResponse' => $captcha_result } );
+                # See if there's a captcha request on it (means we got it wrong)
+                $page = $self->current_page->decoded_content;
+                $page =~ s/[ \t\n\r]+/ /go;
+                # If so, guess again.
+                if ( $page =~ $CAPTCHAi ) { $captcha_result = $self->_handle_captcha( $1 ); }
+                # Only try 5 times, just in case something else is wrong. Stops infinite loop.
+                $count++; last if ( $count > 5 );
+            }
+            # If we've still got a CAPTCHA code, return the appropriate failure code.
+            if ( $page =~ $CAPTCHAi ) {
+                $return_code = 'FC';
+                $return_code = 'FU' if $self->_apply_regex( regex => 'user_requires_captcha' );
+            }
+
         } else {
              $res = $self->submit_form( { form_no => 1 } );
         }
@@ -6271,10 +6415,12 @@ sub _use_captcha_killer {
     
     my $captcha_id = "";
     my $captcha_result = "";
+    my $expire = $self->captcha_tries * 10;
+    print "Expire set to $expire seconds\n";
     my $response = $ua->post( "http://www.captchakiller.com/api.php", 
             Content_Type => 'form-data', 
             Content => [ api_key => $api_key, method => "upload_captcha", 
-            captcha_url => $captcha_url, expire => ( $self->captcha_tries * 10 ), file => [ $upload_filename ] ] );
+            captcha_url => $captcha_url, expire => $expire, file => [ $upload_filename ] ] );
     $captcha_id = "";
     if ( $response->is_success ) {
         print $response->decoded_content;
@@ -6291,7 +6437,7 @@ sub _use_captcha_killer {
     
     $captcha_result = "";
     for ( my $cnt = 1; $cnt < $self->captcha_tries; $cnt++ ) {
-        print "ATTEMPT $cnt\n";
+        print "ATTEMPT $cnt of " . $self->captcha_tries . "\n";
         my $response = $ua->post( "http://www.captchakiller.com/api.php", 
             Content => [ api_key => $api_key, method => "get_result", captcha_id => $captcha_id ] );
         if ( $response->is_success ) {
