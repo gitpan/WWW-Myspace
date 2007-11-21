@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 519 2007-11-13 08:03:58Z grantg $
+# $Id: Myspace.pm 526 2007-11-21 03:20:22Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -42,11 +42,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.73
+Version 0.74
 
 =cut
 
-our $VERSION = '0.73';
+our $VERSION = '0.74';
 
 =head1 WARNING
 
@@ -1962,7 +1962,7 @@ sub get_comments {
         return undef if ($self->error);
 
         # Stop if we got the last comment we're supposed to
-        last if ( $last_comment_time && ( $comments[-1]->{'time'} <= $last_comment_time ) );
+        last if ( $self->{_done} );
 
         # Stop if there's no next button
         last unless ( $self->_next_button( $page->decoded_content ) );
@@ -2027,6 +2027,7 @@ sub _get_comments_from_page {
     my ( %opts ) = @_;
     my $page = $opts{'page'};
     my @comments = ();
+    $self->{_done} = 0;
 
       # Get to the comments section to avoid mis-reads
     if ( $page !~ m/Add Comment<\/a>/gs ) {
@@ -2036,15 +2037,20 @@ sub _get_comments_from_page {
 
     # Read the comment data and push it into our array.
     while ( $page =~ s/.*?"deleteList"\s+value="([0-9]+)".*?UserID=([0-9]+).*?<h4>(.*?)<\/h4>\s*(.*?)\s*<\/textarea>//smo ) {
-        unless ( $1 =~ /[0-9]+/o ) {
-            $self->error( "Invalid comment ID: $1" );
+        my $c = { comment_id => $1, sender => $2, date => $3, comment => $4 };
+        unless ( $c->{'comment_id'} =~ /[0-9]+/o ) {
+            $self->error( "Invalid comment ID: $c->{'comment_id'}" );
             return;
         }
-        last if ( $opts{'last_comment'} && ( $opts{'last_comment'} == $1 ) );
-        my $datetime = parsedate( $3 );
-        push @comments, { comment_id => $1, sender => $2, date => $3, comment => $4, 'time' => $datetime };
-        last if ( $opts{'last_comment_time'} && ( $datetime <= $opts{'last_comment_time'} ) );
-#        print "found 1:$1\nfound 2:$2\nfound 3:$3\ndatetime: ". parsedate( $2 )."\n\n";
+
+        if ( $opts{'last_comment'} && ( $opts{'last_comment'} == $c->{'comment_id'} ) ) {
+            $self->{_done}=1; last;
+        }
+        $c->{'time'} = parsedate( $c->{'date'} ) if $c->{'date'};
+        if ( $opts{'last_comment_time'} && ( $c->{'time'} < $opts{'last_comment_time'} ) ) {
+            $self->{_done}=1; last;
+        }
+        push @comments, $c;
     }
 
     return @comments;
@@ -3680,20 +3686,58 @@ sub get_inbox {
 }
 
 # Return a list of message data from the current page
+# Updated by WZorn to fix hanging problem on Mandriva and RetHat linux.
 sub _get_messages_from_page {
 
     my ( %options ) = @_;
     my $page = $self->current_page->decoded_content;
     my @messages = ();
-    while ( $page =~
-            s/.*?viewprofile&friendid=([0-9]+).*?(Unread|Read|Sent|Replied).*?messageID=([^&]+)&.*?>([^<]+)<//som ) {
+    my $state = 0;  			# State Values
+    					# 0 - Beginning state, looking for beginning of message block
+					# 1 - In message block, looking for data
+					#     Will return to state=0 when we get the last data (messageID and subject)
+    my $sender;
+    my $status;
+    my $msg_id;
+    my $subject;
+
+    open(my $fh, "<", \$page);
+    while ( <$fh> ) {
+    	chomp;
         last if ( $options{'stop_at'} && ( $options{'stop_at'} == $3 ) );
-        push @messages,
-             { sender => $1, status => $2, message_id => $3, subject => $4 }
+	if(/<td class="messageListCell" align="center">/){
+		# Found beginning of Message block
+		$state = 1;
+	} elsif (/viewprofile&friendid=([0-9]+)/ && $state == 1){
+		$sender = $1;
+	} elsif (/(Unread|Read|Sent|Replied)/ && $state == 1){
+		$status = $1;
+	} elsif (/messageID=([^&]+)&.*?>(.+?)<\/a>/ && $state == 1){
+		$msg_id = $1;
+		$subject = $2;
+		$state = 0;    #return to state=0 because we need to start looking for the beginning of the next message block
+		
+		push @messages, { sender => $sender, status => $status, message_id=> $msg_id, subject => $subject };
+		if ($DEBUG) { print $sender,"|",$status,"|",$msg_id,"|",$subject,"\n"; }
+	}
     }
-    
     return @messages;
 }
+
+# sub _get_messages_from_page {
+# 
+#     my ( %options ) = @_;
+#     my $page = $self->current_page->decoded_content;
+#     my @messages = ();
+#     while ( $page =~
+#             s/.*?viewprofile&friendid=([0-9]+).*?(Unread|Read|Sent|Replied).*?messageID=([^&]+)&.*?>(.+?)<\/a>//som ) {
+#         last if ( $options{'stop_at'} && ( $options{'stop_at'} == $3 ) );
+#         push @messages,
+#              { sender => $1, status => $2, message_id => $3, subject => $4 }
+#     }
+#     
+#     return @messages;
+# }
 
 =head2 inbox
 
@@ -6547,6 +6591,16 @@ It will work with other English-speaking locations, but some methods (such as
 last_login) will fail if your location causes dates to be displayed in a
 manner other than month/day/year.
 
+=item -
+
+Your account must be set to the "classic" profile for the module to work
+when logged in.
+
+=item -
+
+If the method used to go to the next page in get_inbox doesn't work,
+get_inbox can enter an endless loop.
+
 =back
 
 =head1 TODO
@@ -6573,6 +6627,10 @@ Add tests for get_comments.
 Add Internationalization (i18n) support.
 
 Centralize all regular expressions into _regex and _apply_regex methods.
+
+Have get_inbox check to see if it's paging properly - i.e. check to see if a
+message on the current page has the same message_id as a message on the
+previous page.
 
 =head1 CONTRIBUTING
 

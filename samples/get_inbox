@@ -10,7 +10,7 @@ $myspace = new WWW::Myspace;
 die $myspace->error if $myspace->error;
 
 print "Getting inbox...\n";
-my $messages = $myspace->inbox;
+my $messages = $myspace->get_inbox('end_page' => 3);
 
 foreach $message ( @{$messages} ) {
   if ( ( ! $friend_id ) || ( $friend_id == $message->{sender} ) ) {

@@ -1,5 +1,16 @@
 Revision history for WWW::Myspace
 
+0.74    2007-11-20
+        - Implemented workaround submitted by William in RT issue#30762 - stops
+          get_inbox from hanging on Linux.
+        - Fixed regex used to get Subject line to fix an issue in which
+          a subject line containing an HTML tag would be cut short.
+        - Fixed bug in get_comments that would cause a stream of "uninitialized value"
+          errors.
+        - Fixed a bug in which get_comments would skip the rest of the comments on
+          the page when it reached "last_comment", but continue reading the rest of the
+          comment pages.
+
 0.73    2007-11-13
         - Updated last_login regex to be more sturdy.
         - Updated get_profile to use long form of URL when passed a friend_id.
