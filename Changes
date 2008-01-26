@@ -1,5 +1,33 @@
 Revision history for WWW::Myspace
 
+0.75    2008-01-17
+        - Removed badly programmed "die" statement that could cause the module to
+          die if an invalid argument was passed to certain methods.  Now sets error
+          and returns undef as is standard practice throughout the module.
+        - read_message now returns the URL to the message in the message hashref.
+        - Corrected documentation for reply_message.
+        - get_inbox now accepts a "page_no" argument, useful for stepping through
+          and processing messages.
+        - send_message now correctly returns "FI" when it encounters an invalid
+          friendID.  Previously it would return "FL" because it couldn't find the
+          link on the page.
+        - get_inbox now returns the full name of the sender in the message hash
+        - added a subroutine called search_friend_list() that allows you to search
+          for a friend by name.
+        - Fixed bug in _get_friend_id that could cause it to fail under the new "skin".
+        - search_friend_list and find_friend now return with an error if called without
+          arguments.
+        - Fixed "find_friend" method broken by change in myspace code.
+        - got rid of $FRIEND_REGEXP in favor of %regex's friend_link.
+          fixed subroutines that used $FRIEND_REGEXP
+        - removed excessive references to veeRob in comments
+        - changed get_friends_on_page() to use regex very similar to friend_link
+        - changed _get_friend_id() to use %regex's friend_link instead of inline regex 
+        - Added get_friends_images_on_page method.
+        - send_friend_request now accepts a message argument and works with the
+          Add Friend form changed by myspace on 1/25/08.
+
+
 0.74    2007-11-20
         - Implemented workaround submitted by William in RT issue#30762 - stops
           get_inbox from hanging on Linux.
