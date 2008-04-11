@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 564 2008-01-27 23:45:09Z grantg $
+# $Id: Myspace.pm 570 2008-04-11 22:44:35Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -42,11 +42,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.76
+Version 0.77
 
 =cut
 
-our $VERSION = '0.76';
+our $VERSION = '0.77';
 
 =head1 WARNING
 
@@ -629,22 +629,38 @@ sub _try_login {
     if ( $tries_left ) { $tries_left--;  return if ( $tries_left ) < 1; }
     $tries_left = 20 unless defined $tries_left;
 
-    # Submit the login form.  They have two different ones, so if we see indication of
-    # the ASP form (new as of late Jun 2007), use it, otherwise use the CFM version.
-    # 9/17/07 - they changed from "ctl01" to "ctl00", so we check for both in case
-    # they go back and forth.
+    # Detect which login form is in use, and submit it.
     my $submitted="";
     $self->get_page( 'http://www.myspace.com/' );
     if ( $self->current_page->decoded_content =~
-            /ctl00\$Main\$SplashDisplay\$ctl00\$Email_Textbox/io )
+            /ctl00\$ctl00\$Main\$cpMain\$SplashDisplay\$ctl00\$Email_Textbox/io )
     {
+        # 2008-04-11 -- they added an extra ctl00$ and cpMain$ to the names of
+        #  the login form inputs
+        $submitted = $self->submit_form( {
+#            page => 'http://www.myspace.com/',
+            form_name => 'aspnetForm',
+            fields_ref => { 'ctl00$ctl00$Main$cpMain$SplashDisplay$ctl00$Email_Textbox' => $self->account_name,
+                            'ctl00$ctl00$Main$cpMain$SplashDisplay$ctl00$Password_Textbox' => $self->password,
+    #                        '__EVENTTARGET' => 'ctl00$ctl00$Main$cpMain$SplashDisplay$ctl00$Login_ImageButton',
+    #                        '__EVENTARGUMENT' => '',
+                          },
+            action => 'http://secure.myspace.com/index.cfm?fuseaction=login.process',
+    #        no_click => 1,
+        } ) ;
+    } elsif ( $self->current_page->decoded_content =~
+            /ctl00\$ctl00\$Main\$cpMain\$SplashDisplay\$ctl00\$Email_Textbox/io )
+    {
+        # 2007-09-17 -- they changed from "ctl01" to "ctl00".  If this form is
+        #  not found we check for the "ctl01" form in case they go back and
+        #  forth.
         $submitted = $self->submit_form( {
 #            page => 'http://www.myspace.com/',
             form_name => 'aspnetForm',
             fields_ref => { 'ctl00$Main$SplashDisplay$ctl00$Email_Textbox' => $self->account_name,
-                            'ctl00$Main$SplashDisplay$ctl00$Password_Textbox' => $self->password,
-    #                        '__EVENTTARGET' => 'ctl00$Main$SplashDisplay$ctl00$Login_ImageButton',
-    #                        '__EVENTARGUMENT' => '',
+                            'ctl00$Main$SplashDisplay$ctl00$Password_Textbox' => $self->password
+    #                        '__EVENTTARGET' => 'ctl00$ctl00$Main$cpMain$SplashDisplay$ctl00$Login_ImageButton',
+    #                        '__EVENTARGUMENT' => '',,
                           },
             action => 'http://secure.myspace.com/index.cfm?fuseaction=login.process',
     #        no_click => 1,
@@ -652,6 +668,7 @@ sub _try_login {
     } elsif ( $self->current_page->decoded_content =~
             /ctl00\$Main\$SplashDisplay\$ctl01\$Email_Textbox/io )
     {
+        # Late 2007-06 -- an ASP form appears alongside the CFM form
         $submitted = $self->submit_form( {
 #            page => 'http://www.myspace.com/',
             form_name => 'aspnetForm',
@@ -664,6 +681,7 @@ sub _try_login {
     #        no_click => 1,
         } )
     } else {
+        # The old CFM form
         my $btn_name = $self->current_page->decoded_content =~
             /ctl00\$Main\$SplashDisplay\$ctl00\$loginbutton/ ? 
             'ctl00$Main$SplashDisplay$ctl00$loginbutton' :
