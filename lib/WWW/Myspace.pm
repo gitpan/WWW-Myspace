@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 562 2008-01-26 07:24:34Z grantg $
+# $Id: Myspace.pm 564 2008-01-27 23:45:09Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -42,11 +42,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.75
+Version 0.76
 
 =cut
 
-our $VERSION = '0.75';
+our $VERSION = '0.76';
 
 =head1 WARNING
 
@@ -4590,6 +4590,18 @@ the known failure messages were received, but the verification
 message wasn't seen either.  This means it -might- have gone through,
 but probably not.  Of course, worst case here is you try again.
 
+Advanced features: If $message contains an array reference, send_friend_request
+will pick one of the elements at random as the message to send.  This means
+you can do:
+
+ $myspace->send_friend_request( $friend_id,
+     [ 'Hi!  I thought I\'d send you a message",
+       'Hello!  I saw your profile and wanted to add you.',
+       'Hi, I\'m just adding you at random, hope you\'ll accept!'
+     ]
+ );
+
+This can help add a bit more feeling to your requests.
 
  EXAMPLES
  
@@ -4664,6 +4676,10 @@ sub send_friend_request {
     my ($page, $res);
     my $captcha_result = "";
 
+    # If they passed an array reference, pick a message at random
+    if ( ref $message eq 'ARRAY' ) {
+        $message = $message->[ int( rand( @$message ) ) ]
+    }        
     # Convert newlines (\n) into socket-ready CRLF ASCII characters.
     # This also takes care of possible literal "\n"s that come
     # from command-line arguments.

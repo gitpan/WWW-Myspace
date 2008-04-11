@@ -1,5 +1,26 @@
 Revision history for WWW::Myspace
 
+0.76   2008-04-11
+        - MAINTENANCE RELEASE NOTE:
+          Several methods are still not working due
+          to changes in myspace forms.  As such, the tests will probably fail.
+          Do a "force install" - this version is at least better than what
+          you have now. :)
+          PLEASE SUBMIT PATCHES if you are able as we (the developers) really
+          busy at the moment and I'm not sure when we'll be able to go through
+          and update things.
+          Only through the group effort that is the strength of open source
+          programming can this module evolve as quickly as a site as dynamic
+          as Myspace.
+          Thanks! - Grant
+
+        - send_friend_request now takes either a single message as a string,
+          or an arrayref of messages for the value of $message.  If passed an
+          arrayref, send_friend_request will pick one of the messages at random
+          to include with the friend request.
+        - Applied patch by steven [...] pyro.eu.org that fixes login form
+          change 4/11/08
+
 0.75    2008-01-17
         - Removed badly programmed "die" statement that could cause the module to
           die if an invalid argument was passed to certain methods.  Now sets error

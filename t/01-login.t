@@ -32,7 +32,8 @@ is( $myspace->is_band( $CONFIG->{'acct2'}->{'friend_id'} ), 0,
 	"is_band identifies 3rd party non-band profile correctly" );
 	
 #Test get_profile_type for individuals
-is( $myspace->get_profile_type( 76959716), 1,
+#76959716
+is( $myspace->get_profile_type( 123557), 1,
 	"get_profile_type identifies personal profile correctly" );
 
 #Test get_profile_type for music
