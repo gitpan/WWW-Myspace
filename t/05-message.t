@@ -84,7 +84,7 @@ SKIP: {
 		is( $mr->{from}, $CONFIG->{acct1}->{friend_id}, "read_message From" );
 		is( $mr->{subject}, 'Hi '.$ident, "read_message Subject" );
 		#is( $mr->{date}, 'Feb 28, 2006 1:20 AM', "read_message Date" );
-		is( $mr->{body}, "Just saying hi.\n\nHope all is well.\n", "read_message Body" );
+		is( $mr->{body}, "Just saying hi.\n\nHope all is well.", "read_message Body" );
 		
 		SKIP: {
 			skip "delete_message tests disabled because Myspace's Delete button doesn't work", 2;

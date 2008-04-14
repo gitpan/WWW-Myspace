@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 570 2008-04-11 22:44:35Z grantg $
+# $Id: Myspace.pm 571 2008-04-14 23:00:03Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -42,11 +42,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.77
+Version 0.78
 
 =cut
 
-our $VERSION = '0.77';
+our $VERSION = '0.78';
 
 =head1 WARNING
 
@@ -118,8 +118,8 @@ our $NOT_FRIEND_ERROR='Error: You must be someone\'s friend to make '.
 
 # What should we look for to see if we are being asked for a CAPTCHA code?
 # We'll extract the URL to return from the area in parenthesis.
-our $CAPTCHA='<img.*?src="(http:\/\/security.myspace.com\/CAPTCHA\/'.
-    'CAPTCHA\.aspx\?SecurityToken=[^"]+)"';
+our $CAPTCHA='<img.*?src="(http:\/\/security\.myspace\.com\/captcha\/'.
+    'captcha\.aspx\?SecurityToken=[^"]+)"';
 our $CAPTCHAi = qr/$CAPTCHA/io;   # ok, we will store both ways
 our $CAPTCHAs = qr/$CAPTCHA/o;  
 #$CAPTCHA = $CAPTCHAi;             # use case insensitive for now
@@ -203,8 +203,8 @@ my %regex = (
     comment_posted => qr/Your Comment has been posted/io,
     not_logged_in => qr/You Must Be Logged-In to do That\!/io,
     verify_message_sent => qr/Your Message Has Been Sent\!/o,
-    comment_p1 => qr/ctl00\$(cp)?Main\$postComment\$commentTextBox.*<\/form|$NOT_FRIEND_ERROR|($CAPTCHA)|($INVALID_ID)/smio,
-    comment_p2 => qr/ctl00\$(cp)?Main\$postComment\$Button1.*<\/form/smo,
+    comment_p1 => qr/ctl00\$(cp)?Main\$UserWriteCommentsControl\$commentTextBox.*<\/form|($NOT_FRIEND_ERROR)|($CAPTCHA)|($INVALID_ID)/smio,
+    comment_p2 => qr/ctl00\$(cp)?Main\$UserWriteCommentsControl\$ConfirmPostButton.*<\/form/smo,
     comment_approval_msg => qr/This user requires all comments to be approved before being posted/o,
     not_friend => qr/$NOT_FRIEND_ERROR/smo,
     bulletin_url => qr/fuseaction=bulletin\.edit/io,
@@ -3445,7 +3445,7 @@ sub post_comment {
     
             # Submit the comment to $friend_id's page
             $link = $self->mech->find_link(
-                                    text_regex => qr/^add\s+comment$/io );
+                                    text_regex => qr/^Add\s+Comment$/io );
             unless ( $link ) { $status="FL"; last TESTBLOCK; }
     
             ( $DEBUG ) && print "Getting comment form..\n";
@@ -3455,8 +3455,9 @@ sub post_comment {
                          follow => 1,
                          form_name => 'aspnetForm',
                          fields_ref => {
-                            'ctl00$cpMain$postComment$commentTextBox' => "$message",
-                            '__EVENTTARGET' => 'ctl00$cpMain$postComment$postcommentImageButton',
+                            'ctl00$cpMain$UserWriteCommentsControl$commentTextBox' => "$message",
+                            'ctl00$cpMain$UserWriteCommentsControl$postcommentImageButton' => "Post A Comment",
+    #                        '__EVENTTARGET' => 'ctl00$cpMain$UserWriteCommentsControl$postcommentImageButton',
     #                        '__EVENTARGUMENT' => '',
                          },
                          re1 => 'comment_p1',
@@ -3484,7 +3485,7 @@ sub post_comment {
                 $submitted = $self->submit_form( {
                     follow => 1,
                     form_name => 'aspnetForm',
-                    button => 'ctl00$cpMain$postComment$ConfirmPostButton',
+                    button => 'ctl00$cpMain$UserWriteCommentsControl$ConfirmPostButton',
                     @captcha
                 } );
             } else {
@@ -3503,7 +3504,7 @@ sub post_comment {
         $page =~ s/[ \t\n\r]+/ /g;
     
         # Set the status code to return.
-        if ( $self->_apply_regex( source => $page, regex => 'not_friend_error' ) ) {
+        if ( $self->_apply_regex( source => $page, regex => 'not_friend' ) ) {
             $status="FF";
         } elsif ( $self->_apply_regex( source => $page, regex => 'is_invalid' ) ) {
             $status="FI";
@@ -3977,7 +3978,7 @@ sub read_message {
     $message{'date'} = $1;
     
     # Subject:
-    if ( $page =~ /<th.*?>\s*Subject:\s*<.*?<td>\s*(.*?)\s*<\/td>/smo ) {
+    if ( $page =~ /<p.*?>\s*Subject:\s*<.*?<p.*?>\s*(.*?)\s*<\/p>/smo ) {
         $message{'subject'} = $1;
     }
  
@@ -3995,18 +3996,18 @@ sub read_message {
     # Clean up newlines
     $message{'body'} =~ s/[\n\r]/\n/go;
 
-    # Gotta clean white space before and after the body
-    $message{'body'} =~ s/^\s*//so;  # Before
-    $message{'body'} =~ s/\s*$//so;  # After
-
     # And they have these BR tags at the beginning of each line...
     # Not any more - 8/16/07
 #    $message{'body'} =~ s/^[ \t]*<br \/>[ \t]*//mog;
     
     # And sometimes they put them elsewhere, so we'll convert those to newlines.
     # (Note: Maybe this shouldn't be done, since the messages *are* HTML after all)
-    $message{'body'} =~ s/<br \/>/\n/mog;
-    
+    $message{'body'} =~ s/<br (style=\"display:none\")?\/>/\n/mog;
+
+    # Gotta clean white space before and after the body
+    $message{'body'} =~ s/^\s*//so;  # Before
+    $message{'body'} =~ s/\s*$//so;  # After
+
     return \%message;
 }
 
@@ -4317,13 +4318,14 @@ sub send_message {
             # New mail form...
             $submitted = $self->submit_form( {
                 form_name => 'aspnetForm',
+		button => 'ctl00$ctl00$Main$messagingMain$SendMessage$btnSend',
                 fields_ref => {
-                    'ctl00$ctl00$Main$Main$sendMessageControl$subjectTextBox' =>
+                    'ctl00$ctl00$Main$messagingMain$SendMessage$subjectTextBox' =>
                         "$options{'subject'}",
-                    'ctl00$ctl00$Main$Main$sendMessageControl$bodyTextBox' =>
+                    'ctl00$ctl00$Main$messagingMain$SendMessage$bodyTextBox' =>
                         "$options{'message'}",
-                     '__EVENTTARGET' => 'ctl00$ctl00$Main$Main$sendMessageControl$btnSend',
-                     '__EVENTARGUMENT' => ''
+                    '__EVENTTARGET' => 'ctl00$ctl00$Main$messagingMain$SendMessage$btnSend',
+                    '__EVENTARGUMENT' => ''
     
                 },
                 no_click => 1,

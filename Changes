@@ -1,6 +1,11 @@
 Revision history for WWW::Myspace
 
-0.77   2008-04-11
+0.78    2008-04-14
+        - Applied patch from RT#34921 by steven [...] pyro.eu.org,
+          fixes post_comment and send_message methods to work with current
+          myspace forms.
+
+0.77    2008-04-11
         - MAINTENANCE RELEASE NOTE:
           Several methods are still not working due
           to changes in myspace forms.  As such, the tests will probably fail.
