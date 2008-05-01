@@ -1,5 +1,18 @@
 Revision history for WWW::Myspace
 
+0.79    2008-04-30
+        - Updated get_friends method to work with current myspace paging system.
+        - get_comments now returns the sender's profile "name" in
+          $comments->{'sendername'}.
+        - get_comments sample script displays $comments->{'sendername'}.
+        - Updated get_comments to properly display comment after myspace
+          format change (was displaying a "span" tag around the comment).
+        - Updated get_inbox to use current myspace form values and to
+          work more robustly with changes in the form values.  This
+          fixes a bug that caused get_inbox to return only the first
+          page of messages.
+        - Added sendername to get_inbox sample script output.
+
 0.78    2008-04-14
         - Applied patch from RT#34921 by steven [...] pyro.eu.org,
           fixes post_comment and send_message methods to work with current

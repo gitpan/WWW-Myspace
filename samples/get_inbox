@@ -14,7 +14,7 @@ my $messages = $myspace->get_inbox('end_page' => 3);
 
 foreach $message ( @{$messages} ) {
   if ( ( ! $friend_id ) || ( $friend_id == $message->{sender} ) ) {
-    print "Sender: " . $message->{sender} . "\n";
+    print "Sender: " . $message->{sender} . ": " . $message->{sendername} . "\n";
     print "Status: " . $message->{status} . "\n";
     print "messageID: " . $message->{message_id} . "\n";
     print "Subject: " . $message->{subject} . "\n\n";

@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 571 2008-04-14 23:00:03Z grantg $
+# $Id: Myspace.pm 578 2008-05-01 02:43:47Z grantg $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -42,11 +42,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.78
+Version 0.79
 
 =cut
 
-our $VERSION = '0.78';
+our $VERSION = '0.79';
 
 =head1 WARNING
 
@@ -1921,6 +1921,7 @@ updated from 50 to 100 pages in version 0.73.
  { 
    comment_id => $comment_id  # Myspace's unique ID for this comment (might change/break)
    sender => $friend_id, # friendID of the person who sent the comment
+   sendername => $name, # Profile "name" of the person who sent the comment
    date => $date_time,   # As formatted on MySpace
    time => $datetime,    # time the comment was left in "time" format.
    comment => $string    # HTML of the comment.
@@ -1958,7 +1959,7 @@ sub get_comments {
     my @comments = ();
     my $url="http://comment.myspace.com/index.cfm?fuseaction=user.viewComments&friendID=".
             $friend_id;
-    my $eventtarget='ctl00$cpMain$PagedComments$pagerTop';
+    my $eventtarget='ctl00$cpMain$UserViewCommentsControl$pagerTop';
     my $mspagerstate;
     my $viewstate;
     my $page="";
@@ -1978,6 +1979,7 @@ sub get_comments {
     # find out how many comments in total
     if ($page->decoded_content =~ /.*Listing [\d-]+ of (\d+).*/smo){
         $commentcount=$1;
+        ( $DEBUG ) && print "Listing line shows $commentcount comments.\n";
     } else {
         $self->error("Could not find how many comments are on profile");
         return undef;
@@ -2003,7 +2005,7 @@ sub get_comments {
         last if ( $self->{_done} );
 
         # Stop if there's no next button
-        last unless ( $self->_next_button( $page->decoded_content ) );
+        last unless $self->_next_button;
 
         #get value of form field msPagerState
         if ($page->decoded_content =~ /id=\"___msPagerState\" value=\"(.*?)\"/o){
@@ -2035,6 +2037,7 @@ sub get_comments {
         my $form=HTML::Form->parse($htmlform,"http://comment.myspace.com/index.cfm");
         
         ( $DEBUG ) && print "Sumbitting form to access comments page #",$i+1,"\n";
+#        last if ( $DEBUG && ( $i > 5 ) );
 
         #submit it and hope for the best
         $self->submit_form({form => $form,no_click=> 1,follow=>0});
@@ -2074,8 +2077,8 @@ sub _get_comments_from_page {
     }
 
     # Read the comment data and push it into our array.
-    while ( $page =~ s/.*?"deleteList"\s+value="([0-9]+)".*?UserID=([0-9]+).*?<h4>(.*?)<\/h4>\s*(.*?)\s*<\/textarea>//smo ) {
-        my $c = { comment_id => $1, sender => $2, date => $3, comment => $4 };
+    while ( $page =~ s/.*?"deleteList"\s+value="([0-9]+)".*?friendid=([0-9]+)">(.*?)<.*?<h4>(.*?)<\/h4>\s*.*?<span .*?>(.*?)<\/span>//smo ) {
+        my $c = { comment_id => $1, sender => $2, sendername => $3, date => $4, comment => $5 };
         unless ( $c->{'comment_id'} =~ /[0-9]+/o ) {
             $self->error( "Invalid comment ID: $c->{'comment_id'}" );
             return;
@@ -2091,6 +2094,7 @@ sub _get_comments_from_page {
         push @comments, $c;
     }
 
+    ( $DEBUG ) && print "  Got " . @comments . " comments\n";
     return @comments;
 }
 
@@ -2970,6 +2974,9 @@ sub get_friends {
     my $exclude = "";
 
     my $page_no = 1;
+    my $last_page_no = 1;
+    my $profile_id = '';
+    my $page_jump;
 
     # This should be split into "get_my_friends", "get_profile_friends",
     # and "get_group_friends".
@@ -2977,8 +2984,9 @@ sub get_friends {
         $self->_go_home;
         $self->follow_link(
             url_regex => qr/fuseaction=user\.viewfriends/io,
-            re => 'View All Friends',
+            re => 'friends.*go to my profile',
         );
+        $profile_id = $self->friend_id;
     } elsif ( $options{'source'} eq 'group' ) {
         warn "Can't get friends from group due to change in myspace until method is updated.";
         return undef;
@@ -2990,7 +2998,8 @@ sub get_friends {
         $options{end_page} && $options{end_page}--;
         $page_no--;
     } elsif ( $options{'source'} eq 'profile' ) {
-        $self->get_profile( $options{id} );
+        $profile_id = $options{'id'};
+        $self->get_profile( $profile_id );
         #check first whether there are friends at all
         #if not, return zero friends    
         if ( $self->current_page->decoded_content =~ qr/Invite Your Friends Here/o ) {
@@ -3020,16 +3029,30 @@ sub get_friends {
           if ( $options{'end_page'} && ( $page_no > $options{'end_page'} ) );
 
         return @friends
-          if ( $options{'max_count'} && ( $#friends >= $options{max_count} ) );
+          if ( $options{'max_count'} && ( $#friends >= $options{'max_count'} ) );
 
-        $page_no++;
-        $self->submit_form( {
-            form_name => 'aspnetForm',
-            no_click => 1,
-            re2 => 'View All Friends',
-            fields_ref => { '__EVENTTARGET' => 'ctl00$cpMain$pagerTop',
-                            '__EVENTARGUMENT' => $page_no },
-        } );
+        $last_page_no = $page_no;
+        if ( $options{'start_page'} && ( $page_no < $options{'start_page'} ) ) {
+            $page_no = $options{'start_page'};
+            $page_jump = $page_no - $last_page_no;
+        } else {
+            $page_no++;
+            $page_jump = 1;
+        }
+        # Get the base URL
+        $self->current_page->decoded_content =~
+            /function GoToPage.*?FriendsCategories\.UrlHelper\(\'(.*?)\'\)/smio;
+        my $url = $1;
+        # Fill in the page values and get the next page.
+        # Myspace calls a JavaScript "GotoPage" function with the page number
+        # (starting from page 1).  That function then sets the URL's "p="
+        # to the page number - 1, so we do the same here.
+        my $get_page = $page_no-1;
+        $self->get_page(
+            $url.'&p='.$get_page.'&j='.$page_jump.'&fid='.
+            $self->{'_highest_friend_id'}.
+            '&lid='.$self->{'_lowest_friend_id'}, 'friends.*go to my profile' );
+
 
     }
 
@@ -3786,6 +3809,7 @@ sub get_inbox {
     my $page="";
     my $page_no = ( $options{'page_no'} || 1 );
     my @messages = ();
+    my $eventtarget;
 
     $self->_die_unless_logged_in( 'inbox' );
 
@@ -3805,11 +3829,19 @@ sub get_inbox {
                     ) or return;
         }
 
+        $self->current_page->decoded_content =~
+            /javascript:__doPostBack\('(.*?)'.*?>Next/ismo;
+        $eventtarget = $1;
+        unless ( $eventtarget ) {
+            $self->error('get_inbox couldn\'t detect EVENTTARGET in form on inbox page '.$page_no);
+            return;
+        }
+
         if ( !( $self->current_page->decoded_content =~ /\b"?currentpage"?>(\d+)</imso ) or $1 != $page_no ) {
             $self->submit_form( {
                 form_name => 'aspnetForm',
                 fields_ref => {
-                    '__EVENTTARGET' => 'ctl00$ctl00$Main$Main$messageList$pagingTop',
+                    '__EVENTTARGET' => $eventtarget,
                     '__EVENTARGUMENT' => $page_no
                 },
                 no_click => 1,
@@ -3830,7 +3862,7 @@ sub get_inbox {
         # Stop if we've reached the last page they requested
         last if ( $options{'end_page'} && ( $page_no >= $options{'end_page'} ) );
 
-	# Stop if we're only requesting one page
+        # Stop if we're only requesting one page
         last if ( $options{'page_no'} );
         
         # Next!
@@ -6068,6 +6100,9 @@ sub get_friends_on_page {
 
     my @friend_ids = ();
 
+    $self->{'_lowest_friend_id'} = '';
+    $self->{'_highest_friend_id'} = '';
+
     while ( $page =~ /$regex{'friend_link'}/gioms ) {
         unless ( ( ( $self->logged_in ) &&
                    ( "$2" == $self->my_friend_id )
@@ -6076,7 +6111,26 @@ sub get_friends_on_page {
                  ( ( $exclude ) && ( "$2" == $exclude ) )||
                  ( @friend_ids && ( "$2" == $friend_ids[$#friend_ids] ) ) # Duplicate check
                  ) {
-            push( @friend_ids, $2 );
+            my $friend_id = $2;
+            push( @friend_ids, $friend_id );
+            if
+            (
+                ( ! $self->{'_lowest_friend_id'} ) ||
+                ( $self->{'_lowest_friend_id'} &&
+                    ( $friend_id < $self->{'_lowest_friend_id'} )
+                )
+            ) {
+                $self->{'_lowest_friend_id'} = $friend_id
+            }
+            if
+            (
+                ( ! $self->{'_highest_friend_id'} ) ||
+                ( $self->{'_highest_friend_id'} &&
+                    ( $friend_id > $self->{'_highest_friend_id'} )
+                )
+            ) {
+                $self->{'_highest_friend_id'} = $friend_id
+            }
         }
     }
     
@@ -6442,7 +6496,7 @@ sub _next_button {
         $content = $self->current_page->decoded_content;
     }
 
-    $content =~ /">\s*Next\s*((<\/a>)?(\s|&nbsp;)+(\&gt;|>)|&rsaquo;\s*<\/a>)/io;
+    $content =~ /">\s*Next\s*((<\/a>)?((\s|&nbsp;)+(\&gt;|>))?|&rsaquo;\s*<\/a>)/io;
 
 }
 
