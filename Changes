@@ -1,5 +1,10 @@
 Revision history for WWW::Myspace
 
+0.80    2008-05-24
+        - Applied patch from RT#35703 by steven [...] pyro.eu.org
+        - Applied patch from RT#35702 by steven [...] pyro.eu.org
+        - Applied patch from RT#36100 by steven [...] pyro.eu.org
+
 0.79    2008-04-30
         - Updated get_friends method to work with current myspace paging system.
         - get_comments now returns the sender's profile "name" in

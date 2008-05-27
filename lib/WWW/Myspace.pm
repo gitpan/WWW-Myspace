@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 578 2008-05-01 02:43:47Z grantg $
+# $Id: Myspace.pm 580 2008-05-24 16:18:57Z oalders $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -42,11 +42,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.79
+Version 0.80
 
 =cut
 
-our $VERSION = '0.79';
+our $VERSION = '0.80';
 
 =head1 WARNING
 
@@ -633,6 +633,22 @@ sub _try_login {
     my $submitted="";
     $self->get_page( 'http://www.myspace.com/' );
     if ( $self->current_page->decoded_content =~
+       /ctl00\$ctl00\$Main\$cpMain\$SplashDisplay\$ctl01\$Email_Textbox/io )
+    {
+        # 2008-05-22 -- slight change to form input names; this could easily
+        #  change back in the future (it has done so previously)
+        $submitted = $self->submit_form( {
+#            page => 'http://www.myspace.com/',
+            form_name => 'aspnetForm',
+            fields_ref => { 'ctl00$ctl00$Main$cpMain$SplashDisplay$ctl01$Email_Textbox' => $self->account_name,
+                            'ctl00$ctl00$Main$cpMain$SplashDisplay$ctl01$Password_Textbox' => $self->password,
+    #                        '__EVENTTARGET' => 'ctl00$ctl00$Main$cpMain$SplashDisplay$ctl01$Login_ImageButton',
+    #                        '__EVENTARGUMENT' => '',
+                          },
+            action => 'http://secure.myspace.com/index.cfm?fuseaction=login.process',
+    #        no_click => 1,
+        } ) ;
+    } elsif ( $self->current_page->decoded_content =~
             /ctl00\$ctl00\$Main\$cpMain\$SplashDisplay\$ctl00\$Email_Textbox/io )
     {
         # 2008-04-11 -- they added an extra ctl00$ and cpMain$ to the names of
@@ -1378,6 +1394,11 @@ sub user_name {
 #           $line =~ s/\+/ /g;
 #           $line =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
             $self->{user_name} = $2;
+
+	        # 2008-04-14 -- have noticed Myspace inserting <wbr/> randomly
+	        #  in the middle of the user's name on the homepage; these need to
+	        #  be stripped out
+	        $self->{user_name} =~ s/<w?br\s?\/>//ig;
         }
     }
     
@@ -6496,7 +6517,17 @@ sub _next_button {
         $content = $self->current_page->decoded_content;
     }
 
-    $content =~ /">\s*Next\s*((<\/a>)?((\s|&nbsp;)+(\&gt;|>))?|&rsaquo;\s*<\/a>)/io;
+    # Example HTML for 'Next' button in messaging inbox:
+    #  <a class="pagingLink" href="javascript:__doPostBack('ctl00$ctl00$Main$messagingMain$MessageList$pagingTop','2')">Next &rsaquo;</a>
+    #
+    # Example HTML for 'Next' button in friends list:
+    #  <a href="javascript: GotoPage(6);" class="nextPagingLink">next</a>
+    #
+    # Example HTML for a *disabled* 'Next' button in friends list -- we do not
+    # want to match this:
+    #  <a class="nextPagingLink disabledPaging">next</a>
+ 
+    $content =~ /<a [^>]*href=\"[^\"]*\"[^>]*>(\s|&nbsp;)*Next(\s|&nbsp;|&rsaquo;|&gt;)*<\/a>/io;
 
 }
 
