@@ -1,5 +1,11 @@
 Revision history for WWW::Myspace
 
+0.81    2008-06-14
+        - Updated login method to adapt to recent changes in Myspace login form
+        - Minor edits to POD entry for friends_in_group method, to stop
+	  podchecker warnings, and a warning when viewing the WWW::Myspace(3)
+	  man page generated from it
+
 0.80    2008-05-24
         - Applied patch from RT#35703 by steven [...] pyro.eu.org
         - Applied patch from RT#35702 by steven [...] pyro.eu.org

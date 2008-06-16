@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 580 2008-05-24 16:18:57Z oalders $
+# $Id: Myspace.pm 582 2008-06-14 00:36:11Z s-chamberlain $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -42,11 +42,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.80
+Version 0.81
 
 =cut
 
-our $VERSION = '0.80';
+our $VERSION = '0.81';
 
 =head1 WARNING
 
@@ -633,7 +633,22 @@ sub _try_login {
     my $submitted="";
     $self->get_page( 'http://www.myspace.com/' );
     if ( $self->current_page->decoded_content =~
-       /ctl00\$ctl00\$Main\$cpMain\$SplashDisplay\$ctl01\$Email_Textbox/io )
+       /ctl00\$ctl00\$Main\$cpMain\$ctl00\$ctl01\$Email_Textbox/io )
+    {
+        # 2008-06-13 -- another slight change to form input names
+        $submitted = $self->submit_form( {
+#            page => 'http://www.myspace.com/',
+            form_name => 'aspnetForm',
+            fields_ref => { 'ctl00$ctl00$Main$cpMain$ctl00$ctl01$Email_Textbox' => $self->account_name,
+                            'ctl00$ctl00$Main$cpMain$ctl00$ctl01$Password_Textbox' => $self->password,
+    #                        '__EVENTTARGET' => 'ctl00$ctl00$Main$cpMain$SplashDisplay$ctl01$Login_ImageButton',
+    #                        '__EVENTARGUMENT' => '',
+                          },
+            action => 'http://secure.myspace.com/index.cfm?fuseaction=login.process',
+    #        no_click => 1,
+        } ) ;
+    } elsif ( $self->current_page->decoded_content =~
+            /ctl00\$ctl00\$Main\$cpMain\$SplashDisplay\$ctl01\$Email_Textbox/io )
     {
         # 2008-05-22 -- slight change to form input names; this could easily
         #  change back in the future (it has done so previously)
@@ -3170,26 +3185,25 @@ sub friends_from_profile {
 
 =head2 friends_in_group( group_id );
 
-Convenience method: Same as calling
-"get_friends( source => 'group', id => $group_id )".
+Convenience method;  the same as calling:
 
-Returns a list of the friend IDs of all people in the
-group identified by group_id. Tom is disincluded as in get_friends
-(because the same routine is used to get the friendIDs).
+   get_friends( source => 'group', id => $group_id )
 
+Returns a list of the friend IDs of all people in the group identified by
+C<group_id>.  Tom is excluded from this list (as is the case when using the
+C<get_friends> method directly).
 
 Example:
 
- my @hilary_fans = $myspace->friends_in_group( 100011592 );
- 
- @hilary_fans now contains the friendID of everyone in the HIlary
- Duff Fan Club group (group ID 100011592 ).
- 
-To get the group ID, go to the group page in WWW::Myspace and look at
-the URL:
-http://groups.myspace.com/index.cfm?fuseaction=groups.viewMembers&GroupID=100011592&adTopicId=&page=3
- 
-The group ID is the number after "GroupID=".
+   my @hilary_fans = $myspace->friends_in_group( 100011592 );
+
+C<@hilary_fans> will now contain the friend ID of everyone in the Hilary Duff
+Fan Club group (group ID 100011592).
+
+The group ID can be found immediately after C<groupid=> in the URL of the
+group's page on Myspace, for example:
+
+   http://groups.myspace.com/index.cfm?fuseaction=groups.groupProfile&groupid=100011592
 
 =cut
 
