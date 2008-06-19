@@ -28,6 +28,7 @@ WriteMakefile(
         'Config::General'       => 0, # MyBase.pm
         'Params::Validate'      => 0, # MyBase.pm
         'Time::ParseDate'       => 100.010301, # Myspace.pm - last_login method.
+        'URI::Escape'           => 0 # Myspace.pm - find_friend method
     },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean               => { FILES => 'WWW-Myspace-*' },

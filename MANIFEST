@@ -33,6 +33,8 @@ t/pod-coverage.t
 t/pod.t
 t/TestConfig.pm
 t/config.yaml
+t/login-forms/2008-06-18.html
+t/login-forms/get_login_form.pl
 scripts/approve_friends
 scripts/comment_myspace
 scripts/message_group
@@ -69,3 +71,4 @@ samples/read_message
 samples/send_friend_request
 samples/set_random_photo
 samples/test_next_button
+META.yml                                 Module meta-data (added by MakeMaker)

@@ -1,7 +1,7 @@
 #!perl -T
 
 #use Test::More 'no_plan';
-use Test::More tests => 1;
+use Test::More tests => 2;
 use strict;
 
 use WWW::Myspace;
@@ -12,6 +12,19 @@ use TestConfig;
 
 # Get myspace object
 my $myspace = new WWW::Myspace( auto_login => 0 );
+
+
+# Try to find an account which doesn't exist
+my @results = $myspace->find_friend( 'madeup@example.com' );
+if ( $myspace->error )
+{
+    warn $myspace->error;
+    fail( 'Search for a non-existent friend');
+} else {
+    my $num_results = @results;
+    is ($num_results, 0, 'Search for a non-existent friend');
+}
+
 
 SKIP: {
     my $email = $CONFIG->{acct1}->{username};

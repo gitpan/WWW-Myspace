@@ -10,13 +10,14 @@ login_myspace or die "Login Failed - can't run tests";
 my $myspace = $CONFIG->{acct1}->{myspace}; # For sanity
 
 SKIP: {
-	skip "Not logged in", 2 unless $CONFIG->{login};
+    skip "Not logged in", 2 unless $CONFIG->{login};
 
     # Get a list of photo IDs
-    warn "Getting photos for $CONFIG->{acct1}->{friend_id}\n";
+    #warn "Getting photos for $CONFIG->{acct1}->{friend_id}\n";
     my @photo_ids = $myspace->get_photo_ids(
             friend_id => $CONFIG->{acct1}->{friend_id}
-        ) or warn $myspace->error;
+        );
+    warn $myspace->error if $myspace->error;
     
     my ( %friend_ids ) = ();
     my $pass = 1;
