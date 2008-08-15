@@ -1,5 +1,35 @@
 Revision history for WWW::Myspace
 
+0.83    ???
+        - Fixed send_message, broken by Myspace changes 2008-08-15 (RT#38494)
+        - Fixed send_friend_request, broken by Myspace changes (RT#38385)
+          of Myspace changes
+        - Fixed friends_from_profile;  function was returning friends from
+          the logged-in account, instead of the profile specified (RT#37057)
+        - Removed example documenting the use of the "exclude" option
+          from friends_from_profile method.  This option relied on the
+          "exclude" option in get_friends, which was removed during the
+          re-write of get_friends_on_page in version 0.62.
+        - Fixed get_basic_info
+        - Fixed friend_user_name
+        - Fixed last_login
+        - Fixed last_login_ymd
+        - read_message now cleans the 'gauntlet_tokenizer_reserved' attribute
+          from HTML tags in received messages
+        - Disabled cool_new_people function and tests because the feature has
+          been replaced by Myspace with a similar feature on the homepage;  this
+          may be supported in the future
+        - It should be no longer necessary to change an account's language/
+          location to English/United States;  this is now handled automatically
+          without changing your account settings directly (currently by 
+          modifying the MSCulture cookie)
+        - Much functionality previously worked with language/location set to
+          English/United Kingdom, until changes on 2008-07-18 which broke
+          messaging functions.  That is fixed in this release by way of the
+          change mentioned above
+        - Send Accept-Language HTTP header in anticipation of Myspace one day
+          respecting it when guessing the visitor's language preference
+
 0.82    2008-06-19
         - New login method adapts to recent changes in Myspace login form;
           hopefully this will be more robust against future changes

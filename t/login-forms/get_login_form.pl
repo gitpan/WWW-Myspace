@@ -19,7 +19,7 @@ my $myspace = new WWW::Myspace( { 'auto_login' => 0 } );
 my $res = $myspace->get_page ( 'http://www.myspace.com/' );
 my @form = $res->decoded_content =~ /(<form[^>]*>.*?<\/form>)/igs;
 
-# :FIXME: assumes login form is always the second form on the page
+# :FIXME: assumes login form is always the third form on the page
 print _get_clean_form($form[1]);
 
 =head2 _get_clean_form( $form )

@@ -3,7 +3,7 @@
 use strict;
 
 use Data::Dumper;
-use Test::More tests => 29;
+use Test::More tests => 31;
 #use Test::More 'no_plan';
 
 use lib 't';
@@ -34,7 +34,7 @@ $myspace = new WWW::Myspace( { auto_login => 0 } );
 ok( ref $myspace, 'Create myspace object' );
 
 # Test _get_login_forms on an offline copy of a login form, to make sure the method works
-open INPUT, '<t/login-forms/2008-06-18.html';
+open INPUT, '<t/login-forms/latest.html';
 undef $/;
 my $form = <INPUT>;
 close INPUT;
@@ -90,7 +90,20 @@ SKIP: {
 
     # Network tests.
     # All tests below require network access.
-    skip 'Tests require network access', 27 if ( -f 'no-network-access' );
+    skip 'Tests require network access', 29 if ( -f 'no-network-access' );
+
+
+    # Make sure we received the US Myspace page and not any other localization
+    my ( $localization ) = ( $res->decoded_content =~
+        /header\/([a-z]{2}\-[A-Z]{2})\/mslogo/i );
+    warn "Myspace seems to be serving pages to you in a language other than\n".
+         " en-US, and this may break functionality where a WWW::Myspace\n".
+         " object is used without logging into an account.  At present,\n".
+         " Myspace uses IP-based geolocation and a workaround is not yet\n".
+         " implemented.\n" unless
+        is( lc ($localization), lc ('en-US'),
+            'Homepage (without login) should display en-US localization' );
+
 
     SKIP: {
         # Make sure _get_login_forms worked when we tested it, because we need
@@ -156,7 +169,7 @@ SKIP: {
 
 
     SKIP: {
-        skip "Tests require login", 15 unless $CONFIG->{login};
+        skip "Tests require login", 16 unless $CONFIG->{login};
 
         login_myspace or die "Failed to log into test acct1 - can't run tests";
         $myspace = $CONFIG->{'acct1'}->{'myspace'};
@@ -167,6 +180,24 @@ SKIP: {
 
         ok( $myspace->logged_in, "Login successful for acct1" );
         ok( $myspace2->logged_in, "Login successful for acct2" );
+
+
+        # The following URL should display a 'logged in' version of the homepage
+        $res = $myspace->get_page("http://www.myspace.com/");
+
+        # Make sure we received the US Myspace page and not any other
+        #  localization
+        my ( $localization ) = ( $res->decoded_content =~
+            /header\/([a-z]{2}\-[A-Z]{2})\/mslogo/i );
+        warn "After logging into acct1, Myspace appears to serve pages to\n".
+             " in a language other than than en-US, and this may break\n".
+             " functionality where a WWW::Myspace object is used without\n".
+             " logging into an account.  At present, this is configured in\n".
+             " the Account Settings page for the account and WWW::Myspace\n".
+             " can't currently override this automatically.\n" unless
+            is( lc ($localization), lc ('en-US'),
+                'Homepage (after login) should display en-US localization' );
+
 
         cmp_ok( $myspace->my_friend_id, '==', $CONFIG->{'acct1'}->{'friend_id'},
             'Verify friend ID' );
@@ -281,10 +312,8 @@ SKIP: {
 
     # Test last_login
     if ( $CONFIG->{login} ) {
-        # Had some problems when this was set to 24 hours;  now we make sure the
-        #  date is within 48 hours, but it probably should be looked into
         cmp_ok ( $myspace->last_login( $CONFIG->{'acct2'}->{'friend_id'} ), ">",
-                 time - 2*86400, "last_login date seems recent" );
+                 time - 86400, "last_login date seems recent" );
     } else {
         ok ( $myspace->last_login( $CONFIG->{'acct2'}->{'friend_id'} ),
              "last_login returns a value" );

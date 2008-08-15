@@ -10,7 +10,7 @@ use WWW::Myspace;
 
 my $myspace = WWW::Myspace->new( auto_login => 0);
 
-plan tests => 8;
+plan tests => 6;
 
 my $friend_id = $myspace->friend_id('greatbigseaofficial');
 ok ($friend_id, "got friend id: $friend_id");
@@ -29,12 +29,6 @@ ok ( $comments, "got $comments comments from page");
 
 $comments = $myspace->comment_count( 76772500 );
 is ( $comments, 0, "detected that profile has zero comments");
-
-my $ymd = $myspace->last_login_ymd( page => $page );
-like ( $ymd, qr/\d\d\d\d-\d{1,2}-\d{1,2}/, "got YMD format for band page" );
-
-my $ymd_personal = $myspace->last_login_ymd( friend_id => 211075 );
-like ( $ymd_personal, qr/\d\d\d\d-\d{1,2}-\d{1,2}/, "got YMD format for personal page" );
 
 #SKIP: {
 #    skip "Test::Exception not installed", 1 if $@;

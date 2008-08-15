@@ -1,7 +1,7 @@
 ######################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 598 2008-06-19 07:53:25Z s-chamberlain $
+# $Id: Myspace.pm 621 2008-08-15 01:58:14Z s-chamberlain $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -43,11 +43,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.82
+Version 0.83
 
 =cut
 
-our $VERSION = '0.82';
+our $VERSION = '0.83';
 
 =head1 WARNING
 
@@ -199,8 +199,7 @@ my %regex = (
     is_film => qr/http\:\/\/.*?myspace\.com\/images\/film_logo\.gif/io,
     is_music => qr/http\:\/\/.*?myspace\.com\/images\/music_logo\.gif/io,
     last_login => qr/Last Login:/io,
-    basic_info => qr/Table2".*?>(.*Last Login:.*?)<br>/smo,
-    basic_info_sub => qr/align="left">(.*)/smo,
+    basic_info => qr/"Table2".*<td[^>]*>(.*Last Login:.*?)<br(?: \/)?>/smo,
     basic_info_band => qr/Arial, Helvetic, sans-serif"><strong>(.*Last Login:.*?)<br>/smo,
     comment_posted => qr/Your Comment has been posted/io,
     not_logged_in => qr/You Must Be Logged-In to do That\!/io,
@@ -695,12 +694,49 @@ sub _try_login {
                 return;
             }
         }
+
+        # Now switch to en-US locale
+        $self->_set_locale( 'en-US' );
     } else
     {
         $self->error("Login failed.\n");
         warn "Login failed.\n";
     }
 
+}
+
+=head2 _set_locale( $locale )
+
+Changes the locale in use by the current Myspace session.  This is called
+immediately after login to set the locale to en-US.  This is necessary for
+the module's regexp matches to work as intended.
+
+The C<locale> parameter is in ISO 3166-1-alpha-2 format, e.g. 'en-US'.
+
+At present, this is implemented by modifying the MSCulture cookie directly,
+changing the PreferredCulture setting.  This mimics the behaviour of the
+JavaScript used on the website.
+
+=cut
+
+sub _set_locale
+{
+    my ( $locale ) = @_;
+    if ( ! defined $locale )
+    {
+        die("_set_locale called without specifying the locale to use");
+    }
+ 
+    # Get currently value of MSCulture cookie
+    my $locale_cookie_value = $self->mech->cookie_jar->{'COOKIES'}->{'.myspace.com'}->{'/'}->{'MSCulture'}[1];
+    warn "MSCulture cookie was as follows:\n  $locale_cookie_value\n" if $DEBUG;
+
+    # Change PreferredCulture, which applies to the session until logout
+    $locale_cookie_value =~ s/PreferredCulture=[^\&\;]*/PreferredCulture=$locale/;
+    warn "MSCulture cookie is now as follows:\n  $locale_cookie_value\n" if $DEBUG;
+
+    # Apply changes to the mech object
+    $self->mech->cookie_jar->{'COOKIES'}->{'.myspace.com'}->{'/'}->{'MSCulture'}[1] = $locale_cookie_value;
 }
 
 =head2 _get_login_forms( $page )
@@ -869,6 +905,16 @@ sub _new_mech {
     # We need to follow redirects for POST too.
     push @{ $self->mech->requests_redirectable }, 'POST';
 
+
+    # Specify HTTP headers to send with all requests
+
+    # Prefer pages in US English (required by this module's regexs), otherwise
+    #  generic English, or whatever's available
+    # As of 2008-06-25, Myspace currently ignores this header
+    $self->mech->default_headers->push_header(
+        'Accept-Language' => 'en-US, en;q=0.8, *;q=0.1'
+    );
+
 }
 
 =head2 logout
@@ -897,6 +943,11 @@ sub logout {
     # Do NOT clear options that are set by the user!
 #   $self->{account_name} = undef;
 #   $self->{password} = undef;
+
+    # Since we might be required to perform some actions without login, we
+    #  must make sure we're using US English.  Visiting this URL currently sets
+    #  the current session's locale appropriately.
+    my $res = $self->get_page('http://us.myspace.com/');
 
 }
 
@@ -1487,13 +1538,19 @@ sub friend_user_name {
         $page = $self->current_page;
     }
 
-    if ( $page->decoded_content =~ /<span class="nametext">(.*?)<\/span>/o ) {
-        my $line = $1;
-#        $line =~ s/\+/ /g;
-#        $line =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
-        return $line;
+    if ( $page->decoded_content =~ /<span class="nametext">\s*(.*?)\s*<\/span>/ios ) {
+        my $user_name = $1;
+
+        # Strip any <br />'s
+        $user_name =~ s/<br(?:\s+\/)?>//gio;
+
+#        $user_name =~ s/\+/ /g;
+#        $user_name =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
+
+        return $user_name;
     } else {
-        return "";
+        warn "friend_user_name:  couldn't parse user name from page";
+        return undef;
     }
 }
 
@@ -1646,109 +1703,171 @@ sub friend_count {
 
 }
 
-=head2 last_login( [friend_id] )
+=head2 last_login_ymd ( [$friend_id || $friend_url || friend_id => $friend_id || page => $page] )
 
-Returns the last login date from the specified profile in Perl "time"
-format.  As of WWW::Myspace 0.70, uses the Time::ParseDate module's
-"parsedate" method to parse the date according to your system's locale
-settings.  This was done to allow for UK-style dates, which myspace seems
-to display based either on your profile settings, if you're logged in, or
-based on your IP address if not logged in.
+Returns the "Last Login" date for a profile in YYYY-MM-DD form (ISO 8601).
 
-If no friend_id is specified, this method scans the current page
-so you can do:
+Parameter is the same as for C<last_login>;  please refer to that function's
+documentation.
 
- $myspace->get_profile( $friend_id );
- ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =
-    localtime( $myspace->last_login );
+This date format allows lexical comparisons to be made, for example:
 
- # or
-
- if ( $myspace->last_login( $friend_id ) < today - 3600 * 60 ) {
-    print "They haven't logged in in 60 days!"
- }
-
-=cut
-
-sub last_login {
-
-    my ( $page, $time );
-
-    if ( @_ ) {
-        $page = $self->get_profile( @_ ) or return;
-    } else {
-        $page = $self->current_page;
+    # Remember to use eq, gt, lt here instead of ==, <, >
+    if ( $myspace->last_login_ymd( $friend_id ) lt "2005-04" ) {
+        print "They haven't logged in since before April 2005!\n"
     }
 
-    if ( $page && $page->decoded_content =~
-        /Last\s+Login:(\s|&nbsp;)+([0-9]+\/[0-9]+\/[0-9]+)\s*<br\s?\/?>/smo ) {
-        # Convert to Perl's time format.
-
-        my $time = parsedate( "$2", DATE_REQUIRED => 1); # From Time::ParseDate
-        $self->error( "Unable to parse date: $1" ) unless $time;
-#        eval { $time = timelocal( 0, 0, 0, $3, $2 - 1, $4 ); }; # From Time::Local
-#        $self->error( $@ . "\nDate found was $2/$3/$4" ); # Need to report to the caller if we got an error.
-        # Return it.
-        return $time;
-    } else {
-        $self->error("Last Login regex not found on profile page");
-        return;
-    }
-}
-
-=head2 last_login_ymd ( $friend_id || friend_id => $friend_id || page => $page )
-
-Returns the "Last Login" date for a given friend_id in YMD format.
-Behaves the same as profile_views.  See profile_views for documentation on
-passing parameters to this function.
+Returns C<undef> on failure.
 
 =cut
 
 sub last_login_ymd {
 
-    my $page = $self->_validate_page_request( @_ );
+    # Rewritten to re-use last_login instead of duplicating code
+    my $last_login = $self->last_login( @_ );
+    return undef if !defined $last_login;
 
-    if ( defined $page ) {
-        my $content = $page->decoded_content;
-        $content =~ s/\n//g;
-        # Band pages.
-        if ( $content =~ /Last\sLogin:&nbsp;\s*(\d{1,})\/(\d{1,})\/(\d{4})/igmsoxc ) {
-            return join("-", $3, $1, $2);
-        }
-        # Personal pages
-        elsif ( $content =~ /Last\sLogin:\s*(\d{1,})\/(\d{1,})\/(\d{4})/igmsoxc ) {
-            return join("-", $3, $1, $2);
+    my ( undef, undef, undef,   # second, minute, hour
+         $day, $month, $year ) = gmtime($last_login);
+
+    # gmtime returns year minus 1900 (?)
+    $year += 1900;
+
+    # gmtime returns month with 0=Jan (!?!)
+    $month++;
+
+    # Add leading zeroes if necessary
+    $month = "0$month" if ($month < 10);
+    $day   = "0$day"   if ($day   < 10);
+
+    return "$year-$month-$day";
+
+}
+
+=head2 last_login( [$friend_id || $friend_url || friend_id => $friend_id || page => $page] )
+
+Returns the "Last Login" date for a profile in POSIX time format, aka UNIX time:
+seconds since the epoch (1970-01-01T00:00:00Z) excluding leap seconds.
+
+Parameter can be a friend ID, a friend URL, or a previously-retrieved
+HTTP::Response object;  if unspecified it will use the current page, for
+example:
+
+    $myspace->get_profile( $friend_id );
+
+    ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =
+        localtime( $myspace->last_login );
+
+or:
+
+    if ( $myspace->last_login( $friend_id ) < today - 86400 * 90 ) {
+        print "They haven't logged in in 90 days!\n"
+    }
+
+Returns C<undef> on failure.
+
+=cut
+
+sub last_login {
+
+    my $profile;
+
+    # :FIXME: this amount of validation of input parameters is justified but
+    #  should be moved elsewhere
+    if ( scalar @_ > 2 ) {
+        croak 'last_login called with too many parameters';
+    }
+
+    if ( scalar @_ == 2 )
+    {
+        my ( $type, $value ) = @_;
+
+        if ( $type eq 'page' ) {
+
+            # We were given a page parameter;  ensure it's valid
+            if ( ref $value ne 'HTTP::Response' )
+            {
+                croak "last_login given a page parameter which is not a valid\n".
+                      "HTTP::Response object;  parameter was of type";
+            }
+
+            $profile = $value;
+
+        } elsif ( $type eq 'friend_id' ) {
+
+            # Parameter will be detected as a friend_id below
+            @_ = ( $value );
+
+        } else {
+            croak "last_login called with unrecognised parameter '$type'";
         }
     }
 
-    return;
-}
+    if ( scalar @_ == 1 ) {
 
-#---------------------------------------------------------------------
-# get_profile( $friend_id )
-# Return the friend's profile page as an HTTP::Response object
+        my ( $parameter ) = @_;
+
+        # If a friend ID or URL was given;  try to retrieve the profile
+        if ( ! ( $profile = $self->get_profile( $parameter ) ) ) {
+            warn "last_login:  failed to retrieve specified profile ($parameter)";
+            return undef;
+        }
+
+    }
+
+    if ( scalar @_ == 0 ) {
+        # No parameter given -- use current page by default
+        $profile = $self->current_page;
+    }
+
+
+    # Look for last login date in any format beginning and ending with at
+    #  least one digit, with either / or - used as a delimiter
+    if ( ! ($profile->decoded_content =~
+        /Last\s+Login:.*?([0-9][0-9\/\-]+[0-9])/smio) ) {
+
+        $self->error( 'last_login:  failed to parse date from profile page' );
+        return undef;
+
+    }
+
+    # Auto-detect a valid date
+    my $time = parsedate( "$1",                     # From Time::ParseDate
+                          DATE_REQUIRED => 1,       # Return undef on error
+                          GMT           => 1,       # Return UTC time
+                          VALIDATE      => 1 );     # Expect a valid date
+
+    if ( !defined $time ) {
+        $self->error( "last_login:  unable to parse date '$1'" ) unless $time;
+        return undef;
+    }
+
+    return $time;
+}
 
 =head2 get_profile( $friend_id || $friend_url )
 
-Gets the profile identified by $friend_id or $friend_url. That means
-both of these will work:
+Gets the profile identified by either C<$friend_id> or C<$friend_url>. That
+means both of these will work:
 
- $myspace->get_profile( "12345" );
- $myspace->get_profile( "hilaryduff" );
+    $myspace->get_profile( "12345" );
+    $myspace->get_profile( "hilaryduff" );
 
-Returns a reference to a HTTP::Response object that contains the
-profile page for $friend_id.
+Returns a reference to an HTTP::Response object for the profile page.
 
-    The following displays the HTML source code of the friend's
-    profile identified by "$friend_id":
+The following displays the HTML source code of the profile identified by
+C<$friend_id>:
 
     my $res = $myspace->get_profile( $friend_id );
-
     print $res->decoded_content;
 
 =cut
 
 sub get_profile {
+
+    if ( ! @_ ) {
+        croak 'get_profile called without parameters';
+    }
 
     # $no_validate is used by the internal _validate_page_request method
     # in case a method needs to specifically check for an invalid
@@ -1757,14 +1876,15 @@ sub get_profile {
 
     my $re = 'verify_get_profile';
     $re = undef if ( $no_validate );
+
     # Myspace bug on 10/25/07: Calling certain profiles (occurred on a Chinese
     # profile in the test/discovery case myspace.com/1300323889) using the
     # myspace.com/friend_id format causes a circular redirect.
-    # So now we use the explicit profile request if
-    # we were given a friendID, or the short form if we were given a MySpace URL.
+    # So now we use the explicit profile request if we were given a friendID, or
+    # the short form if we were given a MySpace URL.
     if ( $friend_id =~ /^[0-9]+$/o ) {
-        return $self->get_page( 'http://profile.myspace.com/index.cfm?fuseaction='.
-            'user.viewprofile&friendid='.$friend_id, $re );
+        return $self->get_page( 'http://profile.myspace.com/index.cfm'.
+            '?fuseaction=user.viewprofile&friendid='.$friend_id, $re );
     } else {
         return $self->get_page( "${BASE_URL}${friend_id}", $re );
     }
@@ -1894,35 +2014,37 @@ sub get_basic_info {
     return undef if($self->error);
 
     #if it is not a band profile
-    unless($type == 2){
+    unless( $type == 2 ) {
+
         $page = $self->_apply_regex( regex => 'basic_info', page => $page );
-        $page = $self->_apply_regex( regex => 'basic_info_sub', source => $page );
 
-        #we tend to get sometimes funny html in the basic info section that breaks
-        #the regex; we should get round this by stripping out every <br> that is not
-        #immediately followed by a newline
-        $page=~ s/(<br>)([^\s])/$2/g;
+        # Parse text found between <br />'s, and trim whitespace
+        ( $info{'headline'},
+          undef,
+          $info{'gender'},
+          $info{'age'},
+          $info{'cityregion'},
+          $info{'country'},
+          undef,
+          undef,
+          undef,
+          $info{'lastlogin'}
+        ) = split(/\s*<br(?: \/)?>\s*/ios, $page);
 
-        #<br>U.S<span class=lastlogin>, COLORADO
-        #$page=~ s/<br>.*<span class=lastlogin>(.*\n)?//;
-
-
-        #assign values and trim leading and trailing white spaces
-        ( $info{'headline'},undef,$info{'gender'},
-          $info{'age'},$info{'cityregion'},$info{'country'},
-          undef,undef,$info{'lastlogin'}
-        )=map {s/^\s+//;s/\s+$//;$_} split('<br>',$page);
+        # Strip quotes from around headline, if any
+        $info{'headline'} =~ s/^\"(.*)\"$/$1/os;
 
         #return age as number only
-        $info{'age'} =~ s/^(\d+).*/$1/;
-
-
+        $info{'age'} =~ s/^(\d+).*/$1/os
+            or warn "get_basic_info:  failed to parse age\n";
 
         #return last login as date only
-        $info{'lastlogin'} =~ s/Last Login:\s+([\d\/]*)/$1/;
+        $info{'lastlogin'} =~ s/Last Login:\s*([0-9][0-9\/\-]+[0-9]).*/$1/ios
+            or warn "get_basic_info:  failed to parse lastlogin";
+
     }
     #separately for band profiles
-    else{
+    else {
 
         $page = $self->_apply_regex( regex => 'basic_info_band', page => $page );
         $page =~ s/<\/strong><\/font>//;
@@ -1935,6 +2057,9 @@ sub get_basic_info {
           undef,undef,undef,$info{'lastlogin'}
         )=map {s/^\s+//;s/\s+$//;$_} split('<br>',$page);
 
+        # Strip quotes from around headline, if any
+        $info{'headline'} =~ s/^\"(.*)\"$/$1/os;
+
         #make sure profile views returns only the number
         $info{'profileviews'}=~ s/[^\d]*([\d]+)/$1/sm;
 
@@ -1942,7 +2067,17 @@ sub get_basic_info {
         $info{'lastlogin'} =~ s/Last Login:[^\d]*([\d\/]+)/$1/sm;
     }
 
-    ( $DEBUG ) && print %info,"\n";
+    if ( $DEBUG )
+    {
+        print "get_basic_info parsed the following:\n";
+
+        my $item = undef;
+        my $value = undef;
+        while (($item, $value) = each %info)
+        {
+            print "  '$item' = '$value'\n"
+        }
+    }
 
     #let's guess what is the city and what the region
     if ($info{'cityregion'} =~ /(.*),\s*(.*)/){
@@ -2408,11 +2543,9 @@ sub ____FIND_PEOPLE____ {}
 
 =head2 C<find_friend( $email )>
 
-Takes an email address and returns a list of the friend_ids of the
-owner.
+Takes an email address and returns one or more matching friend IDs
 
-It does so by clicking "Search" and filling in the "Find a Friend"
-form with "email" selected.
+Sets C<$myspace->error> on failure.
 
     Example:
     use WWW::Myspace;
@@ -2441,27 +2574,26 @@ sub find_friend {
         return;
     }
 
-    warn "Getting home page.\n" if $DEBUG;
-    $self->_go_home or return;
+    # Search feature is now available from the header on all pages
+#    warn "Getting home page.\n" if $DEBUG;
+#    $self->_go_home or return;
 
-    warn "Getting search page.\n" if $DEBUG;
-    $self->follow_to( 'http://search.myspace.com/index.cfm?fuseaction=find', '' ) or return;
-
-    warn "Submitting $email to search form\n" if $DEBUG;
+#    warn "Getting search page.\n" if $DEBUG;
+#    $self->follow_to( 'http://search.myspace.com/index.cfm?fuseaction=find', '' ) or return;
 
     # JavaScript seems to change the form's action into a GET request instead?!?
-    my $search_uri = "http://searchservice.myspace.com/index.cfm?fuseaction=sitesearch.results&type=People&qry=";
+    my $search_uri = "http://searchservice.myspace.com/index.cfm?fuseaction=sitesearch.results&type=People&srchBy=Email&qry=";
     $search_uri .= uri_escape($email);
+
+    warn "Submitting $email to search form" if $DEBUG;
     return unless $self->get_page( $search_uri,
         qr/(results for|weren('|\&rsquo\;)t able to find)/io);
 
 #    return unless $self->submit_form( {
-#        form_no => 1,
+#        form_name => 'theForm',
 #        fields_ref=>{
-#            # searchBy has disappeared, for some reason;  f_first_name is now
-#            #  used for first/last name, display name, email, or MySpace URL
-##               searchBy => 'Email',
-#            f_first_name => "$email",
+#            searchBy => 'Email',
+#            f_first_name => $email,
 #        },
 #        # Take note -- Myspace used &rsquo; instead of an apostrophe.  That's
 #        #  actually correct typography, and they might be planning to use it
@@ -2471,16 +2603,24 @@ sub find_friend {
 
     warn "Posted form, scanning for response.\n" if $DEBUG;
     if ( $self->current_page->decoded_content =~ qr/results for/io ) {
+
         warn "Got positive response for $email\n" if $DEBUG;
-        return ( $self->get_friends_on_page );
+        my @results = $self->get_friends_on_page;
+
+        # If get_friends_on_page finds nothing, don't return, and the error
+        #  is handled later
+        return @results if @results;
+
     } elsif ( $self->current_page->decoded_content =~ qr/weren('|\&rsquo\;)t able to find/io )  {
+
         warn "Got negative response for $email\n" if $DEBUG;
-        return;
-    } else {
-        # This currently can't happen...
-        $self->error("Unable to parse friend search results page");
-        return;
+        return ();
+
     }
+
+    $self->error("Unable to parse friend search results page -- error in\n".
+                 " either find_friend or get_friends_on_page");
+    return ( );
 }
 
 =head2 C<search_friend_list( $name )>
@@ -2850,10 +2990,7 @@ sub _browse_action {
 
 =head2 cool_new_people( $country_code )
 
-NOTE: Myspace appears to have abandoned this method of posting "cool new
-people" sometime around August of 2006.  However, the .js pages are still
-posted, so this method will return a list of people.  However, they are not
-new and maybe not even cool.  This method should be considered deprecated.
+2008-08-12 -- this feature no longer exists at Myspace.  It has been replaced by a similar feature on the homepage whcih may be supported in the future by WWW::Myspace.  This function is disabled until then.
 
 This method provides you with a list of "cool new people".
 Currently Myspace saves the "cool new people" data
@@ -2920,9 +3057,16 @@ which cool people lists may exist, you can do something like this:
 
 sub cool_new_people {
 
+    my %cool_people     = ( );
+
+    # 2008-08-12 -- cool_new_people no longer works as it used to;  there is a
+    #  new, similar feature implemented on the homepage implemented using AJAX
+    warn "cool_new_people disabled until it can be rewritten\n";
+    return %cool_people;
+
+
     my $country_code    = shift;
     my $country_code_uc = "\U$country_code";
-    my %cool_people     = ( );
 
     $self->error(0);  # Lets the calling script check for error being true.
 
@@ -3075,6 +3219,7 @@ sub get_friends {
     # This should be split into "get_my_friends", "get_profile_friends",
     # and "get_group_friends".
     if ( ! defined $options{'source'} ) {
+        print "get_friends:  will get friends from own profile\n" if $DEBUG;
         $self->_go_home;
         $self->follow_link(
             url_regex => qr/fuseaction=user\.viewfriends/io,
@@ -3100,7 +3245,7 @@ sub get_friends {
             return ( @friends)
         }
         else {
-            $self->follow_link( url_regex => qr/fuseaction=user\.viewfriends/io );
+            $self->follow_link( url_regex => qr/fuseaction=user\.viewfriends\&[^'"]*friendID=$profile_id/io );
             $exclude=$options{id}; # Exclude the owner's ID (bit of a hack).
         }
     }
@@ -3108,6 +3253,9 @@ sub get_friends {
 
     #TODO: This should be "_get_friends", called by the above methods.
     while (1) {
+        print "get_friends:  now getting friends from the current page\n"
+            if $DEBUG;
+
         push ( @friends, $self->get_friends_on_page( '', $exclude ) )
             unless ( $options{start_page} &&
                      ( $page_no < $options{start_page} )
@@ -3180,18 +3328,6 @@ Also accepts the same options as the get_friends method
                 max_count => 500
             );
 
- # A further example:
- # Before you do anything with these ids, make sure you don't already
- # have them as friends (uses the "exclude" option in get_friends,
- # which is very efficient as friends are excluded as they're read
- # instead of afterwards):
- my @current_friends = $myspace->get_friends;
- die $self->error if $self->error;
- my @potential_friends = $myspace->friends_from_profile(
-    id => [ 12345, 54366 ],
-    exclude => \@current_friends
- );
-
 =cut
 
 sub friends_from_profile {
@@ -3222,6 +3358,9 @@ sub friends_from_profile {
 
     # Get the friendIDs
     foreach $id ( @profiles ) {
+        print "friends_from_profile:  getting friends from profile '$id'\n"
+            if $DEBUG;
+
         push ( @friends,
                $self->get_friends(
                    source => 'profile',
@@ -4121,6 +4260,9 @@ sub read_message {
     # Clean up newlines
     $message{'body'} =~ s/[\n\r]/\n/go;
 
+    # Remove mysterious 'gauntlet_tokenizer_reserved=""' attribute
+    $message{'body'} =~ s/ gauntlet_tokenizer_reserved=""//io;
+
     # And they have these BR tags at the beginning of each line...
     # Not any more - 8/16/07
 #    $message{'body'} =~ s/^[ \t]*<br \/>[ \t]*//mog;
@@ -4438,17 +4580,22 @@ sub send_message {
         # against myspace changes and platform differences).
         $options{'message'} =~ s/(\n|\\n)/\015\012/gso;
 
+
+        # my $input_name_prefix = 'ctl00$ctl00$Main$messagingMain$SendMessage$';
+        # Changed 2008-08-15
+        my $input_name_prefix = 'ctl00$ctl00$ctl00$cpMain$cpMain$messagingMain$SendMessage$';
+
         # Submit the message
         warn "Submitting message\n" if $DEBUG;
         $submitted = $self->submit_form( {
             form_name => 'aspnetForm',
-            button => 'ctl00$ctl00$Main$messagingMain$SendMessage$btnSend',
+            button => $input_name_prefix.'btnSend',
             fields_ref => {
-                'ctl00$ctl00$Main$messagingMain$SendMessage$subjectTextBox' =>
+                $input_name_prefix.'subjectTextBox' =>
                     "$options{'subject'}",
-                'ctl00$ctl00$Main$messagingMain$SendMessage$bodyTextBox' =>
+                $input_name_prefix.'bodyTextBox' =>
                     "$options{'message'}",
-                '__EVENTTARGET' => 'ctl00$ctl00$Main$messagingMain$SendMessage$btnSend',
+                '__EVENTTARGET' => $input_name_prefix.'btnSend',
                 'RTEEnabled' => 'false'
             },
             no_click => 1,
@@ -4820,8 +4967,9 @@ sub send_friend_request {
     # against myspace changes and platform differences).
     $message =~ s/(\n|\\n)/\015\012/gso if ( $message );
 
-
     TESTBLOCK: {
+        my $add_to_friends_button_name = "";
+
         # Check message length for them
         if ( $message && ( length( $message ) > 150 ) ) {
             $return_code='FM';
@@ -4896,9 +5044,27 @@ sub send_friend_request {
         # You might want to change this whole section to:
         # do { $res = $self->get_page ... ;
         # $attempts++; } until ( ( $attempts > 20 ) || ( $page =~ /<input type="submit" ...) );
-        elsif ( $page !~ /ctl00\$cpMain\$btnAddToFriends/io ) {
+
+        # 2008-08-12 -- button 'name' had changed;  it may be better to
+        #  match the button's caption ('value' attribute) instead from now on
+        elsif ( $page !~ /<input\s[^>]*value=(["'])Add\s+to\s+Friends\1[^>]*>/io ) {
             $return_code ='F';
             warn "No Add to Friends button on form!\n";
+        }
+
+        else
+        {
+            # The previous regexp did match, so there is an Add To Friends on
+            #  the page and its HTML is the last-matched string
+            my $add_to_friends_button = $&;
+            print "Add To Friends button HTML is:\n  $add_to_friends_button\n"
+                if $DEBUG;
+
+            # Determine the button name, so that we can 'click' on it
+            $add_to_friends_button =~ /\sname=(["'])(.*?)\1/io;
+            $add_to_friends_button_name = $2;
+            print "Add To Friends button name is:\n".
+                  "  $add_to_friends_button_name\n" if $DEBUG;
         }
 
         # If we got a return code above, go return it.
@@ -4927,11 +5093,15 @@ sub send_friend_request {
         } else {
              $res = $self->submit_form( {
                     form_name => 'aspnetForm',
-                    button => 'ctl00$cpMain$btnAddToFriends',
+                    button => $add_to_friends_button_name,
                     no_click => 1,
                     fields_ref => {
-                        '__EVENTTARGET' => 'ctl00$cpMain$btnAddToFriends',
-                        'ctl00$cpMain$NoteToFriend$Note' => $message
+                        # 2008-08-12 -- this doesn't seem to be sent any more
+#                        '__EVENTTARGET' => $add_to_friends_button_name,
+
+                        # Should implement automatic detection of this input's
+                        #  name as it will probably change again soon
+                        'ctl00$ctl00$ctl00$cpMain$cpMain$cpfMainBody$NoteToFriend$Note' => $message
                     }
                 } );
         }
@@ -4950,7 +5120,8 @@ sub send_friend_request {
         $page =~ s/[ \t\n\r]+/ /go;
 
         # Check for success
-        if ( $page =~ /An email has been sent to the user/io ) {
+        # 2008-08-12 -- adapted to recognise new wording
+        if ( $page =~ /An? (friend request|email) has been sent to (this|the) user/io ) {
             $return_code = 'P';
             last;
         }
@@ -6960,6 +7131,35 @@ idea.
 
 =item -
 
+Version 0.83 onwards -- it should no longer matter what language/location is
+specified in the Myspace account settings.  This is now handled automatically
+without changing your account settings directly.
+
+=item -
+
+2008-08-12 -- send_friend_request may be returning the wrong status codes in
+certain situations.  More tests are needed in the test suite.
+
+Also, the function does not currently retry automatically in the cases of a
+'network' error;  until then, a script may wish to retry sending a friend
+request if 'FN' is returned.
+
+=item -
+
+2008-08-12 -- read_message may be returning null 'fromname' some or all of the
+time.  Tests for this are needed in t/05-message.t.
+
+=item -
+
+2008-08-12 -- Due to incorrect UTF-8 in many of Myspace's pages, a lot of these
+warnings are generated:
+
+  Parsing of undecoded UTF-8 will give garbage when decoding entities at /usr/local/lib/perl/5.8.8/HTML/PullParser.pm line 83.
+
+This is something which we can hopefully fix at a later date.
+
+=item -
+
 One of the modules upon which WWW::Myspace depends generates the following
 warnings when logging in:
 
@@ -6991,13 +7191,6 @@ that the page hasn't been loaded when in fact it has.
 
 A user has reported that the module fails to log in with human=>0.
 We recommend always leaving human=>1 (the default).
-
-=item -
-
-Your account location must be set to United States for the module to work.
-It will work with other English-speaking locations, but some methods (such as
-last_login) will fail if your location causes dates to be displayed in a
-manner other than month/day/year.
 
 =item -
 

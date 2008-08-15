@@ -9,6 +9,7 @@ lib/WWW/Myspace/Comment.pm
 lib/WWW/Myspace/Message.pm
 lib/WWW/Myspace/FriendChanges.pm
 lib/WWW/Myspace/MyBase.pm
+mechanize.patch
 t/00-load.t
 t/01-login.t
 t/02-dual.t

@@ -1,0 +1,35 @@
+Apply ihis patch to WWW::Mechanize.pm to stop the "UTF-8" warnings.
+(tested on WWW::Mechanize 1.34)
+
+The following command should do it.  Might need to run it as root.
+cd /path/to/perl/lib/ ; patch </path/to/mechanize.patch
+
+More comprehensively you could do:
+  perl -e 'foreach $k (@INC) { $p = $k."/WWW/Mechanize.pm"; print "$p\n" if (-f $p); }'
+and this would tell you where this file is
+
+If you're brave (or reckless?), you can just do:
+sh
+for file in `perl -e 'foreach $k (@INC) { $p = $k."/WWW/Mechanize.pm"; print "$p\n" if (-f $p); }'`
+do
+  sudo patch $file mechanize.patch
+done
+
+The loop makes sure it gets all versions you may have installed (i.e. if you
+have Perl 5.8.6 and 5.8.8 libraries installed).
+
+
+--- WWW/Mechanize.pm	2008-08-13 03:14:25.000000000 +0100
++++ WWW/Mechanize.pm	2008-08-13 03:14:49.000000000 +0100
+@@ -2140,9 +2140,7 @@
+
+    # Try to decode the content. Undef will be returned if there's nothing to decompress.
+    # See docs in HTTP::Message for details. Do we need to expose the options there? 
+-    # use charset => 'none' because while we want LWP to handle Content-Encoding for 
+-    # the auto-gzipping with Compress::Zlib we don't want it messing with charset
+-    my $content = $res->decoded_content( charset => 'none' );
++    my $content = $res->decoded_content;
+    $content = $res->content if (not defined $content);
+
+    $content .= _taintedness();
+

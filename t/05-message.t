@@ -41,6 +41,7 @@ SKIP: {
             skip "A CAPTCHA response was requested", 13;
         }
 
+    warn $myspace1->error if $myspace1->error;
     is( $response, 'P', 'Send Message' );
 
     # Use get_inbox to find the message. We just sent it, so we just

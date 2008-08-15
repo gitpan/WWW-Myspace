@@ -7,7 +7,11 @@ More comprehensively you could do:
 and this would tell you where this file is
 
 If you're brave (or reckless?), you can just do:
-sudo patch `perl -e 'foreach $k (@INC) { $p = $k."/HTTP/Date.pm"; print "$p\n" if (-f $p); }'` < date.patch
+sh
+for file in `perl -e 'foreach $k (@INC) { $p = $k."/HTTP/Date.pm"; print "$p\n" if (-f $p); }'`
+do
+sudo patch $file date.patch
+done
 
 *** Date.pm	2006/09/28 03:14:57	1.1
 --- Date.pm	2006/09/29 02:27:16
