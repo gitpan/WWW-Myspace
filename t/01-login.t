@@ -33,17 +33,28 @@ my $myspace2;
 $myspace = new WWW::Myspace( { auto_login => 0 } );
 ok( ref $myspace, 'Create myspace object' );
 
-# Test _get_login_forms on an offline copy of a login form, to make sure the method works
-open INPUT, '<t/login-forms/latest.html';
-undef $/;
-my $form = <INPUT>;
-close INPUT;
-$/ = "\n";
+my $get_login_forms_works = 1;
 
-my @login_forms = $myspace->_get_login_forms( $form );
-my $num_login_forms = @login_forms;
-ok ( $num_login_forms == 1 );
+SKIP: {
+    # Test _get_login_forms on an offline copy of a login form, to make sure
+    #  the method works even if we don't have network access
+    my $file = 't/login-forms/latest.html';
+    if ( ! open INPUT, "<$file" )
+    {
+        warn "Unable to open file '$file':  $!";
+        skip 'Failed to open file required for test', 1;
+    }
 
+    undef $/;
+    my $form = <INPUT>;
+    close INPUT;
+    $/ = "\n";
+
+
+    my @login_forms = $myspace->_get_login_forms( $form );
+    my $num_login_forms = @login_forms;
+    ok ( $num_login_forms == 1 ) or $get_login_forms_works = 0;
+}
 
 # Remove no-network-access marker file if it remains from a previous test run
 unlink("no-network-access");
@@ -106,10 +117,10 @@ SKIP: {
 
 
     SKIP: {
-        # Make sure _get_login_forms worked when we tested it, because we need
-        #  it here
+        # Make sure _get_login_forms worked when we tested it previously,
+        #  because we need it here
         skip '_get_login_forms is possibly broken', 1
-            if ( $num_login_forms != 1 );
+            if ( !$get_login_forms_works );
         skip "Didn't get homepage, needed for this test", 1
             if ( !defined $res );
 

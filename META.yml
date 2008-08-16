@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                WWW-Myspace
-version:             0.83
+version:             0.84
 abstract:            Access MySpace.com profile information from Perl
 license:             perl
 author:              

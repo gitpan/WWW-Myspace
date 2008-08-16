@@ -1,7 +1,7 @@
-######################################################################
+#####################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 621 2008-08-15 01:58:14Z s-chamberlain $
+# $Id: Myspace.pm 630 2008-08-16 02:03:35Z s-chamberlain $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -43,11 +43,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.83
+Version 0.84
 
 =cut
 
-our $VERSION = '0.83';
+our $VERSION = '0.84';
 
 =head1 WARNING
 
@@ -1773,51 +1773,60 @@ sub last_login {
     my $profile;
 
     # :FIXME: this amount of validation of input parameters is justified but
-    #  should be moved elsewhere
+    #  most if it should be moved out into a separate function
     if ( scalar @_ > 2 ) {
-        croak 'last_login called with too many parameters';
-    }
 
-    if ( scalar @_ == 2 )
-    {
+        croak 'last_login called with too many parameters';
+
+    } elsif ( scalar @_ == 2 && defined $_[1] ) {
+
         my ( $type, $value ) = @_;
 
         if ( $type eq 'page' ) {
 
-            # We were given a page parameter;  ensure it's valid
-            if ( ref $value ne 'HTTP::Response' )
-            {
-                croak "last_login given a page parameter which is not a valid\n".
-                      "HTTP::Response object;  parameter was of type";
-            }
-
             $profile = $value;
+
+            # We were given a page parameter;  ensure it's valid
+            if ( ref $profile ne 'HTTP::Response' )
+            {
+                croak "last_login given a page parameter which is not a\n".
+                      "valid HTTP::Response object";
+            }
 
         } elsif ( $type eq 'friend_id' ) {
 
             # Parameter will be detected as a friend_id below
             @_ = ( $value );
 
+            # A friend ID or URL was given;  try to retrieve the profile
+            if ( ! ( $profile = $self->get_profile( $value ) ) ) {
+                warn "last_login:  failed to retrieve specified profile ($value)";
+                return undef;
+            }
+
         } else {
             croak "last_login called with unrecognised parameter '$type'";
         }
-    }
 
-    if ( scalar @_ == 1 ) {
+    } elsif ( scalar @_ == 1 && defined $_[0] ) {
 
         my ( $parameter ) = @_;
 
-        # If a friend ID or URL was given;  try to retrieve the profile
+        # A friend ID or URL was given;  try to retrieve the profile
         if ( ! ( $profile = $self->get_profile( $parameter ) ) ) {
             warn "last_login:  failed to retrieve specified profile ($parameter)";
             return undef;
         }
 
-    }
+    } else {
 
-    if ( scalar @_ == 0 ) {
         # No parameter given -- use current page by default
         $profile = $self->current_page;
+        if ( !defined $profile )
+        {
+            croak "last_login called without parameters, but there is no current_page";
+        }
+
     }
 
 
@@ -7151,12 +7160,14 @@ time.  Tests for this are needed in t/05-message.t.
 
 =item -
 
-2008-08-12 -- Due to incorrect UTF-8 in many of Myspace's pages, a lot of these
-warnings are generated:
+2008-08-12 -- A lot of these warnings are generated, either when using the
+'perl -w' option or during a 'make test' with TEST_VERBOSE enabled:
 
   Parsing of undecoded UTF-8 will give garbage when decoding entities at /usr/local/lib/perl/5.8.8/HTML/PullParser.pm line 83.
 
-This is something which we can hopefully fix at a later date.
+The file "mechanize.patch" included in the distribution has been found to stop
+these warnings, but there is no guarantee it does not break functionality for
+other programs dependent on WWW::Mechanize.  Use at your own risk!
 
 =item -
 
