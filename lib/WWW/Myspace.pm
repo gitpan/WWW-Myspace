@@ -1,7 +1,7 @@
 #####################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 630 2008-08-16 02:03:35Z s-chamberlain $
+# $Id: Myspace.pm 634 2008-08-21 16:18:24Z s-chamberlain $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -43,11 +43,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.84
+Version 0.85
 
 =cut
 
-our $VERSION = '0.84';
+our $VERSION = '0.85';
 
 =head1 WARNING
 
@@ -4135,7 +4135,7 @@ sub _get_messages_from_page {
     while ( <$fh> ) {
     	chomp;
         last if ( $options{'stop_at'} && ( $options{'stop_at'} == $3 ) );
-	if(/<td class="messageListCell" align="center">/){
+	if(/<td\s[^>]*class="(?:.* )?messageListCell(?: .*)?"[^>]*>/){
 		# Found beginning of Message block
 		$state = 1;
 	} elsif (/viewprofile&friendid=([0-9]+)"?>([^<>]+)</ && $state == 1){
@@ -5719,15 +5719,11 @@ and known Myspace error pages. If called with the optional regexp,
 it will consider the page an error unless the page content matches
 the regexp. This is designed to get past network problems and such.
 
+=head3 Example
 
-
-EXAMPLE
-
-    The following displays the HTML source of MySpace.com's home
-    page.
-    my $res=get_page( "http://www.myspace.com/" );
-
-    print $res->decoded_content;
+    # Load the Myspace homepage and display the HTML source
+    my $response = $myspace->get_page( 'http://www.myspace.com/' );
+    print $response->decoded_content;
 
 =cut
 
@@ -7160,14 +7156,15 @@ time.  Tests for this are needed in t/05-message.t.
 
 =item -
 
-2008-08-12 -- A lot of these warnings are generated, either when using the
-'perl -w' option or during a 'make test' with TEST_VERBOSE enabled:
+2008-08-12 -- A lot of these warnings are generated when using the 'perl -w'
+option or during a 'make test' with TEST_VERBOSE enabled:
 
-  Parsing of undecoded UTF-8 will give garbage when decoding entities at /usr/local/lib/perl/5.8.8/HTML/PullParser.pm line 83.
+    Parsing of undecoded UTF-8 will give garbage when decoding entities at
+     /usr/local/lib/perl/5.8.8/HTML/PullParser.pm line 83.
 
-The file "mechanize.patch" included in the distribution has been found to stop
-these warnings, but there is no guarantee it does not break functionality for
-other programs dependent on WWW::Mechanize.  Use at your own risk!
+The file 'mechanize.patch' included in the distribution has been found to stop
+these warnings.  Read the comments at the top of the patch file for details on
+how to use it.
 
 =item -
 

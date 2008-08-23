@@ -62,11 +62,13 @@ unlink("no-network-access");
 SKIP: {
     # See if we can get the homepage
     my $res = $myspace->get_page( 'http://www.myspace.com/' );
-    if ( $myspace->error ) {
+    if ( !defined $res || $myspace->error ) {
+
         # We failed to get the homepage
         warn $myspace->error;
         
         if ( $CONFIG->{login} ) {
+
             # If login tests have been configured, then we have a serious
             #  problem -- either network access is not working, or Myspace's
             #  homepage wasn't responding
@@ -77,8 +79,9 @@ SKIP: {
                  " will still be run, but there is little chance of them\n".
                  " passing.  This could be a network issue or a problem with\n".
                  " MySpace.\n";
-        } else
-        {
+
+        } else {
+
             # Otherwise, it's likely that the testing machine just doesn't have
             #  network access.  Therefore, skip any tests which would normally
             #  fail as a result of this.  To do this, we create a 'marker' file
@@ -92,9 +95,10 @@ SKIP: {
                        " that network tests are not to be run.  It can be\n".
                        " safely removed.\n";
             close ( FILE );
+
         }
-    } else
-    {
+
+    } else {
         isa_ok ( $res, 'HTTP::Response', 'Get homepage' );
     }
 
@@ -110,8 +114,10 @@ SKIP: {
     warn "Myspace seems to be serving pages to you in a language other than\n".
          " en-US, and this may break functionality where a WWW::Myspace\n".
          " object is used without logging into an account.  At present,\n".
-         " Myspace uses IP-based geolocation and a workaround is not yet\n".
-         " implemented.\n" unless
+         " Myspace uses IP-based geolocation and a workaround is attempted\n".
+         " via the manipulation of cookies.  This error suggests that either\n".
+         " the workaround no longer works, or there was possibly a problem\n".
+         " connecting to the website.\n" unless
         is( lc ($localization), lc ('en-US'),
             'Homepage (without login) should display en-US localization' );
 

@@ -66,8 +66,9 @@ SKIP: {
     my %msg = ();
     my $found_message = 0;
     foreach $msg ( @messages ) {
+        diag( "Found message: " . $msg->{subject} . ", ID: " . $msg->{message_id} );
+
         if ( $msg->{subject} =~ /$ident/ ) {
-    #       diag( "Found message: " . $msg->{subject} . ", ID: " . $msg->{message_id} );
             $found_message = 1;
             # Dereference it so we can keep it.
             %msg = %{ $msg };

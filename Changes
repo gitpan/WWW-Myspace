@@ -1,5 +1,9 @@
 Revision history for WWW::Myspace
 
+0.85    2008-08-23
+        - Fixed get_inbox;  method was always returning zero messages due to
+          changes around 2008-08-20 (RT#38639)
+
 0.84    2008-08-16
         - Fixed last_login to ignore a supplied 'undef' parameter (RT#38457)
         - Fixed problems in test script t/01-login.t which caused that script to
