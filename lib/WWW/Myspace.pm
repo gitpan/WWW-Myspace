@@ -1,7 +1,7 @@
 #####################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 634 2008-08-21 16:18:24Z s-chamberlain $
+# $Id: Myspace.pm 641 2008-09-10 21:24:24Z s-chamberlain $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -43,11 +43,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.85
+Version 0.86
 
 =cut
 
-our $VERSION = '0.85';
+our $VERSION = '0.86';
 
 =head1 WARNING
 
@@ -3254,7 +3254,8 @@ sub get_friends {
             return ( @friends)
         }
         else {
-            $self->follow_link( url_regex => qr/fuseaction=user\.viewfriends\&[^'"]*friendID=$profile_id/io );
+            print "get_friends:  following View All Friends link for profile $profile_id\n" if $DEBUG;
+            $self->follow_link( url_regex => qr/fuseaction=user\.viewfriends\&[^'"]*friendID=$profile_id/i );
             $exclude=$options{id}; # Exclude the owner's ID (bit of a hack).
         }
     }
@@ -3547,14 +3548,25 @@ sub search_music {
 
     my ( $sc ) = @_;
 
+    # Safety check
+    croak 'search_music:  criteria must be specified as a hash reference'
+        unless ref $sc;
+
+    if ($DEBUG)
+    {
+        while ( my ( $key, $value ) = each(%$sc) ) {
+            print "search_music:  criterion '$key' = '$value'\n";
+        }
+    }
+
+
     # Page verification RE
     my $re = $page_verify_re;
 
     # First fill in the search form with their criteria.
     $self->submit_form( {
-        page =>
-            'http://musicsearch.myspace.com/index.cfm?fuseaction=music.search',
-        form_no => 1,
+        page => 'http://musicsearch.myspace.com/index.cfm?fuseaction=music.search',
+        form_name => 'myForm',
         fields_ref => $sc,
         re1 => $re,
         re2 => $re,
@@ -3566,12 +3578,16 @@ sub search_music {
     # Get the friends
     my $page_no = 0;
     my %friends = ();
-    do {
+    while ( ! $self->error ) {
+
+        print "Got music search results page $page_no\n" if $DEBUG;
 
         # Get the friends on this page
         foreach my $id ( $self->get_friends_on_page ) {
             $friends{ "$id" } = { 'page_no' => $page_no+1 };
         }
+
+        last if ( ! $self->_next_button );
 
         # Click "Next".
         $page_no++;
@@ -3584,8 +3600,7 @@ sub search_music {
             're2' => $re,
 #            base => 'http://musicsearch.myspace.com/',
         } );
-
-    } until ( ( $self->error ) || ( ! $self->_next_button ) );
+    }
 
 
      # Clean up and return
@@ -4410,10 +4425,17 @@ sub reply_message {
 The %options hash is the "correct" method of passing arguments as of
 version 0.53.  The parameter based method is here for backwards-compatibility.
 
+The C<message> parameter can also contain HTML, but note that some accounts
+remove HTML from incoming messages (it is not clear where in the account
+settings this is done).  In that case the HTML would be replaced with dots (..),
+and that would include any <br> tags included in C<message>.  Line breaks
+should use \n or \r\n instead.
+
 send_message sends a message to the user identified by "friend_id".
 If "atf" is a true value, HTML code for a "View My Profile" link will
 be added at the end of the message. (This was an Add To Friends button
 until Myspace started munging that code).
+
 If "skip_re" is defined, friend_id's profile will be matched against
 the RE.  Whitespace will be compressed and the match will NOT be
 case-sensitive.
@@ -5812,6 +5834,9 @@ sub follow_link {
     if ( $options{re} ) { $re = $options{re}; delete $options{re}; }
 
     # Find the link
+    print "follow_link:  calling find_link for '$options{url_regex}'\n"
+        if $DEBUG;
+
     my $link = $self->mech->find_link( %options );
 
     # Follow it
@@ -6214,6 +6239,13 @@ sub submit_form {
                 if ( $f->find_input( $field )->readonly ) {
                     $f->find_input( $field )->readonly(0)
                 }
+
+                # If a field was marked as disabled, enable it otherwise its
+                #  contents won't be submitted
+                if ( $f->find_input( $field )->disabled ) {
+                    $f->find_input( $field )->disabled(0)
+                }
+
                 $f->param( $field, $options->{'fields_ref'}->{ $field } );
             } else {
                 $f = $self->_add_to_form(
@@ -6394,6 +6426,7 @@ sub get_friends_on_page {
         }
     }
 
+    print "get_friends_on_page:  found ".(scalar @friend_ids)."\n" if $DEBUG;
     return ( @friend_ids );
 
 }

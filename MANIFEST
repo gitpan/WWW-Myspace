@@ -65,6 +65,8 @@ t/17-get_basic_info.t
 t/18-get_real_name.t
 t/19-find_friend.t
 t/20-last-login.t
+t/21-get-friends.t
+t/22-search-music.t
 t/99-enduser.t
 t/boilerplate.t
 t/config.yaml

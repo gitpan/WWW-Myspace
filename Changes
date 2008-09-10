@@ -1,5 +1,20 @@
 Revision history for WWW::Myspace
 
+0.86    2008-09-10
+        - Fixed get_friends;  in most cases the method would only have worked
+          the first time it was executed (fixed RT#38716)
+        - Created new tests t/21-get-friends.t for get_friends method
+        - Fixed submit_form flaw;  fields_ref entries were not being submitted
+          where a form input of the same name existed but with the disabled
+          attribute set
+        - Fixed search_music;  searching by keywords was not working due to the
+          above flaw in submit_form, and the method was looking for search
+          results beyond the last page.  Also now croaks if given a parameter
+          which is not a hash ref.
+        - Created new tests t/22-search-music.t for search_music method
+        - Added to send_message documentation a note about line endings and
+          accounts which disable HTML in incoming messages
+
 0.85    2008-08-23
         - Fixed get_inbox;  method was always returning zero messages due to
           changes around 2008-08-20 (RT#38639)
