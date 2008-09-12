@@ -6,8 +6,6 @@ use Test::More tests => 1;
 use WWW::Myspace;
 
 SKIP: {
-    skip "Myspace's login form doesn't seem to indicate an invalid username/password at the moment", 1;
-
     my $myspace = new WWW::Myspace( "wmyw" . int(rand(100000)) . "wmyw",
             "afh" . int(rand(100000)) . "fds" );
 

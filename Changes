@@ -1,5 +1,20 @@
 Revision history for WWW::Myspace
 
+0.87    2008-09-12
+        - New method captcha_handler allows a user-defined function to provide
+          captcha responses directly
+        - For backward-compatibility, setting captcha_killer_api_key will
+          automatically enable the built-in Captcha Killer handler
+        - Fixed send_friend_request to submit CAPTCHA responses correctly
+        - Fixed send_message to submit CAPTCHA responses correctly
+        - Fixed post_comment to submit CAPTCHA responses correctly
+        - Fixed the login mechanism to return an error upon a failed login
+          attempt.  An invalid username/password should also now return the
+          appropriate error message.
+        - Added to the documentation of the 'new' method (the constructor) a way
+          to detect an invalid username/password error within a script
+        - Restored the t/11-badlogin.t test
+
 0.86    2008-09-10
         - Fixed get_friends;  in most cases the method would only have worked
           the first time it was executed (fixed RT#38716)

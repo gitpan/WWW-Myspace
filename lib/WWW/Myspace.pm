@@ -1,7 +1,7 @@
 #####################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 641 2008-09-10 21:24:24Z s-chamberlain $
+# $Id: Myspace.pm 644 2008-09-12 20:12:40Z s-chamberlain $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -43,11 +43,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.86
+Version 0.87
 
 =cut
 
-our $VERSION = '0.86';
+our $VERSION = '0.87';
 
 =head1 WARNING
 
@@ -202,7 +202,7 @@ my %regex = (
     basic_info => qr/"Table2".*<td[^>]*>(.*Last Login:.*?)<br(?: \/)?>/smo,
     basic_info_band => qr/Arial, Helvetic, sans-serif"><strong>(.*Last Login:.*?)<br>/smo,
     comment_posted => qr/Your Comment has been posted/io,
-    not_logged_in => qr/You Must Be Logged-In to do That\!/io,
+    not_logged_in => qr/(You Must Be Logged-In to do That\!|Please log in to continue)/io,      # Updated 2008-09-12
     verify_message_sent => qr/Your Message Has Been Sent\!/o,
     comment_p1 => qr/ctl00\$(cp)?Main\$UserWriteCommentsControl\$commentTextBox.*<\/form|($NOT_FRIEND_ERROR)|($CAPTCHA)|($INVALID_ID)/smio,
     comment_p2 => qr/ctl00\$(cp)?Main\$UserWriteCommentsControl\$ConfirmPostButton.*<\/form/smo,
@@ -249,14 +249,18 @@ appropriate accessor method below.
 const default_options => {
     account_name => 0,
     password => 0,
-    cache_dir => 0,  # Default set by field method below
-    cache_file => 0, # Default set by field method below
-    auto_login => 0, # Default set by field method below
-    human => 0,      # Default set by field method below
-    max_get_attempts => 0,  # Default set by field method below
-    max_post_attempts => 0, # Default set by field method below
-    captcha_killer_api_key => 0, # Default set by field method below
-    captcha_tries => 0,     # Default set by field method below
+
+    # Default values for these settings are set by the field methods below
+    cache_dir => 0,
+    cache_file => 0,
+    auto_login => 0,
+    human => 0,
+    max_get_attempts => 0,
+    max_post_attempts => 0,
+    captcha_handler => 0,
+    captcha_handler_param => 0,
+    captcha_killer_api_key => 0,
+    captcha_tries => 0,
 };
 
 # Options they can pass by position.
@@ -405,6 +409,146 @@ max_post_attempts times.  Change at your own risk.
 
 field 'max_post_attempts' => 5;
 
+
+=head2 captcha_handler
+
+This can be set to a reference to a subroutine that will be called when a
+CAPTCHA is encountered.  The subroutine will be passed two parameters:  the
+value of the C<captcha_handler_param> field (see below), and a hash reference
+containing the following elements:
+
+=over
+
+=item * C<image_data> -- the actual binary image data in a string
+
+=item * C<image_type> -- the MIME type of the data in C<image_data>
+
+=item * C<image_url> -- the absolute URL from where the CAPTCHA was retrieved;
+don't try and download this again yourself or it will probably show a different
+CAPTCHA and the response will be rejected
+
+=back
+
+The following elements I<may> exist in the hash as well (always check that a
+value is defined before trying to use it) :
+
+=over
+
+=item * C<attempt> -- beginning at 1, this value is incremented each time a
+CAPTCHA response was rejected
+
+=item * C<action> -- the type of action that prompted the CAPTCHA response;
+currently can be one of:  C<send_friend_request>, C<send_message>,
+C<post_comment>
+
+=item * C<friend_requires_captcha> -- for the C<send_friend_request> action,
+this value will evaluate to C<true> if the person being added requires a
+CAPTCHA response for I<all> friend requests (configured in Privacy Settings).
+B<Currently broken -- see KNOWN ISSUES.>
+
+=back
+
+The handler is expected to return C<undef> if it can't (or doesn't want to)
+provide a response to the CAPTCHA.  Otherwise, it should return a hashref
+containing only one element:
+
+=over
+
+=item * C<response> -- a string which is thought to be the solution for the
+CAPTCHA;  case insensitive but shouldn't contain spaces
+
+=back
+
+Here is an example of a fully working CAPTCHA handler:
+
+    sub my_captcha_handler {
+        my $self = shift;   # Unused in this handler
+        my $data = shift;
+
+
+        # Some people require that everyone solves a CAPTCHA to be able to add
+        #  them.  As an example, we decide not to respond those CAPTCHAs.
+        return if ( $data->{'friend_requires_captcha'} );
+
+
+        # Give up if 5 attempts to solve a CAPTCHA failed for the same action
+        if ( defined $data->{'attempt'} && $data->{'attempt'} > 5 ) {
+            warn "Failed ".($data->{'attempt'}-1)." times to solve CAPTCHA\n";
+            warn " for action '".$data->{'action'}."'\n" if $data->{'action'};
+            return;
+        }
+
+
+        my $filename = "captcha";
+
+        # Try to add a sensible filename extension
+        if ($data->{'image_type'} eq "image/jpeg") {
+            $filename .= ".jpg";
+        } elsif ($data->{'image_type'} eq "image/png") {
+            $filename .= ".png";
+        } elsif ($data->{'image_type'} eq "image/gif") {
+            $filename .= ".gif";
+        }
+
+
+        # Save CAPTCHA image to file
+        open FILE, ">$filename"
+            or die "Couldn't write '$filename':  $!\n";
+        print FILE $data->{'image_data'};
+        close FILE;
+
+
+        # Ask user to manually input the solution
+        print "Please see the CAPTCHA in '$filename' and enter the solution:\n";
+        my $response = <STDIN>;
+        chomp $response;
+
+        return { response => $response };
+    }
+
+
+    use WWW::Myspace;
+
+    my $myspace = new WWW::Myspace;
+
+    # Enable the user-defined CAPTCHA handler
+    $myspace->captcha_handler(\&my_captcha_handler);
+
+
+    # The CAPTCHA handler could be tested like this
+    my $solution = $myspace->_handle_captcha( {
+        image_url => 'http://www.example.com/captcha.png'
+    } );
+
+    print "Got CAPTCHA solution:  '$solution'\n";
+
+=cut
+
+field 'captcha_handler' => undef;
+
+=head2 captcha_handler_param
+
+This field's value is passed as the first parameter to the CAPTCHA handler.
+By default it contains C<undef>.  Some examples of how this can be used are:
+
+=over
+
+=item * A string identifying the Myspace account
+
+=item * A reference to the WWW::Myspace object
+
+=item * A reference to the CAPTCHA handler instance, if it is object-oriented
+
+=item * A hash reference containing multiple data items which the handler
+considers useful
+
+=back
+
+=cut
+
+field 'captcha_handler_param' => undef;
+
+
 =head2 captcha_killer_api_key
 
 If you have an API key for captchakiller.com, you can set it
@@ -412,15 +556,41 @@ using this method, or pass it to the "new" method when
 creating the myspace object.  Methods that support it will use
 captchakiller to process captchas.
 
- use WWW::Myspace;
+    use WWW::Myspace;
 
- my $myspace = new WWW::Myspace( captcha_killer_api_key => 'asdfjhasdfe' );
+    my $myspace = new WWW::Myspace( captcha_killer_api_key => 'asdfjhasdfe' );
+
+When this value is set, C<captcha_handler> will be automatically set to the
+built-in Captcha Killer handler.
 
 =cut
 
-field 'captcha_killer_api_key' => "";
+field '_captcha_killer_api_key' => "";
+
+# Accessor method
+sub captcha_killer_api_key {
+
+    # If a parameter was given, use it to set the internal variable's value
+    if ( scalar @_ )
+    {
+        $self->_captcha_killer_api_key( shift );
+
+        # When an API key is set, we need to enable its handler.  This should
+        #  maintain backward-compatibility with scripts that were written before
+        #  WWW::Myspace 0.87.
+        $self->captcha_handler( \&captcha_killer_handler );
+        $self->captcha_handler_param ( $self );
+    }
+
+    # Return current (or new) value
+    return $self->_captcha_killer_api_key;
+
+}
+
 
 =head2 captcha_tries
+
+B<This setting is for the Captcha Killer handler only.>
 
 Sets or returns the number of attempts that should be made to
 retreive the catpcha code (basically, how long it should wait before
@@ -429,6 +599,7 @@ it gives up - each try takes about 5 seconds).  Defaults to 20.
 =cut
 
 field 'captcha_tries' => 20;
+
 
 #---------------------------------------------------------------------
 # new method
@@ -499,6 +670,17 @@ sorry), which basically just means you can call new in many ways:
         # bugging him with comments and such).
         print @friend_ids . " friends (not incl Tom)\n";
 
+It is possible to detect if the supplied username or password were invalid by
+doing the following:
+
+    use WWW::Myspace;
+    my $myspace = new WWW::Myspace;
+    
+    if ( $myspace->error =~ qr/Login Failed.*username.*password/is )
+    {
+        die "Invalid username or password!\n";
+    }
+
 =cut
 
 sub _old_new() {
@@ -522,6 +704,11 @@ sub _old_new() {
 sub new() {
     # Call the MyBase new method (it's ok to feel special about it).
     my $self = super;
+
+    # Must treat captcha_killer_api_key specially as it uses an accessor
+    #  method
+    $self->captcha_killer_api_key($self->{'captcha_killer_api_key'})
+        if $self->{'captcha_killer_api_key'};
 
     # Log in if requested
     if ( $self->auto_login ) {
@@ -3747,16 +3934,19 @@ sub post_comment {
             if ( $submitted ) {
 
                 my $captcha_result="";
-                my @captcha=();
+                my $fields = ();
 
                 # See if there's a CAPTCHA response required, if so,
                 # deal with it or fail appropriately.
                 if ( $self->current_page->decoded_content =~ $CAPTCHAi ) {
                     $self->captcha( $1 );
                     #TODO: Not tested - comment captcha may be on a separate form?
-                    $captcha_result = $self->_handle_captcha( $1 );
+                    $captcha_result = $self->_handle_captcha( {
+                        image_url => $1,
+                        action => 'post_comment',
+                    } );
                     unless ( $captcha_result ) { $status='FC'; last TESTBLOCK; }
-                    @captcha = ( 'CAPTCHAResponse' => $captcha_result );
+                    $fields->{'ctl00$cpMain$UserWriteCommentsControl$captcha$captchaResponseTextBox'} = $captcha_result;
                 }
 
                 # Otherwise, confirm it.
@@ -3765,7 +3955,7 @@ sub post_comment {
                     follow => 1,
                     form_name => 'aspnetForm',
                     button => 'ctl00$cpMain$UserWriteCommentsControl$ConfirmPostButton',
-                    @captcha
+                    fields_ref => $fields
                 } );
             } else {
                 $self->error( 'First submit failed in post_comment with error: '.
@@ -3773,6 +3963,8 @@ sub post_comment {
             }
 
         } else {
+            # :FIXME: this is no longer used?
+
             # Post the confirmation
             $submitted = $self->submit_form( '', 1, '',
                 { 'CAPTCHAResponse' => $captcha_response } );
@@ -4591,9 +4783,11 @@ sub send_message {
             $status='FN'; last TESTBLOCK;
         }
 
-        # Check for known messages that say we can't send it.
+
         $page = $res->decoded_content;
         $page =~ s/[ \t\n\r]+/ /go;
+
+        # Check for known messages that say we can't send it.
         if ( $page =~ /$MAIL_PRIVATE_ERROR/i ) {
             $status='FF'; last TESTBLOCK;
         } elsif ( $page =~ /$MAIL_AWAY_ERROR/i ) {
@@ -4601,6 +4795,9 @@ sub send_message {
         } elsif ( $page =~ /$INVALID_ID/i ) {
             $status='FI'; last TESTBLOCK;
         } elsif ( $page =~ $CAPTCHAi ) {
+            # We don't expect CAPTCHAs here -- if this happens, WWW::Myspace
+            #  needs fixing to allow for it, so return 'F'
+            warn "Received CAPTCHA on send message page, before submitting";
             $status='FC'; last TESTBLOCK;
         }
 
@@ -4632,8 +4829,39 @@ sub send_message {
             no_click => 1,
         } );
 
+
         $page = $self->current_page->decoded_content;
         $page =~ s/[ \t\n\r]+/ /g;
+
+        # Handle a CAPTCHA response if ncessary
+        my $captcha_attempt = 0;
+        while ( $page =~ $CAPTCHAi ) {
+            $captcha_attempt++;
+
+            my $response = $self->_handle_captcha( {
+                image_url => $1,
+                action => 'send_message',
+                attempt => $captcha_attempt,
+            } );
+
+            last if (!defined $response);
+
+            $res = $self->submit_form( {
+                form_name => 'aspnetForm',
+                fields_ref => {
+                    'ctl00$ctl00$ctl00$cpMain$cpMain$messagingMain$SendMessage$captcha$captchaResponseTextBox' => $response
+                }
+            } );
+
+            if (!$res)
+            {
+                warn "Failed to submit CAPTCHA response";
+                $status = "FC"; last TESTBLOCK;
+            }
+
+            $page = $self->current_page->decoded_content;
+            $page =~ s/[ \t\n\r]+/ /go;
+        }
 
         # Return the result
         if (! $submitted ) {
@@ -4985,7 +5213,7 @@ sub send_friend_request {
 
     my $return_code = undef;
     my ($page, $res);
-    my $captcha_result = "";
+    my $captcha_result = undef;
 
     # If they passed an array reference, pick a message at random
     if ( ref $message eq 'ARRAY' ) {
@@ -5019,149 +5247,158 @@ sub send_friend_request {
             last;
         }
 
-        # Strip the page for comparisons
-        $page = $self->current_page->decoded_content;
-        $page =~ s/[ \t\n\r]+/ /go;
+        my $captcha_attempt = 1;
+        while (1) {
+            my $referer = $self->current_page->request->uri;
+            $page = $self->current_page->decoded_content;
 
-        # Check for "doesn't accept band"
-        if ( $page =~ /does not accept add requests from bands/io ) {
-            $return_code = 'FB';
-        }
+            # Strip the page for comparisons
+            $page =~ s/[ \t\n\r]+/ /go;
 
-        # Check for "last name or email" required
-        elsif ( $page =~ /only accepts add requests from people he\/she knows/o ) {
-            $return_code = 'FA';
-        }
-
-        # Check for CAPTCHA
-        #elsif ( $page =~ /CAPTCHA/o ) {
-        elsif ( $page =~ $CAPTCHAi ) {
-            $self->captcha( $1 );
-            $captcha_result = $self->_handle_captcha( $1 );
-
-            # If didn't get a captcha result, return the appropriate failure code.
-            unless ( $captcha_result ) {
-                $return_code = 'FC';
-                $return_code = 'FU' if $self->_apply_regex( regex => 'user_requires_captcha' );
-            }
-        }
-        # Check for "already your friend"
-        elsif ( $page =~ /already one of your friend/io ) {
-            $return_code = 'FF';
-        }
-
-        # Check for pending friend request
-        elsif ( $page =~ /already sent a request/io ) {
-            $return_code = 'FP';
-        }
-
-        # Check for "exceeded daily usage" message
-        elsif ( $self->_apply_regex( source => $page, regex => 'exceed_usage' ) ) {
-            $return_code = 'FE';
-        }
-
-        # Now see if we have a button to click.
-        # MUST BE LAST.
-        # (This probably could return a different code, but it means we don't
-        # have a button and we don't know why).
-        # XXX You may want to loop this entire statement, because currently:
-        # - get_page gets a page, checking for any known error messages.
-        # - this if statement checks for known errors we might receive
-        # - This final statement makes sure we have a button to click so
-        #   we don't bomb in "submit_form".
-        # - BUT, if we get an error page get_page doesn't know (i.e. they
-        #   change an error message or something), we probbaly
-        #   want to retry this page.
-        # You might want to change this whole section to:
-        # do { $res = $self->get_page ... ;
-        # $attempts++; } until ( ( $attempts > 20 ) || ( $page =~ /<input type="submit" ...) );
-
-        # 2008-08-12 -- button 'name' had changed;  it may be better to
-        #  match the button's caption ('value' attribute) instead from now on
-        elsif ( $page !~ /<input\s[^>]*value=(["'])Add\s+to\s+Friends\1[^>]*>/io ) {
-            $return_code ='F';
-            warn "No Add to Friends button on form!\n";
-        }
-
-        else
-        {
-            # The previous regexp did match, so there is an Add To Friends on
-            #  the page and its HTML is the last-matched string
-            my $add_to_friends_button = $&;
-            print "Add To Friends button HTML is:\n  $add_to_friends_button\n"
-                if $DEBUG;
-
-            # Determine the button name, so that we can 'click' on it
-            $add_to_friends_button =~ /\sname=(["'])(.*?)\1/io;
-            $add_to_friends_button_name = $2;
-            print "Add To Friends button name is:\n".
-                  "  $add_to_friends_button_name\n" if $DEBUG;
-        }
-
-        # If we got a return code above, go return it.
-        last if ( $return_code );
-
-        # Post the add request form
-        if ( $captcha_result ) {
-            my $count = 0;
-            while ( $captcha_result && ( $page =~ $CAPTCHAi ) ) {
-                # Submit the form
-                $res = $self->submit_form( '', 1, '', { 'CAPTCHAResponse' => $captcha_result } );
-                # See if there's a captcha request on it (means we got it wrong)
-                $page = $self->current_page->decoded_content;
-                $page =~ s/[ \t\n\r]+/ /go;
-                # If so, guess again.
-                if ( $page =~ $CAPTCHAi ) { $captcha_result = $self->_handle_captcha( $1 ); }
-                # Only try 5 times, just in case something else is wrong. Stops infinite loop.
-                $count++; last if ( $count > 5 );
-            }
-            # If we've still got a CAPTCHA code, return the appropriate failure code.
-            if ( $page =~ $CAPTCHAi ) {
-                $return_code = 'FC';
-                $return_code = 'FU' if $self->_apply_regex( regex => 'user_requires_captcha' );
+            # Check for "doesn't accept band"
+            if ( $page =~ /does not accept add requests from bands/io ) {
+                $return_code = 'FB';
             }
 
-        } else {
-             $res = $self->submit_form( {
-                    form_name => 'aspnetForm',
-                    button => $add_to_friends_button_name,
-                    no_click => 1,
-                    fields_ref => {
-                        # 2008-08-12 -- this doesn't seem to be sent any more
-#                        '__EVENTTARGET' => $add_to_friends_button_name,
+            # Check for "last name or email" required
+            elsif ( $page =~ /only accepts add requests from people he\/she knows/o ) {
+                $return_code = 'FA';
+            }
 
-                        # Should implement automatic detection of this input's
-                        #  name as it will probably change again soon
-                        'ctl00$ctl00$ctl00$cpMain$cpMain$cpfMainBody$NoteToFriend$Note' => $message
-                    }
+            # Check for CAPTCHA
+            #elsif ( $page =~ /CAPTCHA/o ) {
+            elsif ( $page =~ $CAPTCHAi ) {
+                # :FIXME: add an option not to use CAPTCHA handler on FU profiles
+                # :FIXME: maybe add CAPTCHA preferences hash ref somewhere
+
+                my $friend_requires_captcha =
+                    $self->_apply_regex( regex => 'user_requires_captcha' );
+
+                $self->captcha( $1 );
+                $captcha_result = $self->_handle_captcha( {
+                    image_url => $1,
+                    action => 'send_friend_request',
+                    attempt => $captcha_attempt,
+                    friend_requires_captcha => $friend_requires_captcha
                 } );
+
+                # If didn't get a captcha result, return the appropriate failure code.
+                unless ( $captcha_result ) {
+                    $return_code = 'FC';
+                    $return_code = 'FU' if $friend_requires_captcha;
+                }
+            }
+            # Check for "already your friend"
+            elsif ( $page =~ /already one of your friend/io ) {
+                $return_code = 'FF';
+            }
+
+            # Check for pending friend request
+            elsif ( $page =~ /already sent a request/io ) {
+                $return_code = 'FP';
+            }
+
+            # Check for "exceeded daily usage" message
+            elsif ( $self->_apply_regex( source => $page, regex => 'exceed_usage' ) ) {
+                $return_code = 'FE';
+            }
+
+            # Now see if we have a button to click.
+            # MUST BE LAST.
+            # (This probably could return a different code, but it means we don't
+            # have a button and we don't know why).
+            # XXX You may want to loop this entire statement, because currently:
+            # - get_page gets a page, checking for any known error messages.
+            # - this if statement checks for known errors we might receive
+            # - This final statement makes sure we have a button to click so
+            #   we don't bomb in "submit_form".
+            # - BUT, if we get an error page get_page doesn't know (i.e. they
+            #   change an error message or something), we probbaly
+            #   want to retry this page.
+            # You might want to change this whole section to:
+            # do { $res = $self->get_page ... ;
+            # $attempts++; } until ( ( $attempts > 20 ) || ( $page =~ /<input type="submit" ...) );
+
+            # 2008-08-12 -- button 'name' had changed;  it may be better to
+            #  match the button's caption ('value' attribute) instead from now on
+            elsif ( $page !~ /<input\s[^>]*value=(["'])Add\s+to\s+Friends\1[^>]*>/io ) {
+
+                $return_code ='F';
+                warn "No Add to Friends button found on form";
+
+            } else {
+
+                # The previous regexp did match, so there is an Add To Friends
+                #  on the page and its HTML is the last-matched string
+                my $add_to_friends_button = $&;
+                print "Add To Friends button HTML is:\n  $add_to_friends_button\n"
+                    if $DEBUG;
+
+                # Determine the button name, so that we can 'click' on it
+                $add_to_friends_button =~ /\sname=(["'])(.*?)\1/io;
+                $add_to_friends_button_name = $2;
+                print "Add To Friends button name is:\n".
+                      "  $add_to_friends_button_name\n" if $DEBUG;
+            }
+
+            # If we got a return code above, go return it.
+            last if ( $return_code );
+
+
+            my $fields = {};
+
+            # 2008-08-12 -- __EVENTTARGET doesn't seem to be sent any more
+
+            # Should implement automatic detection of the names as they will
+            #  probably change again soon
+            $fields->{'ctl00$ctl00$ctl00$cpMain$cpMain$cpfMainBody$NoteToFriend$Note'} = $message;
+            $fields->{'ctl00$ctl00$ctl00$cpMain$cpMain$cpfMainBody$VerificationPanel$captcha$captchaResponseTextBox'} = $captcha_result if ( $page =~ $CAPTCHAi );
+
+            # Referer has to be set manually because handle_captcha downloads
+            #  the image, causing the wrong URL to be sent
+            $res = $self->submit_form( {
+                form_name => 'aspnetForm',
+                button => $add_to_friends_button_name,
+                fields_ref => $fields,
+                referer => $referer
+            } );
+
+
+            # Check response
+            unless ( $res ) {
+                $return_code = 'FN';
+                last;
+            }
+
+            # Check for REs on the page to see what we got.
+            $page = $self->current_page->decoded_content;
+            $page =~ s/[ \t\n\r]+/ /go;
+
+            # Check for success
+            # 2008-08-12 -- adapted to recognise new wording
+            if ( $page =~ /An? (friend request|email) has been sent to (this|the) user/io ) {
+
+                $return_code = 'P';
+                last;
+
+            }
+
+            if ( $page =~ $CAPTCHAi ) {
+
+                # Another CAPTCHA has been shown;  the loop will restart
+                print "Presented with (another?) CAPTCHA after sending friend request\n" if $DEBUG;
+                $captcha_attempt++;
+
+            } else {
+                # Not sure what happened
+                last;
+            }
         }
-
-
-        # Check response
-        unless ( $res ) {
-            $return_code = 'FN';
-            last;
-        }
-
-        # Unless we already have a return code (in which case we shouldn't be here)
-        # check for REs on the page to see what we got.
-
-        $page = $self->current_page->decoded_content;
-        $page =~ s/[ \t\n\r]+/ /go;
-
-        # Check for success
-        # 2008-08-12 -- adapted to recognise new wording
-        if ( $page =~ /An? (friend request|email) has been sent to (this|the) user/io ) {
-            $return_code = 'P';
-            last;
-        }
-
     }
 
     # If we still don't have a return code, something went wrong
     unless ($return_code) {
-        warn "No return code\n";
+        warn "No return code";
         $return_code = 'F';
     }
 
@@ -6016,7 +6253,7 @@ sub _check_login {
         if ( $res->is_error ) {
             warn "Error: " . $res->is_error . "\n"
         } else {
-            warn "Got \"not logged in\" page\n";
+            warn "Got \"not logged in\" page\n" if $DEBUG;
         }
         # If we already logged in, try to log us back in.
         if ( $self->logged_in ) { $self->site_login }
@@ -6135,6 +6372,9 @@ sure that the Verify Comment page is actually shown.
 This is here because Myspace likes to do weird things like reset
 form actions with Javascript then post them without clicking form buttons.
 
+"referer" is sent as the HTTP Referer header.  This can be specified via the
+hash ref method only.
+
 =cut
 
 
@@ -6163,7 +6403,7 @@ sub submit_form {
             're1' => $regexp1,
             're2' => $regexp2,
             'base' => $base_url,
-            'page' => $url,
+            'page' => $url
         };
     }
 
@@ -6275,16 +6515,24 @@ sub submit_form {
         # Just click the first button
         $request = $f->click;
     }
-    $request->header( 'Referer' => $self->current_page->request->uri );
+
+
+    my $referer = $self->current_page->request->uri;
+    $referer = $options->{'referer'} if ( defined $options->{'referer'} );
+    print "Sending HTTP Referer as '$referer'\n" if $DEBUG;
 
     do
     {
         # If we're trying again, mention it.
         warn $self->error . "\n" if $trying_again;
 
-        eval {
-            $res = $self->mech->request( $request );
-        };
+        # Enable Referer override
+        $self->mech->add_header( 'Referer' => $referer );
+
+        $res = $self->mech->request( $request );
+
+        # Disable Referer override
+        $self->mech->delete_header( 'Referer' );
 
         # If it died (it will if there's no button), just return failure.
         if ( $@ ) {
@@ -7063,6 +7311,43 @@ sub _apply_regex {
 
 }
 
+
+# :TODO: it would tidy things up if the Captcha Killer stuff was moved out to
+#  its own package.  As of 2008-09-11 it seems the service is back in action
+#  but this code is untested.
+
+=head2 captcha_killer_handler
+
+A CAPTCHA handler which uses the Captcha Killer service to try to obtain a
+solution for the CAPTCHA.
+
+=cut
+
+sub captcha_killer_handler {
+
+    return if ( ! $self->captcha_killer_api_key ); # Not handling CAPTCHAs
+
+    my $data = shift;
+    my $filename = catfile( $self->cache_dir, "captcha$$" );
+
+    if ( !open FILE, ">$filename" )
+    {
+        warn "Couldn't write '$filename':  $!\n";
+        return;
+    }
+    print FILE $data->{'image_data'};
+    close FILE;
+
+    my $solution = $self->_use_captcha_killer(
+        $data->{'image_url'},
+        $filename
+    );
+
+    unlink ( $filename );
+
+    return { response => $solution };
+}
+
 sub _use_captcha_killer {
 
     my $api_key = $self->captcha_killer_api_key;
@@ -7075,7 +7360,6 @@ sub _use_captcha_killer {
     push @{ $ua->requests_redirectable }, "POST";
 
     my $captcha_id = "";
-    my $captcha_result = "";
     my $expire = $self->captcha_tries * 10;
     print "Expire set to $expire seconds\n";
     my $response = $ua->post( "http://www.captchakiller.com/api.php",
@@ -7096,7 +7380,7 @@ sub _use_captcha_killer {
         return; # can't upload CAPTCHA?
     }
 
-    $captcha_result = "";
+    my $captcha_result = undef;
     for ( my $cnt = 1; $cnt < $self->captcha_tries; $cnt++ ) {
         print "ATTEMPT $cnt of " . $self->captcha_tries . "\n";
         my $response = $ua->post( "http://www.captchakiller.com/api.php",
@@ -7115,21 +7399,57 @@ sub _use_captcha_killer {
     return $captcha_result;
 }
 
+
+=head2 _handle_captcha
+
+This method is called when an action results in a CAPTCHA.  If a user-defined
+C<captcha_handler> has been configured, it will be called.
+
+The method returns the CAPTCHA response as a string, or undef if it is not
+known.
+
+See the example in the C<captcha_handler> to see how this method can be used
+to test a user-defined C<captcha_handler>.
+
+=cut
+
 sub _handle_captcha {
-    return if ( $self->captcha_killer_api_key eq "" ); # Not handling CAPTCHAs
-    my $url = shift;
-    print "GOT CAPTCHA URL: $url\n";
-    my $file = catfile( $self->cache_dir, "captcha$$" );
-    print "SAVING INTO FILE: $file\n";
-    for ( my $i = 0; $i < 5; $i++ ) {
-        my $res = $self->mech->get( $url, ':content_file' => $file );
-        last if ( -f $file );
-    print "FILE TROUBLE: ", Dumper( $file );
+
+    if (!defined $self->captcha_handler) {
+        print "No CAPTCHA handler set\n" if $DEBUG;
+        return undef;
     }
-    return "" if ( ! -f $file );
-    my $solution = $self->_use_captcha_killer( $url, $file );
-    unlink ( $file );
-    return $solution;
+
+
+    my $data = shift;
+   
+    # Input might not have been a hash ref (backward compatibility)
+    if ( ref $data ne "HASH" ) {
+        my $image_url = $data;
+        $data = {};
+        $data->{'image_url'} = $image_url;
+    }
+
+    print "Getting CAPTCHA image from '".$data->{'image_url'}."'\n" if $DEBUG;
+    my $res = $self->mech->get($data->{'image_url'});
+    $data->{'image_data'} = $res->decoded_content;
+    $data->{'image_type'} = $res->header('Content-Type');
+
+
+    print "Invoking CAPTCHA handler\n" if $DEBUG;
+    my $result = &{$self->captcha_handler}($self->captcha_handler_param, $data);
+
+
+    return undef if (!defined $result);
+
+    if (ref $result ne "HASH") {
+        warn "CAPTCHA handler did not return a hash reference as required";
+        return undef;
+    }
+
+    # :FIXME: want to be able to return the full hash ref to the caller
+    return $result->{'response'};
+
 }
 
 
@@ -7141,7 +7461,6 @@ Methods that aren't quite working yet.
 
 =cut
 
-1;
 
 __END__
 
@@ -7166,6 +7485,18 @@ idea.
 =head1 KNOWN ISSUES
 
 =over 4
+
+=item -
+
+2008-09-11 -- C<captcha_handler> is currently only known to work for
+C<post_comment>, C<send_message> and C<send_friend_request>
+
+=item -
+
+2008-09-11 -- currently, if a friend request results in a CAPTCHA being shown,
+Myspace claims that the person requires CAPTCHAs for all friend requests (set
+in Privacy Settings), even if this is not true.  Therefore, a CAPTCHA handler
+should not yet make use of the C<friend_requires_captcha> parameter.
 
 =item -
 
