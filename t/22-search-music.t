@@ -1,7 +1,7 @@
 #!perl -T
 
 #use Test::More 'no_plan';
-use Test::More tests => 3;
+use Test::More tests => 5;
 use strict;
 
 use WWW::Myspace;
@@ -67,5 +67,25 @@ SKIP: {
         or diag $note_third_party_profile;
 
 
-    # :TODO: test that multiple results pages are correctly handled
+    # Search with a search term containing a space
+    my $spaced_band_name = "two words";
+
+    my @spaced_band_results = $myspace->search_music( {
+        search_term => 0,
+        keywords => $spaced_band_name
+    });
+
+    # If the search term is properly URI-escaped, there should be some results
+    ok ( scalar @spaced_band_results >= 1,
+         "Expect at least one result for a search term containing a space" )
+        or diag $note_third_party_profile;
+
+
+    # The previous search term actually produces 3 pages of results (10 per
+    #  page), so we should expect more than 10 results, if multiple pages are
+    #  being read correctly
+    ok ( scalar @spaced_band_results > 10,
+         "Expect at least 10 results when there are multiple pages" )
+        or diag $note_third_party_profile;
+
 }

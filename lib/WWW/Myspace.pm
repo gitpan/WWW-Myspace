@@ -1,7 +1,7 @@
 #####################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 644 2008-09-12 20:12:40Z s-chamberlain $
+# $Id: Myspace.pm 647 2008-10-01 04:42:20Z s-chamberlain $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -43,11 +43,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.87
+Version 0.88
 
 =cut
 
-our $VERSION = '0.87';
+our $VERSION = '0.88';
 
 =head1 WARNING
 
@@ -191,13 +191,13 @@ my %regex = (
     friend_link => qr/fuseaction=user\.viewprofile\&(amp;)?friendid=([0-9]+)/oism,
     friend_img  => qr/fuseaction=user\.viewprofile\&(amp;)?friendID=([0-9]+)[^<]+<\s*img\b[^<]+\bsrc\s*=\s*["']?(.*?)["'\s>]/oism,
     #friend_img  => qr/fuseaction=user\.viewprofile\&(amp;)?friendID=([0-9]+)["'\s>&][^<]*<\s*img\b[^<]+\bsrc\s*=\s*["']?(.*?)["'\s>]/oism,
-    is_band    => qr/fuseaction=bandprofile/ioxsm,
+    is_band    => qr/fuseaction=music\./ioxsm,  # 2008-09-30 -- changed from
+                                                #  fuseaction=bandprofile
     is_logged_in => qr/fuseaction=signout/io,
     is_private => qr/(This profile is set to private\. This user must add you as a friend to see his\/her profile\.)/io,
     is_invalid => qr/(Invalid Friend ID.<br>This user has either cancelled their membership, or their account has been deleted.)/io,
     is_comedy => qr/http\:\/\/.*?myspace\.com\/images\/comedy\/mscomedy\.gif/io,
     is_film => qr/http\:\/\/.*?myspace\.com\/images\/film_logo\.gif/io,
-    is_music => qr/http\:\/\/.*?myspace\.com\/images\/music_logo\.gif/io,
     last_login => qr/Last Login:/io,
     basic_info => qr/"Table2".*<td[^>]*>(.*Last Login:.*?)<br(?: \/)?>/smo,
     basic_info_band => qr/Arial, Helvetic, sans-serif"><strong>(.*Last Login:.*?)<br>/smo,
@@ -2215,16 +2215,17 @@ sub get_basic_info {
         $page = $self->_apply_regex( regex => 'basic_info', page => $page );
 
         # Parse text found between <br />'s, and trim whitespace
-        ( $info{'headline'},
-          undef,
-          $info{'gender'},
-          $info{'age'},
-          $info{'cityregion'},
-          $info{'country'},
-          undef,
-          undef,
-          undef,
-          $info{'lastlogin'}
+        (
+            $info{'headline'},
+            undef,
+            $info{'gender'},
+            $info{'age'},
+            $info{'cityregion'},
+            $info{'country'},
+            undef,
+            undef,
+            undef,
+            undef         # lastlogin, now obtained by last_login instead
         ) = split(/\s*<br(?: \/)?>\s*/ios, $page);
 
         # Strip quotes from around headline, if any
@@ -2235,8 +2236,9 @@ sub get_basic_info {
             or warn "get_basic_info:  failed to parse age\n";
 
         #return last login as date only
-        $info{'lastlogin'} =~ s/Last Login:\s*([0-9][0-9\/\-]+[0-9]).*/$1/ios
-            or warn "get_basic_info:  failed to parse lastlogin";
+        # There is already a last_login method for this, so we call that instead
+        #  of duplicating code here
+        $info{'lastlogin'} = $self->last_login
 
     }
     #separately for band profiles
@@ -2248,10 +2250,18 @@ sub get_basic_info {
         $page=~ s/(<br>)([^\s])/$2/g;
 
         #assign values and trim leading and trailing white spaces
-        ( $info{'headline'},undef,$info{'cityregion'},
-          $info{'country'},undef,$info{'profileviews'},
-          undef,undef,undef,$info{'lastlogin'}
-        )=map {s/^\s+//;s/\s+$//;$_} split('<br>',$page);
+        (
+            $info{'headline'},
+            undef,
+            $info{'cityregion'},
+            $info{'country'},
+            undef,
+            $info{'profileviews'},
+            undef,
+            undef,
+            undef,
+            undef       # lastlogin, now obtained by last_login instead
+        ) = map {s/^\s+//;s/\s+$//;$_} split('<br>',$page);
 
         # Strip quotes from around headline, if any
         $info{'headline'} =~ s/^\"(.*)\"$/$1/os;
@@ -2259,8 +2269,9 @@ sub get_basic_info {
         #make sure profile views returns only the number
         $info{'profileviews'}=~ s/[^\d]*([\d]+)/$1/sm;
 
-        #return last login as date only
-        $info{'lastlogin'} =~ s/Last Login:[^\d]*([\d\/]+)/$1/sm;
+        # There is already a last_login method for this, so we call that instead
+        #  of duplicating code here
+        $info{'lastlogin'} = $self->last_login
     }
 
     if ( $DEBUG )
@@ -2526,8 +2537,7 @@ sub get_profile_type {
     my $page = $self->_validate_page_request( @_ );
 
     #band profile
-    #return 2 if ( $page->decoded_content =~ qr/x\.myspace\.com\/images\/music_logo\.gif/o );
-    return 2 if($self->_apply_regex( regex => 'is_music', page => $page ));
+    return 2 if($self->_apply_regex( regex => 'is_band', page => $page ));
 
     #film profile
     #return 3 if ( $page->decoded_content =~ qr/x\.myspace\.com\/images\/film_logo\.gif/o );
@@ -3778,7 +3788,6 @@ sub search_music {
 
         # Click "Next".
         $page_no++;
-        print "Getting page " . $page_no . "\n";
         $self->submit_form( {
             'form_name' => 'PageForm',
             no_click => 1,
