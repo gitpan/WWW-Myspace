@@ -1,10 +1,16 @@
 Revision history for WWW::Myspace
 
-0.89    ???
+0.89    2008-11-14
+        - This release replaces a dud re-release of 0.88 made earlier today
+          which had some of the following enhancements but the version
+          number had not been increased
+        - Fixed a problem with get_inbox whereby no messages were returned
+          unless the inbox held more than one page of messages (more than 10
+          messages)
         - Fixed post_comment, broken by recent Myspace changes
         - Altered CAPTCHA handling in post_comment such that the configured
-          handler (if any) is now called repeatedly upon CAPTCHA responses
-          being rejected
+          handler (if any) is now called repeatedly if CAPTCHA responses are
+          rejected
 
 0.88    2008-10-01
         - Fixed is_band to correctly detect music profiles, which broke due to

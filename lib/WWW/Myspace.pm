@@ -1,7 +1,7 @@
 #####################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 652 2008-11-13 18:07:50Z s-chamberlain $
+# $Id: Myspace.pm 654 2008-11-14 06:04:29Z s-chamberlain $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -43,11 +43,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.88
+Version 0.89
 
 =cut
 
-our $VERSION = '0.88';
+our $VERSION = '0.89';
 
 =head1 WARNING
 
@@ -4327,24 +4327,6 @@ sub get_inbox {
                     ) or return;
         }
 
-        $self->current_page->decoded_content =~
-            /javascript:__doPostBack\('(.*?)'.*?>Next/ismo;
-        $eventtarget = $1;
-        unless ( $eventtarget ) {
-            $self->error('get_inbox couldn\'t detect EVENTTARGET in form on inbox page '.$page_no);
-            return;
-        }
-
-        if ( !( $self->current_page->decoded_content =~ /\b"?currentpage"?>(\d+)</imso ) or $1 != $page_no ) {
-            $self->submit_form( {
-                form_name => 'aspnetForm',
-                fields_ref => {
-                    '__EVENTTARGET' => $eventtarget,
-                    '__EVENTARGUMENT' => $page_no
-                },
-                no_click => 1,
-            } );
-        }
 
         # Get the message data.
         push @messages, $self->_get_messages_from_page( %options );
@@ -4363,8 +4345,30 @@ sub get_inbox {
         # Stop if we're only requesting one page
         last if ( $options{'page_no'} );
 
-        # Next!
+
+        # Onto the next page
         $page_no++;
+
+        $self->current_page->decoded_content =~
+            /javascript:__doPostBack\('(.*?)'.*?>Next/ismo;
+        $eventtarget = $1;
+        unless ( $eventtarget ) {
+            # This may happen if there is exactly one page of messages
+#            $self->error('get_inbox couldn\'t detect EVENTTARGET in form on inbox page '.$page_no);
+            return;
+        }
+
+        if ( !( $self->current_page->decoded_content =~ /\b"?currentpage"?>(\d+)</imso ) or $1 != $page_no ) {
+            $self->submit_form( {
+                form_name => 'aspnetForm',
+                fields_ref => {
+                    '__EVENTTARGET' => $eventtarget,
+                    '__EVENTARGUMENT' => $page_no
+                },
+                no_click => 1,
+            } );
+        }
+
     }
 
     return \@messages;
@@ -4395,7 +4399,7 @@ sub _get_messages_from_page {
 	if(/<td\s[^>]*class="(?:.* )?messageListCell(?: .*)?"[^>]*>/){
 		# Found beginning of Message block
 		$state = 1;
-	} elsif (/viewprofile&friendid=([0-9]+)"?>([^<>]+)</ && $state == 1){
+	} elsif (/viewprofile\&(?:amp;)?friendid=([0-9]+)">([^<>]+)</ && $state == 1){
 		$sender = $1;
                 $sendername = $2;
 	} elsif (/(Unread|Read|Sent|Replied)/ && $state == 1){
