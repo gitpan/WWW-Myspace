@@ -1,5 +1,11 @@
 Revision history for WWW::Myspace
 
+0.89    ???
+        - Fixed post_comment, broken by recent Myspace changes
+        - Altered CAPTCHA handling in post_comment such that the configured
+          handler (if any) is now called repeatedly upon CAPTCHA responses
+          being rejected
+
 0.88    2008-10-01
         - Fixed is_band to correctly detect music profiles, which broke due to
           Myspace changes around 2008-09-30;  this was also causing

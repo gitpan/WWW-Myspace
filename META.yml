@@ -3,7 +3,9 @@ name:                WWW-Myspace
 version:             0.88
 abstract:            Access MySpace.com profile information from Perl
 license:             perl
-generated_by:        ExtUtils::MakeMaker version 6.36
+author:              
+    - Grant Grueninger <grantg@cpan.org>
+generated_by:        ExtUtils::MakeMaker version 6.44
 distribution_type:   module
 requires:     
     Config::General:               0
@@ -19,7 +21,5 @@ requires:
     WWW::Mechanize:                1.2
     YAML:                          0.39
 meta-spec:
-    url:     http://module-build.sourceforge.net/META-spec-v1.2.html
-    version: 1.2
-author:
-    - Grant Grueninger <grantg@cpan.org>
+    url:     http://module-build.sourceforge.net/META-spec-v1.3.html
+    version: 1.3

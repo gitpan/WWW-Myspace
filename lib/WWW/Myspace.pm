@@ -1,7 +1,7 @@
 #####################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 647 2008-10-01 04:42:20Z s-chamberlain $
+# $Id: Myspace.pm 652 2008-11-13 18:07:50Z s-chamberlain $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -3886,6 +3886,14 @@ sub post_comment {
     croak "Must pass friend_id and message to post_comment" unless
         ( ( $friend_id ) && ( $message ) );
 
+    if ( defined $captcha_response )
+    {
+        warn "You provided a captcha_response parameter to post_comment;\n".
+             " this is currently broken and doomed to failure.  Please\n".
+             " consider using the new CAPTCHA interface instead (see the\n".
+             " documentation for captcha_handler)\n";
+    }
+
     my %status_codes = (
 
         P   =>  'Passed! Verification string received.',
@@ -3924,14 +3932,15 @@ sub post_comment {
             unless ( $link ) { $status="FL"; last TESTBLOCK; }
 
             ( $DEBUG ) && print "Getting comment form..\n";
+            my $input_name_prefix = 'ctl00$ctl00$cpMain$UserWriteCommentsControl$';
             $submitted =
                 $self->submit_form( {
                          page => $link->url,
                          follow => 1,
                          form_name => 'aspnetForm',
                          fields_ref => {
-                            'ctl00$cpMain$UserWriteCommentsControl$commentTextBox' => "$message",
-                            'ctl00$cpMain$UserWriteCommentsControl$postcommentImageButton' => "Post A Comment",
+                            $input_name_prefix.'commentTextBox' => "$message",
+                            $input_name_prefix.'postcommentImageButton' => "Post A Comment",
     #                        '__EVENTTARGET' => 'ctl00$cpMain$UserWriteCommentsControl$postcommentImageButton',
     #                        '__EVENTARGUMENT' => '',
                          },
@@ -3942,30 +3951,61 @@ sub post_comment {
             # If we posted ok, confirm the comment
             if ( $submitted ) {
 
-                my $captcha_result="";
+                my $captcha_response = "";
+                my $captcha_attempt = 0;
                 my $fields = ();
 
-                # See if there's a CAPTCHA response required, if so,
-                # deal with it or fail appropriately.
                 if ( $self->current_page->decoded_content =~ $CAPTCHAi ) {
-                    $self->captcha( $1 );
-                    #TODO: Not tested - comment captcha may be on a separate form?
-                    $captcha_result = $self->_handle_captcha( {
-                        image_url => $1,
-                        action => 'post_comment',
+
+                    # See if there's a CAPTCHA response required, if so, deal with
+                    #  it or fail appropriately.  If another CAPTCHA is shown (eg.
+                    #  because the CAPTCHA response was wrong) then we retry
+                    #  forever (until the handler returns an empty string).
+                    while ( $self->current_page->decoded_content =~ $CAPTCHAi ) {
+
+                        # :FIXME: this relates to the *old* CAPTCHA interface;
+                        #  please remove
+                        $self->captcha( $1 );
+
+                        # Call the CAPTCHA handler (the new CAPTCHA interface)
+                        $captcha_response = $self->_handle_captcha( {
+                            image_url => $1,
+                            action => 'post_comment',
+                            attempt => $captcha_attempt,
+                        } );
+
+                        unless ( $captcha_response ) { $status='FC'; last TESTBLOCK; }
+                        $fields->{$input_name_prefix.'captcha$captchaResponseTextBox'}
+                            = $captcha_response;
+
+                        ( $DEBUG ) && print "Entering comment CAPTCHA response...\n";
+                        $submitted = $self->submit_form( {
+                            follow => 1,
+                            form_name => 'aspnetForm',
+                            button => $input_name_prefix.'ConfirmPostButton',
+                            fields_ref => $fields
+                        } );
+
+                        if ( !$submitted ) {
+                            $self->error( 'Failed to submit CAPTCHA response in post_comment:  '.
+                                $self->error );
+                        }
+
+                    }
+
+                } else {
+
+                    # If there was no CAPTCHA. just confirm the comment post.
+                    ( $DEBUG ) && print "Confirming comment...\n";
+                    $submitted = $self->submit_form( {
+                        follow => 1,
+                        form_name => 'aspnetForm',
+                        button => $input_name_prefix.'ConfirmPostButton',
+                        fields_ref => $fields
                     } );
-                    unless ( $captcha_result ) { $status='FC'; last TESTBLOCK; }
-                    $fields->{'ctl00$cpMain$UserWriteCommentsControl$captcha$captchaResponseTextBox'} = $captcha_result;
+
                 }
 
-                # Otherwise, confirm it.
-                ( $DEBUG ) && print "Confirming comment...\n";
-                $submitted = $self->submit_form( {
-                    follow => 1,
-                    form_name => 'aspnetForm',
-                    button => 'ctl00$cpMain$UserWriteCommentsControl$ConfirmPostButton',
-                    fields_ref => $fields
-                } );
             } else {
                 $self->error( 'First submit failed in post_comment with error: '.
                     $self->error );
@@ -3973,6 +4013,7 @@ sub post_comment {
 
         } else {
             # :FIXME: this is no longer used?
+            # :FIXME: if this is still used, it definitely doesn't work any more
 
             # Post the confirmation
             $submitted = $self->submit_form( '', 1, '',
@@ -5277,8 +5318,6 @@ sub send_friend_request {
             # Check for CAPTCHA
             #elsif ( $page =~ /CAPTCHA/o ) {
             elsif ( $page =~ $CAPTCHAi ) {
-                # :FIXME: add an option not to use CAPTCHA handler on FU profiles
-                # :FIXME: maybe add CAPTCHA preferences hash ref somewhere
 
                 my $friend_requires_captcha =
                     $self->_apply_regex( regex => 'user_requires_captcha' );
@@ -5296,6 +5335,7 @@ sub send_friend_request {
                     $return_code = 'FC';
                     $return_code = 'FU' if $friend_requires_captcha;
                 }
+
             }
             # Check for "already your friend"
             elsif ( $page =~ /already one of your friend/io ) {
