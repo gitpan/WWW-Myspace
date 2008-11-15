@@ -43,11 +43,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.89
+Version 0.90
 
 =cut
 
-our $VERSION = '0.89';
+our $VERSION = '0.90';
 
 =head1 WARNING
 
@@ -4399,7 +4399,7 @@ sub _get_messages_from_page {
 	if(/<td\s[^>]*class="(?:.* )?messageListCell(?: .*)?"[^>]*>/){
 		# Found beginning of Message block
 		$state = 1;
-	} elsif (/viewprofile\&(?:amp;)?friendid=([0-9]+)">([^<>]+)</ && $state == 1){
+	} elsif (/viewprofile\&(?:amp;)?friendid=([0-9]+)"[^>]*\stitle="([^"]+)"[^>]*>/ && $state == 1){
 		$sender = $1;
                 $sendername = $2;
 	} elsif (/(Unread|Read|Sent|Replied)/ && $state == 1){
@@ -4501,7 +4501,7 @@ sub read_message {
     $page =~ s/[ \t\n\r]+/ /go; # Turn multiple whitespace into single space
 
     # From:
-    $page =~ /From:.*?friendID=([0-9]+)"?>([^<>]+)</io;
+    $page =~ /From:.*?friendid=([0-9]+).*?"[^>]*\stitle="([^"]+)"[^>]*>/io;
     $message{'from'} = $1;
     $message{'fromname'} = $2;
 
