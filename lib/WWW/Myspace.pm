@@ -1,7 +1,7 @@
 #####################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 654 2008-11-14 06:04:29Z s-chamberlain $
+# $Id: Myspace.pm 655 2008-11-20 05:52:58Z s-chamberlain $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -43,11 +43,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.90
+Version 0.91
 
 =cut
 
-our $VERSION = '0.90';
+our $VERSION = '0.91';
 
 =head1 WARNING
 
@@ -5123,7 +5123,7 @@ sub _get_friend_requests
     my $line = "";
 
     # Get the GUID codes from it.
-    while ( $page =~ s/ctl00\$ctl00\$Main\$Main\$incomingRequests\$requestRepeater\$ctl00\$selectRequest.*? value="(.*?)"//im ) {
+    while ( $page =~ s/(ctl00\$ctl00\$ctl00\$cpMain\$cpMain\$messagingMain\$FriendRequestsIncomingV2.+?\$messageCheckBox)//im ) {
         $guids{"$1"}++;
     }
 

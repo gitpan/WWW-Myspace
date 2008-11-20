@@ -1,5 +1,10 @@
 Revision history for WWW::Myspace
 
+0.91    2008-11-20
+        - Fixed approve_friend_requests which was no longer working as a result
+          of Myspace changes (RT#41074, patch from David Moreno Garza)
+        - Example script samples/approve_friends also fixed by the above change
+
 0.90    2008-11-15
         - Fixed a new problem in get_inbox and read_message, which were no
           longer returning the message sender's name or ID due to Myspace
