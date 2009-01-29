@@ -1,7 +1,7 @@
 #####################################################################
 # WWW::Myspace.pm
 # Sccsid:  %Z%  %M%  %I%  Delta: %G%
-# $Id: Myspace.pm 655 2008-11-20 05:52:58Z s-chamberlain $
+# $Id: Myspace.pm 656 2009-01-29 13:22:42Z s-chamberlain $
 ######################################################################
 # Copyright (c) 2005 Grant Grueninger, Commercial Systems Corp.
 #
@@ -43,11 +43,11 @@ WWW::Myspace - Access MySpace.com profile information from Perl
 
 =head1 VERSION
 
-Version 0.91
+Version 0.92
 
 =cut
 
-our $VERSION = '0.91';
+our $VERSION = '0.92';
 
 =head1 WARNING
 
@@ -187,7 +187,7 @@ our $ADD_FRIEND_URL = 'http://collect.myspace.com/index.cfm?'.
 
 my %regex = (
     friend_id => qr/fuseaction=mail\.message&friendID=([0-9]+)/o,
-    friend_url => qr/www.myspace.com\/(\w*)\W+<\/title>/oixsm,
+    friend_url => qr/<a [^>]*href=\"http:\/\/www\.myspace\.com\/(\w+)\"[^>]*>www\.myspace\.com\/\1<\/a>/oixsm,
     friend_link => qr/fuseaction=user\.viewprofile\&(amp;)?friendid=([0-9]+)/oism,
     friend_img  => qr/fuseaction=user\.viewprofile\&(amp;)?friendID=([0-9]+)[^<]+<\s*img\b[^<]+\bsrc\s*=\s*["']?(.*?)["'\s>]/oism,
     #friend_img  => qr/fuseaction=user\.viewprofile\&(amp;)?friendID=([0-9]+)["'\s>&][^<]*<\s*img\b[^<]+\bsrc\s*=\s*["']?(.*?)["'\s>]/oism,
@@ -4399,9 +4399,9 @@ sub _get_messages_from_page {
 	if(/<td\s[^>]*class="(?:.* )?messageListCell(?: .*)?"[^>]*>/){
 		# Found beginning of Message block
 		$state = 1;
-	} elsif (/viewprofile\&(?:amp;)?friendid=([0-9]+)"[^>]*\stitle="([^"]+)"[^>]*>/ && $state == 1){
-		$sender = $1;
-                $sendername = $2;
+	} elsif (/<a\s+title="([^"]+)"\s[^>]*href="[^"]+viewProfile\&(?:amp;)?friendID=([0-9]+)(?:\&[^"]+)?"[^>]*>/i && $state == 1){
+                $sendername = $1;
+		$sender = $2;
 	} elsif (/(Unread|Read|Sent|Replied)/ && $state == 1){
 		$status = $1;
 	} elsif (/messageID=([^&]+)&.*?>(.+?)<\/a>/ && $state == 1){
@@ -5927,32 +5927,41 @@ sub post_blog {
                      'Go To Advanced Editor'
                    ) or return undef;
 
-    # Get Mytoken
-    $self->current_page->decoded_content =~ /Mytoken=([A-Za-z0-9\-]+)/;
-    my $token = $1;
+    my $preview_button_name = ($self->current_page->decoded_content =~ /name=\"([^"]*btnPreview)"/i)[0];
+    my $subject_input_name = ($self->current_page->decoded_content =~ /name=\"([^"]*txbTitle)"/i)[0];
+    my $body_input_name = 'body';
+
+    # JavaScript seems to fill in these form fields
+    my $hd_body_input_name = ($self->current_page->decoded_content =~ /name=\"([^"]*hdBody)"/i)[0];
+    my $hd_category_id_input_name = ($self->current_page->decoded_content =~ /name=\"([^"]*hdCategoryId)"/i)[0];
+    my $hd_mood_id_input_name = ($self->current_page->decoded_content =~ /name=\"([^"]*hdMoodId)"/i)[0];
 
     # Fill and in post the blog
     ( $DEBUG ) && warn "Submitting initial blog form\n";
+    ( $DEBUG ) && warn "Clicking button named '$preview_button_name'\n";
     $self->submit_form( {
         form_no => 1,
         fields_ref => {
-            subject => $options{subject},
-            body => $options{body},
+            $subject_input_name => $options{subject},
+            $body_input_name => $options{body},
+            $hd_body_input_name => $options{body},
+            $hd_category_id_input_name => 0,
+            $hd_mood_id_input_name => 0
         },
-        # They use JavaScript to reset the action of the form...
-        action => 'http://blog.myspace.com/index.cfm?fuseaction=blog.previewBlog&Mytoken='.
-                  $token,
-        no_click => 1,
+        button => $preview_button_name,
         re2 => 'Confirm Blog Posting'
     } ) or return undef;
 
+
+    my $confirm_button_name = ($self->current_page->decoded_content =~ /name=\"([^"]*btnSubmit2)"/i)[0];
+
     # Post the confirmation, unless we're in test mode.
     ( $DEBUG ) && warn "Posting blog confirmation\n";
+    ( $DEBUG ) && warn "Clicking button named '$confirm_button_name'\n";
     unless ( $options{testing} ) {
         $self->submit_form( {
             form_no => 1,
-            action => 'http://blog.myspace.com/index.cfm?fuseaction=blog.processCreate',
-            no_click => 1,
+            button => $confirm_button_name
         } ) or return undef;
     }
 

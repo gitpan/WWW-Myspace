@@ -1,5 +1,13 @@
 Revision history for WWW::Myspace
 
+0.92    2009-01-29
+        - Fixed get_inbox 'sender' field again;  was returning undef due to a
+          couple of Myspace HTML changes made since 2008-12-05
+        - Fixed post_blog, which had stopped working after Myspace added new
+          JavaScript to the blog editor (RT#41844)
+        - Fixed friend_url;  was returning 'undef' for some profiles due to
+          Myspace HTML changes
+
 0.91    2008-11-20
         - Fixed approve_friend_requests which was no longer working as a result
           of Myspace changes (RT#41074, patch from David Moreno Garza)
